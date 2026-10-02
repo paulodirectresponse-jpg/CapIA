@@ -32,3 +32,8 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+
+# Spikes (throwaway build outputs)
+spikes/**/target/
+spikes/**/node_modules/
+spikes/**/package-lock.json

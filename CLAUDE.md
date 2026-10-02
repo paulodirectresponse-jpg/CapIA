@@ -34,6 +34,9 @@ Estado atual e próxima missão: **leia `docs/STATUS.md` primeiro.**
 | `docs/TEST_STRATEGY.md` | Estratégia de testes por subsistema |
 | `docs/DECISIONS.md` | ADRs: decisões, alternativas, requisitos reformulados |
 | `docs/OPEN_SOURCE_AUDIT.md` | Due diligence de projetos open-source: licenças, reuso, estratégia recomendada (M02) |
+| `docs/PROVENANCE.md` | Política obrigatória de proveniência/licenças de terceiros + registro (ADR-031) |
+| `docs/spikes/README.md` | Resultados dos spikes S1–S7 (M03) e relatórios individuais |
+| `tests/acceptance/` | Suíte de aceitação de comportamento da timeline (critério da Fase 2, ADR-036) |
 
 ## Regras de trabalho
 
@@ -42,4 +45,7 @@ Estado atual e próxima missão: **leia `docs/STATUS.md` primeiro.**
 - Respeite as regras de dependência entre crates (`docs/ARCHITECTURE.md` §4). UI, Timeline, Render, AI, Providers, Assets e Integrations não se acoplam diretamente.
 - Testes de propriedade para tempo e Command Engine são obrigatórios (`docs/TEST_STRATEGY.md`).
 - Nunca commitar chaves, `.env`, projetos de usuário ou mídia.
+- **Todo código/ativo de terceiros segue `docs/PROVENANCE.md`** (registro, cabeçalho, licença permitida; `REFERENCE_ONLY`/`DO_NOT_USE` nunca são copiados).
+- **Escritas na timeline:** todo comando tem `operation_id`; atores `Agent`/`Api` só escrevem por `preview → apply_plan` (ADR-029/030).
+- **FFmpeg:** build própria LGPL, dinâmica, sem GPL/nonfree (ADR-032). Timing é do engine, não do ffmpeg (ADR-035).
 - Idioma da documentação: português; identificadores de código: inglês.

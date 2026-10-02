@@ -1,0 +1,981 @@
+[
+ {
+  "id": "RTM-001",
+  "area": "retime",
+  "title": "2x speed halves the duration and ripples followers (magnetic)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 90
+      },
+      {
+       "id": "b",
+       "start": 90,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 2
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      45
+     ],
+     [
+      "b",
+      45,
+      30
+     ]
+    ]
+   },
+   "clips": {
+    "a": {
+     "speed": 2
+    }
+   }
+  }
+ },
+ {
+  "id": "RTM-002",
+  "area": "retime",
+  "title": "0.5x speed doubles the duration",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 90
+      },
+      {
+       "id": "b",
+       "start": 90,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": "1/2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      180
+     ],
+     [
+      "b",
+      180,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RTM-003",
+  "area": "retime",
+  "title": "Fractional result rounds to the nearest frame (100/3 = 33.33 -> 33)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   },
+   "diverges_from_opencut": "OpenCut: rate range [0.01,5], durations rounded to integer ticks; CapIA: frame-aligned durations (round half up), min 1 frame"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 100
+      },
+      {
+       "id": "b",
+       "start": 100,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 3
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      33
+     ],
+     [
+      "b",
+      33,
+      10
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RTM-004",
+  "area": "retime",
+  "title": "Half-frame rounds up (10/4 = 2.5 -> 3)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.3",
+   "diverges_from_opencut": "OpenCut: rate range [0.01,5], durations rounded to integer ticks; CapIA: frame-aligned durations (round half up), min 1 frame"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 4
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      3
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RTM-005",
+  "area": "retime",
+  "title": "Duration never collapses below one frame",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §6 invariant 3"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 1
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 5
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      1
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RTM-006",
+  "area": "retime",
+  "title": "Speed above the maximum is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   },
+   "diverges_from_opencut": "OpenCut: rate range [0.01,5], durations rounded to integer ticks; CapIA: frame-aligned durations (round half up), min 1 frame"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 6
+   }
+  },
+  "then": {
+   "error": "OUT_OF_RANGE"
+  }
+ },
+ {
+  "id": "RTM-007",
+  "area": "retime",
+  "title": "Speed below the minimum is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   },
+   "diverges_from_opencut": "OpenCut: rate range [0.01,5], durations rounded to integer ticks; CapIA: frame-aligned durations (round half up), min 1 frame"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": "1/200"
+   }
+  },
+  "then": {
+   "error": "OUT_OF_RANGE"
+  }
+ },
+ {
+  "id": "RTM-008",
+  "area": "retime",
+  "title": "Maximum speed (5x) is accepted",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 5
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      20
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RTM-009",
+  "area": "retime",
+  "title": "Minimum speed (1/100) is accepted",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": "1/100"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      1000
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RTM-010",
+  "area": "retime",
+  "title": "Slowing a non-magnetic clip into its neighbour is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": "1/2"
+   }
+  },
+  "then": {
+   "error": "OVERLAP"
+  }
+ },
+ {
+  "id": "RTM-011",
+  "area": "retime",
+  "title": "Splitting a retimed clip maps source time by the speed",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 90,
+       "speed": 2,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 30,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "a2",
+      30,
+      60
+     ]
+    ]
+   },
+   "clips": {
+    "a": {
+     "src_in": 0,
+     "speed": 2
+    },
+    "a2": {
+     "src_in": 60,
+     "speed": 2
+    }
+   }
+  }
+ },
+ {
+  "id": "RTM-012",
+  "area": "retime",
+  "title": "Splitting at 3/2 speed gives a source offset of 15 frames after 10 timeline frames",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 90,
+       "speed": "3/2",
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 10,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      10
+     ],
+     [
+      "a2",
+      10,
+      80
+     ]
+    ]
+   },
+   "clips": {
+    "a2": {
+     "src_in": 15,
+     "speed": "3/2"
+    }
+   }
+  }
+ },
+ {
+  "id": "RTM-013",
+  "area": "retime",
+  "title": "Extending a retimed clip consumes source proportionally (within handles)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 45,
+       "speed": 2,
+       "src_in": 0,
+       "src_dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 50
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      50
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RTM-014",
+  "area": "retime",
+  "title": "Extending a retimed clip beyond the media end is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 45,
+       "speed": 2,
+       "src_in": 0,
+       "src_dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 51
+   }
+  },
+  "then": {
+   "error": "INSUFFICIENT_HANDLES"
+  }
+ },
+ {
+  "id": "RTM-015",
+  "area": "retime",
+  "title": "Trimming the in edge of a retimed clip advances source by delta*speed",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/retime/resolve.ts",
+     "apps/web/src/retime/rate.ts",
+     "apps/web/src/retime/split.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 45,
+       "speed": 2,
+       "src_in": 0,
+       "src_dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "in",
+    "to": 10
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      10,
+      35
+     ]
+    ]
+   },
+   "clips": {
+    "a": {
+     "src_in": 20
+    }
+   }
+  }
+ },
+ {
+  "id": "RTM-016",
+  "area": "retime",
+  "title": "Speed 2x then 1x round-trips exactly",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 90
+      },
+      {
+       "id": "b",
+       "start": 90,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": [
+   {
+    "cmd": "set_clip_speed",
+    "args": {
+     "clip": "a",
+     "speed": 2
+    }
+   },
+   {
+    "cmd": "set_clip_speed",
+    "args": {
+     "clip": "a",
+     "speed": 1
+    }
+   }
+  ],
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      90
+     ],
+     [
+      "b",
+      90,
+      30
+     ]
+    ]
+   },
+   "clips": {
+    "a": {
+     "speed": 1
+    }
+   }
+  }
+ },
+ {
+  "id": "RTM-017",
+  "area": "retime",
+  "title": "Splitting a reversed clip: left half plays the later source segment",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.4 reverse"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 90,
+       "reversed": true,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 30,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "a2",
+      30,
+      60
+     ]
+    ]
+   },
+   "clips": {
+    "a": {
+     "src_in": 60,
+     "reversed": true
+    },
+    "a2": {
+     "src_in": 0,
+     "reversed": true
+    }
+   }
+  }
+ }
+]

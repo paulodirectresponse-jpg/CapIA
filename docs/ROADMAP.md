@@ -17,21 +17,22 @@ Cada fase só começa quando os critérios de conclusão da anterior forem atend
 
 **Objetivo:** arquitetura documentada, decisões bloqueantes fechadas, riscos técnicos maiores validados por spikes, repositório pronto para código.
 
-Missões:
-1. ✅ **M01 — Arquitetura e documentação** (este conjunto de documentos).
-2. **M02 — Decisões abertas + spikes técnicos** (código descartável em `/spikes`, relatórios em `docs/spikes/`):
-   - S1: Preview presenter no Tauri 2/WebView2 (P1 superfície nativa vs P2 shared buffer) — `PREVIEW_RENDER.md` §5.
-   - S2: Decode frame-exato com libav no Windows: seek exato, VFR de celular (iPhone/Android), HW decode D3D11VA, rotação, HDR→SDR.
-   - S3: Build FFmpeg conforme licenciamento escolhido (OD-2) e encoders disponíveis (NVENC/QSV/AMF/OpenH264).
-   - S4: `capia-time`/modelo mínimo compilado para WASM rodando na WebView; throughput de patches pelo IPC.
-   - S5: Timeline canvas com 10.000 clips sintéticos (scroll/zoom/drag).
-3. **M03 — Scaffold do repositório:** workspace Cargo + pnpm, crates vazios com regras de dependência verificadas (ex.: `cargo-deny`/check customizado), lint/format, CI no GitHub Actions (Windows), secret scanning, licença definida.
+Missões (numeração real das sessões):
+1. ✅ **M01 — Arquitetura e documentação.**
+2. ✅ **M02 — Auditoria de bases open-source e estratégia de reuso** (`OPEN_SOURCE_AUDIT.md`; estratégia C aprovada).
+3. ✅ **M03 — Fechamento da fundação e spikes de risco** (`docs/spikes/`; ADR-029..036). Resultado: S2, S3, S4, S5, S6 e S7 **medidos/concluídos**; **S1 não mensurável no ambiente de nuvem** (sem Windows/GPU).
+4. ⏳ **M04 — Pendências para fechar a Fase 1:**
+   - **S1 em Windows 11** (protocolo e regra de decisão em `docs/spikes/S1-preview-surface.md`) → fecha **OD-1**;
+   - **Scaffold do repositório:** workspace Cargo + pnpm, crates vazios com regras de dependência verificadas (`cargo-deny`/check customizado), lint/format, CI no GitHub Actions (Windows), secret scanning, `cargo-deny`/verificador de licenças (PROVENANCE §2.6);
+   - **Acesso de escrita ao GitHub** (hoje bloqueado por 403) para o CI poder rodar.
+
+Spikes da Fase 1 (relatórios em `docs/spikes/`): S1 preview surface · S2 decode frame-exato/VFR · S3 FFmpeg LGPL · S4 core em WASM · S5 timeline em canvas · S6 compositor OpenCut (`REIMPLEMENT_WITH_REFERENCE`) · S7 suíte de aceitação de timeline.
 
 **Critérios de conclusão:**
-- [ ] Todas as decisões abertas (OD-*) de `DECISIONS.md` resolvidas e registradas como ADR aceitos.
-- [ ] Relatórios de S1–S5 com medições contra as metas declaradas; presenter escolhido.
+- [ ] Todas as decisões abertas (OD-*) de `DECISIONS.md` resolvidas e registradas como ADR aceitos. *(OD-2 e OD-3 fechadas na M03; **OD-1 aberta**.)*
+- [ ] Relatórios de S1–S7 com resultados contra as metas declaradas; presenter escolhido. *(S2–S7 entregues; **S1 pendente de medição em Windows**.)*
 - [ ] CI verde em Windows para workspace vazio (build, lint, testes vazios, secret scan).
-- [ ] Nenhum ADR "Proposed" bloqueando a Fase 2.
+- [x] Nenhum ADR "Proposed" bloqueando a Fase 2 (ADR-016 aceito na M03).
 
 ---
 
@@ -39,12 +40,16 @@ Missões:
 
 **Objetivo:** todo o núcleo funcionando e testado via CLI/testes, sem interface.
 
-Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, dry-run, refs simbólicas, conflitos), `capia-store` (formato `.capia`, autosave, snapshots, backups, migrations, recovery), `capia-assets` (import, fingerprint, dedup, relink, offline, versões), `capia-media` (probe, frame index, decode, thumbnails, waveforms, proxies), `capia-jobs`, `capia-render` (render graph, compositor wgpu, texto, transições básicas, mixer, export H.264), `capia-preview` (scheduler + presenter escolhido, demo mínima), `capia-engine`, `capia-cli`.
+Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, `preview`/`apply_plan` com plan token, `operation_id`/idempotência, refs simbólicas, conflitos), `capia-store` (formato `.capia`, autosave, snapshots, backups, migrations, recovery), `capia-assets` (import, fingerprint, dedup, relink, offline, versões), `capia-media` (probe, frame index, decode, thumbnails, waveforms, proxies), `capia-jobs`, `capia-render` (render graph, compositor wgpu **próprio** — ADR-034, RGBA16F linear —, texto, transições básicas, mixer, export H.264 via encoders atrás de abstração — ADR-032), `capia-preview` (scheduler + presenter escolhido, demo mínima), `capia-engine`, `capia-cli`.
 
 **Critérios de conclusão:**
 - [ ] Script via `capia-cli` cria projeto com 3 sequences (2 hooks + `BODY_MASTER` nested), transações, undo/redo, e exporta MP4 corretos (duração/fps/sync verificados por probe).
 - [ ] Testes de propriedade do Command Engine (≥ 10.000 sequências aleatórias) sem violação de invariantes; `apply∘undo = id`.
-- [ ] Teste de paridade preview×export bit-idêntico (sem proxy) no corpus de teste.
+- [ ] **Suíte de aceitação `tests/acceptance/timeline` (108 cenários, ADR-036) 100% verde em `capia-commands`**, com exatidão em Ticks e atomicidade nos erros.
+- [ ] **Idempotência e plan token (ADR-029/030):** testes de replay, de kill no meio do commit e de rejeição de token adulterado/expirado/consumido/de outro ator.
+- [ ] **Paridade nativo × WASM** por hash sobre o modelo real, em CI (ADR-016).
+- [ ] Teste de paridade preview×export bit-idêntico (sem proxy) no corpus de teste; golden frames em GPU de software (WARP/llvmpipe).
+- [ ] Conformidade de mídia (ADR-035): seek por índice 100% exato e conformação de cadência = `frame_at` em corpus CFR/VFR sintético.
 - [ ] Corpus VFR/29,97/23,976/59,94/44,1 kHz: drift A/V ≤ 1 frame em 10 min.
 - [ ] Kill -9 durante transações e jobs: projeto reabre íntegro em 100% dos testes de crash.
 - [ ] Benchmarks: transação de 500 ops < 200 ms em projeto de 10.000 clips; abrir projeto de 10.000 clips < 2 s.

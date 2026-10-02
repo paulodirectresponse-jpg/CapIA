@@ -51,6 +51,7 @@ Cada comando tem: `type`, `version`, schema JSON, documentação, label humano g
 | Invariante | Após aplicar (por comando e no fim da transação) | `OVERLAP`, `GAP_IN_MAGNETIC_TRACK`, `NESTED_CYCLE`, `NESTED_DEPTH`, `DANGLING_REFERENCE`, `TRANSITION_NOT_ADJACENT` |
 | Permissão | Antes da expansão, pelo `Actor` | `PERMISSION_DENIED` (ex.: agente sem permissão de deletar sequence) |
 | Conflito | No commit | `CONFLICT` (§7) |
+| Idempotência / plano | Na submissão e no apply | `OPERATION_ID_REUSED`, `OPERATION_ID_CONFLICT`, `PLAN_TOKEN_INVALID`, `PLAN_EXPIRED`, `PLAN_CONSUMED`, `PLAN_STATE_CHANGED`, `PREVIEW_REQUIRED` (§4.1–4.2) |
 
 Erros são **estruturados e acionáveis** (essencial para a IA se autocorrigir):
 ```json
@@ -70,9 +71,9 @@ rollback_tx(tx)                    → descarta working copy
 
 Equivalente em lote (o formato preferido pela IA e pela API):
 ```json
-{ "transaction": { "label": "AI · Editor: montar AD 2 / Hook 1", "base_revision": 1842,
-    "commands": [ { "type": "create_sequence", "ref": "$seq", "args": { ... } },
-                  { "type": "insert_clip", "ref": "$c1", "args": { "track": "$seq.tracks.main", ... } },
+{ "transaction": { "transaction_id": "run_01J…:edit:0", "label": "AI · Editor: montar AD 2 / Hook 1", "base_revision": 1842,
+    "commands": [ { "operation_id": "run_01J…:edit:0:0", "type": "create_sequence", "ref": "$seq", "args": { ... } },
+                  { "operation_id": "run_01J…:edit:0:1", "type": "insert_clip", "ref": "$c1", "args": { "track": "$seq.tracks.main", ... } },
                   ... 147 comandos ... ] } }
 ```
 
@@ -81,8 +82,40 @@ Propriedades:
 - **Isolamento:** a transação opera numa working copy (fork imutável do snapshot `base_revision`). Leitores continuam vendo a revisão anterior.
 - **Validação cumulativa:** cada comando valida precondições sobre o estado já modificado pelos anteriores; invariantes globais são revalidadas no fim.
 - **Limites:** `max_ops` (padrão 10.000 primitive ops) e tempo máximo; protege contra planos degenerados.
-- **Dry-run:** `dry_run(transaction)` executa tudo e retorna relatório + diff sem commitar — usado no stage VALIDATE PLAN da IA e em previews de "o que vai mudar".
+- **Preview (dry-run):** `preview(transaction)` executa tudo sobre a working copy, **não commita**, e devolve relatório + diff + `plan_token` (§4.2). É o único caminho de escrita para atores `Agent` e `Api` (ADR-030).
 - **Transações aninhadas:** não suportadas (simplicidade); comandos compostos (ex.: `generate_variants`) são expandidos internamente.
+
+### 4.1 Idempotência: `operation_id` (ADR-029)
+
+Todo comando de uma transação carrega um **`operation_id`** (string ≤ 128 caracteres, único dentro da transação e do projeto). A transação carrega um `transaction_id` opcional (agrupamento/auditoria; a idempotência vale por `operation_id`).
+
+- **Quem gera:** a UI usa UUIDv7; o Orquestrador de IA usa ids **determinísticos** derivados de `run_id + stage + índice` (`run_01J…:edit:0:17`), para que um Run retomado após crash ou timeout reenvie os mesmos ids e **nunca duplique edições**; clientes REST/MCP escolhem os seus.
+- **Registro:** tabela `applied_operations(operation_id PK, payload_hash, history_entry_id, applied_at, actor)` no `.capia`, gravada **na mesma transação SQLite** do commit. `payload_hash` = SHA-256 do JSON canônico (RFC 8785) do comando.
+- **Reenvio (replay):** se **todos** os `operation_id` da transação já existem com o mesmo `payload_hash` → o engine **não reaplica**; retorna o resultado original (`replayed: true`, mesmo `history_entry_id`, mapa de `refs` original).
+- **Conflitos:** mesmo `operation_id` com `payload_hash` diferente → `OPERATION_ID_REUSED`. Parte dos ids conhecida e parte nova → `OPERATION_ID_CONFLICT` (a atomicidade garante que isso só ocorre por bug ou colisão de ids; nada é aplicado).
+- **Undo não libera ids.** `operation_id` identifica a *submissão*, não o efeito: após o usuário desfazer, reenviar os mesmos ids devolve `replayed: true` sem reaplicar (respeita o undo). Para reaplicar, use redo ou novos ids.
+- **Retenção:** registros são mantidos por no mínimo 30 dias e nunca podados enquanto houver AI Run ativo ou retomável no projeto; poda é só por idade.
+- **Escopo:** ids são por projeto. Interações da UI que não passam por preview também carregam `operation_id` (barato e uniformiza auditoria).
+
+### 4.2 Preview → apply vinculado por token (ADR-030)
+
+Objetivo: **impedir que um plano diferente do revisado seja aplicado**, seja por bug, race, retry ou manipulação.
+
+```
+preview(transaction)  → { plan_token, diff, report, diff_digest, base_revision, expires_at }
+apply_plan(plan_token) → HistoryEntry              // recebe SÓ o token; nunca o plano de novo
+```
+
+1. **Normalização e digest.** No preview, o engine normaliza a transação (ordem de comandos, `operation_id`s, args em JSON canônico) e calcula `plan_digest = SHA-256(canonical(transaction))`. Executa em working copy e calcula `diff_digest = SHA-256(canonical(ops primitivas resultantes))`.
+2. **Armazenamento do plano revisado.** O engine guarda `{plan_id, transaction normalizada, ops, plan_digest, diff_digest, base_revision, actor, scope, expires_at}` num *preview store* em memória (limitado em número e bytes; TTL padrão 15 min; apagado ao fechar o projeto).
+3. **Token.** `plan_token = plan_id ‖ HMAC-SHA256(K, plan_id ‖ plan_digest ‖ diff_digest ‖ base_revision ‖ actor_id ‖ scope ‖ expires_at)`, onde `K` é uma chave de 256 bits **aleatória por processo, só em memória** (nunca persistida nem logada). Tokens não sobrevivem a reinício — comportamento desejado (re-preview).
+4. **Apply.** `apply_plan` verifica: HMAC válido (comparação em tempo constante) → `PLAN_TOKEN_INVALID`; não expirado → `PLAN_EXPIRED`; não consumido → `PLAN_CONSUMED`; mesmo `actor`/`client_id` e escopo do preview; permissões ainda válidas. Como o plano vem do store (não do chamador), **não é possível aplicar um plano diferente**.
+5. **Drift de revisão.** Se `current_revision ≠ base_revision`: o engine tenta **rebase** (§7); só prossegue se o conjunto de ops primitivas recomputado tiver o **mesmo `diff_digest`**. Caso contrário → `PLAN_STATE_CHANGED` e é preciso novo preview. Se o `diff_digest` mudar, qualquer aprovação humana anterior é invalidada (a aprovação se liga ao `diff_digest`).
+6. **Uso único.** O token é consumido no apply bem-sucedido. Reenvio do mesmo `apply_plan` após sucesso devolve o resultado original (idempotente, via §4.1) em vez de `PLAN_CONSUMED` quando os `operation_id` já estão registrados.
+7. **Obrigatoriedade.** Atores `Agent` e `Api` **só** escrevem via `preview → apply_plan`; `execute(tx)` direto devolve `PREVIEW_REQUIRED`. Atores `User`/`System` podem usar `execute` direto (gestos interativos), com `operation_id`.
+8. **Gate humano.** Em checkpoints que exigem aprovação (ex.: aprovar EditPlan), a UI mostra o `diff` e a aprovação referencia `plan_id + diff_digest`; `apply_plan` só roda com aprovação correspondente.
+
+Limite honesto: o token garante integridade e vínculo entre **revisão e aplicação dentro do mesmo processo**. Ele não impede que um humano ou agente com permissão de preview+apply submeta um plano ruim; isso é papel de validação, permissões e undo.
 
 ## 5. Referências simbólicas
 

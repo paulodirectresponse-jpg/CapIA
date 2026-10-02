@@ -43,7 +43,7 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 **Consequências:** adapters HTTP próprios (APIs são simples e estáveis o suficiente); custo de manter formatos de cada provider.
 
 ### ADR-005 — Timeline UI própria em canvas
-**Status:** Accepted
+**Status:** Accepted · **Evidência (M03/S5):** canvas virtualizado manteve 60 fps com 10.000 clips visíveis (JS 2,1 ms p50) só com raster por CPU; DOM sem virtualização caiu a ~8 fps no zoom — `docs/spikes/S5-timeline-canvas.md`
 **Decisão:** `packages/ui-timeline` próprio (canvas + virtualização + camada de gestos), sem biblioteca de timeline de terceiros como base. Ver `TIMELINE_UX.md` §6.
 **Consequências:** mais trabalho inicial; controle total sobre desempenho, track magnética, nested e integração com o estado autoritativo do core.
 
@@ -92,7 +92,7 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 **Decisão:** `.capia` (SQLite WAL) com commit durável por transação; mídia gerenciada em `Nome.capia-media\`; cache regenerável em AppData; snapshots JSON canônico internos; backups rotativos externos. Ver `DATA_MODEL.md` §2 e §6.
 
 ### ADR-016 — Crates puros do core compilados para WASM e usados pela UI
-**Status:** Proposed (validação no spike S4)
+**Status:** Accepted (M03, spike S4 — `docs/spikes/S4-wasm-core.md`), condicionada a: teste de paridade nativo×WASM por hash em CI sobre o modelo real; API WASM com f64 nos limites de tempo; medir cold-start do módulo e IPC real no S1/Fase 3
 **Decisão:** `capia-time`, `capia-model`, `capia-commands` sem IO, compilados para WASM; a UI usa-os para ghost previews de gestos e snapping, aplicando a mesma lógica do core.
 **Alternativa:** reimplementar lógica em TS (rejeitada: divergência inevitável); round-trip IPC a cada movimento do mouse (latência).
 
@@ -125,7 +125,7 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 **Decisão:** ver `AI_SYSTEM.md` §9.
 
 ### ADR-024 — Uso do FFmpeg
-**Status:** Accepted (licenciamento em OD-2)
+**Status:** Accepted (licenciamento fechado na ADR-032)
 **Decisão:** libav in-process para decode/preview/export; CLI como sidecar para jobs batch isolados; build única versionada; nunca como engine de composição.
 
 ### ADR-025 — Keyframes ancorados no tempo de conteúdo do clip
@@ -143,6 +143,56 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 ### ADR-028 — Text engine em Rust compartilhado por preview e export
 **Status:** Accepted (biblioteca concreta escolhida no início da Fase 2: cosmic-text/swash vs Skia)
 **Decisão:** nenhum texto é rasterizado pela WebView para fins de render.
+
+### ADR-029 — `operation_id` em todo comando (idempotência)
+**Status:** Accepted (M03, decisão do Product Owner)
+**Contexto:** AI Runs, REST/MCP e retries de rede podem reenviar uma transação. Só `base_revision` (ADR-014) protege contra conflito, não contra **duplicação** (ex.: Run retomado após crash reaplica 147 operações). O Timeline Studio (auditoria M02) usa ids de operação idempotentes; adotamos a ideia, reimplementada e estendida.
+**Decisão:** todo comando carrega `operation_id` (≤128 chars, único no projeto). O engine registra `applied_operations(operation_id, payload_hash, history_entry_id)` na **mesma transação SQLite** do commit. Reenvio com todos os ids conhecidos e mesmo payload → resultado original (`replayed: true`), sem reaplicar; mesmo id com payload diferente → `OPERATION_ID_REUSED`; mistura de conhecidos/novos → `OPERATION_ID_CONFLICT`. Ids da IA são determinísticos (`run_id+stage+índice`). Undo **não** libera ids (idempotência da submissão, não do efeito). Retenção ≥ 30 dias e nunca enquanto houver Run retomável.
+**Alternativas:** idempotência só por `transaction_id` (rejeitada: reenvio parcial/reordenado); deduplicar por hash do plano (rejeitada: mesmo plano legítimo reaplicado depois de undo seria bloqueado sem controle do chamador).
+**Consequências:** nova tabela e verificação no commit; `COMMAND_SYSTEM.md` §4.1; Fase 2 testa replay/conflito/crash no meio do commit.
+
+### ADR-030 — `preview → apply_plan` vinculado por token (plan token)
+**Status:** Accepted (M03, decisão do Product Owner)
+**Contexto:** a IA precisa revisar o diff antes de aplicar e **nada pode permitir aplicar silenciosamente um plano diferente do revisado** (bug, race, retry, manipulação). `dry_run` + `commit` com o plano reenviado não garante isso.
+**Decisão:** `preview(tx)` normaliza a transação (JSON canônico RFC 8785), calcula `plan_digest` e `diff_digest` (ops primitivas resultantes), guarda o plano revisado num *preview store* em memória (TTL 15 min) e devolve `plan_token = plan_id ‖ HMAC-SHA256(K, plan_id‖plan_digest‖diff_digest‖base_revision‖actor‖scope‖expires_at)` com `K` aleatória por processo, só em memória. `apply_plan(plan_token)` recebe **só o token**, verifica HMAC (tempo constante), validade, uso único e ator, e aplica o plano **guardado**. Se a revisão mudou, só prossegue se o rebase produzir o **mesmo `diff_digest`**; senão `PLAN_STATE_CHANGED` (novo preview; aprovação humana se invalida). Atores `Agent` e `Api` só escrevem por este caminho (`PREVIEW_REQUIRED`); `User/System` podem usar `execute` direto.
+**Alternativas:** assinar o plano e reenviá-lo no apply (rejeitada: o chamador ainda controla o corpo; maior superfície); chave persistida (rejeitada: vazamento de chave e tokens longevos); sem token, só `base_revision` (rejeitada: não prova que o plano aplicado é o revisado).
+**Consequências:** estado em memória a limitar; tokens não sobrevivem a reinício (re-preview); `COMMAND_SYSTEM.md` §4.2; AI Tool System (`timeline.preview`/`apply_plan`); aprovação humana referencia `plan_id+diff_digest`. **Limite:** garante integridade preview→apply no mesmo processo; não impede um plano ruim submetido por quem tem permissão (isso é validação, permissões e undo).
+
+### ADR-031 — Estratégia de reutilização C e política de proveniência
+**Status:** Accepted (M03, decisão do Product Owner; auditoria em `OPEN_SOURCE_AUDIT.md`)
+**Decisão:** **core próprio + reutilização seletiva de comportamento, testes, padrões e componentes legalmente compatíveis**. Sem fork de OpenCut, Timeline Studio ou outro editor como base. Classes `SAFE_TO_REUSE / SAFE_WITH_OBLIGATIONS / REFERENCE_ONLY / DO_NOT_USE`. Proveniência **obrigatória** (repositório, commit/tag, arquivo original, licença, alterações, copyright) para qualquer código reutilizado; nada de `REFERENCE_ONLY`/`DO_NOT_USE` é copiado; ideias podem ser reimplementadas (clean-room). Política e registro: **`docs/PROVENANCE.md`**.
+**Consequências:** nenhum código de terceiros incorporado até aqui; verificação de licenças no CI (M04); métricas de acompanhamento passam a ser marcos, critérios de aceitação, testes, riscos eliminados, blockers, retrabalho e custo de sessões (não pessoas-semanas).
+
+### ADR-032 — FFmpeg: LGPL, dynamic linking, build própria mínima; sem GPL/nonfree (fecha OD-2)
+**Status:** Accepted (M03, direção do Product Owner; evidência em `docs/spikes/S3-ffmpeg-lgpl.md`)
+**Decisão:**
+1. Build padrão **LGPL**, **bibliotecas compartilhadas** (DLLs), carregadas dinamicamente; **nenhum** componente GPL ou `--enable-nonfree`; **sem x264/x265**; sem `--enable-gpl`.
+2. **Build própria e mínima**, **sem `--enable-version3`** (resulta em LGPL-2.1+), `--disable-autodetect --disable-network --disable-programs` (CLI só como sidecar opcional), componentes habilitados explicitamente. **Não** consumir a build BtbN "como está": ela é **LGPL-3.0** (`version3`), tem ~70 bibliotecas externas (manifesto/superfície), e o manifesto do OpenCut a rotula incorretamente como 2.1.
+3. **Origem e build pinadas e reproduzíveis:** tarball/tag + SHA-256 + commit (ex.: `n8.1.3`, `1041abdc…`), receita versionada no repositório, toolchain fixa, CI gera artefatos; reprodutibilidade bit a bit é meta a verificar (não verificada no S3).
+4. **Encoders de sistema/hardware atrás de abstração** (`VideoEncoder` trait): NVENC/AMF/QSV (via headers permissivos) e Media Foundation (`h264_mf`/`hevc_mf`) como caminho principal em Windows; **fallback por software**: H.264 via OpenH264 (Constrained Baseline) e HEVC via kvazaar (lento); ProRes via `prores_ks` quando permitido.
+5. **Manifesto de licenças** (`THIRD_PARTY_LICENSES`) gerado a cada release, com texto da licença, versão, flags e fonte da build.
+**Riscos registrados (não resolvidos por engenharia):** patentes/royalties de H.264/HEVC/AAC; OpenH264 compilado do fonte **não** tem a cobertura de patentes da Cisco (que vale para o binário distribuído por ela, obtido em runtime); obrigações LGPL (oferta do fonte da build, permitir substituir DLLs); `prores_ks` (implementação independente); dependência de drivers/SO para encoders HW.
+**Pendente (M04/Fase 2):** build Windows própria, habilitação e teste dos encoders HW, teste de reprodutibilidade, política de download do binário OpenH264.
+
+### ADR-033 — Baseline de hardware e plataforma V1 (fecha OD-3)
+**Status:** Accepted (M03, decisão do Product Owner; **revisável por benchmark real nas próximas fases**, não é requisito imutável)
+**Decisão:** suporte planejado **Windows 11 x64**. **Máquina de referência mínima** para testes: CPU moderna de 4+ cores, 16 GB RAM, GPU compatível com DirectX 12/wgpu (inclui iGPU moderna), SSD; edição alvo principal **1080p**. **Recomendada:** 8+ cores, 32 GB RAM, GPU dedicada com 6 GB+ de VRAM, NVMe. Metas de desempenho (`TEST_STRATEGY.md` §8) valem na máquina mínima, salvo indicação.
+**Nota:** o CI em nuvem usa GPU de software (WARP/llvmpipe) para correção (golden frames), **não** para desempenho; benchmarks de desempenho exigem máquinas reais.
+
+### ADR-034 — Compositor próprio (`REIMPLEMENT_WITH_REFERENCE`)
+**Status:** Accepted (M03, spike S6 — `docs/spikes/S6-compositor.md`)
+**Decisão:** `capia-render` escreve seu compositor wgpu conforme `PREVIEW_RENDER.md`; o compositor do OpenCut Classic **não** é semente de núcleo (8 bits não linear, passes full-canvas por camada ≈ 16 MB/camada a 1080p, sem YUV/texto/transições/bbox, API orientada ao bridge WASM). Pode servir de referência; `blend.wgsl` e `masks/` são candidatos a adaptação com atribuição (MIT) após testes dourados próprios, registrados em `PROVENANCE.md`.
+**Achado útil:** wgpu 29 roda em llvmpipe (Vulkan por software) → golden frames no CI sem GPU.
+
+### ADR-035 — O engine é dono da seleção de frame e da conformação de cadência
+**Status:** Accepted (M03, spike S2 — `docs/spikes/S2-frame-exact.md`); reforça a ADR-007
+**Contexto:** em mídia sintética VFR/CFR, o seek `-ss` do ffmpeg devolveu o frame **seguinte** em 99% dos casos (até 75 frames de erro com pausas) e o filtro `fps` divergiu de sample-and-hold em 13–38% dos frames ao conformar para 23,976/24/25/50 fps.
+**Decisão:** preview e export usam **a mesma** função de seleção de frame (`frame_at` sample-and-hold sobre *frame index* próprio, decode por ordinal) e conformam a cadência no compositor; **nem `-ss` nem o filtro `fps`** do ffmpeg determinam timing. Conversão pts→Ticks por aritmética racional de 128 bits (`pts×num×705.600.000/den`, arredondamento definido; time bases como 1/15360 e 1/12288 não dividem o timebase). O demux/decode mantém o tratamento de *edit list* do libav (ignorá-la causa +21 ms de dessincronia). Rotação é aplicada pelo engine.
+**Consequências:** suíte de conformidade de mídia (`/testdata`, gerada por script) em `capia-media`.
+
+### ADR-036 — Suíte de aceitação de comportamento da timeline como ativo normativo
+**Status:** Accepted (M03, spike S7 — `docs/spikes/S7-timeline-acceptance.md`)
+**Decisão:** `tests/acceptance/timeline/*.json` (108 cenários em formato de dados, independentes de implementação) são o **critério de aceitação da Fase 2** de `capia-commands` e fonte de verdade de comportamento (placement, snapping, ripple, retime, group move, keyframes). Cada cenário tem `provenance` e, onde o CapIA diverge do OpenCut, `diverges_from_opencut`. As regras D-S7-1..8 (S7) são **propostas** a confirmar pelo Product Owner; mudanças nelas alteram cenários, não código. Nenhum teste de terceiros foi copiado.
 
 ---
 
@@ -173,10 +223,13 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 ## C. Decisões abertas (precisam ser fechadas antes da Fase 2)
 
 ### OD-1 — Presenter do preview na janela Tauri/WebView2
+**Estado (M03): ABERTA.** S1 **não pôde ser medido** no ambiente da sessão (sem Windows/GPU/WebView2). Evidência documental e de proxy, protocolo de medição e **regra de decisão** definidos em `docs/spikes/S1-preview-surface.md`. Achado verificado: o `wry` 0.57 (Tauri 2.12) só faz *windowed hosting* do WebView2 (sem visual hosting/DirectComposition).
 Opções: P1 superfície nativa filha (preferida), P2 WebView2 SharedBuffer + canvas. **Como decidir:** spike S1 com os critérios de `PREVIEW_RENDER.md` §5. Se nenhuma atender, reavaliar ADR-001 (ex.: shell nativo com UI web embutida em região, ou Qt).
 
 ### OD-2 — Modelo de licença do produto e build do FFmpeg
+**Estado (M03): FECHADA pela ADR-032** (direção do PO: LGPL, dynamic linking, sem GPL/nonfree). Riscos jurídicos/patentes registrados na ADR; modelo de licença **do repositório** do produto continua a definir pelo PO antes do primeiro release.
 Se o produto for **comercial e de código fechado** (recomendação implícita do contexto): FFmpeg LGPL com linkagem dinâmica, sem x264/x265; H.264/HEVC via encoders de hardware (NVENC/QSV/AMF) com fallback OpenH264 (qualidade inferior) ou licenciamento comercial de encoder; avaliar royalties de patentes (AAC, HEVC). Se **open-source GPL**: x264/x265 liberados. Também define a licença do repositório. **Quem decide:** o dono do produto (decisão de negócio), com aconselhamento jurídico.
 
 ### OD-3 — Baseline de plataforma e hardware de referência
+**Estado (M03): FECHADA pela ADR-033.**
 Proposta: Windows 10 22H2+ e Windows 11, x64 (ARM64 depois); GPU com D3D12 (feature level 11_0+); 16 GB RAM; hardware de referência para metas de desempenho: notebook com CPU de 8 núcleos (≈2021+) e GPU integrada Intel Iris Xe **e** uma máquina com GPU NVIDIA dedicada. Afeta backend wgpu, decode/encode HW e metas de `TEST_STRATEGY.md` §8.

@@ -1,0 +1,1420 @@
+[
+ {
+  "id": "KF-001",
+  "area": "keyframes",
+  "title": "Linear interpolation between keyframes",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/animation/keyframes.ts",
+     "apps/web/src/animation/interpolation.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0
+         ],
+         [
+          30,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "eval_keyframes",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": [
+     0,
+     15,
+     30
+    ]
+   }
+  },
+  "then": {
+   "values": [
+    0.0,
+    0.5,
+    1.0
+   ]
+  }
+ },
+ {
+  "id": "KF-002",
+  "area": "keyframes",
+  "title": "Values hold before the first and after the last keyframe",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/animation/keyframes.ts",
+     "apps/web/src/animation/interpolation.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          10,
+          0.2
+         ],
+         [
+          20,
+          0.8
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "eval_keyframes",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": [
+     0,
+     10,
+     15,
+     20,
+     50
+    ]
+   }
+  },
+  "then": {
+   "values": [
+    0.2,
+    0.2,
+    0.5,
+    0.8,
+    0.8
+   ]
+  }
+ },
+ {
+  "id": "KF-003",
+  "area": "keyframes",
+  "title": "Hold interpolation steps until the next keyframe",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/animation/keyframes.ts",
+     "apps/web/src/animation/interpolation.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0,
+          "hold"
+         ],
+         [
+          30,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "eval_keyframes",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": [
+     0,
+     29,
+     30
+    ]
+   }
+  },
+  "then": {
+   "values": [
+    0.0,
+    0.0,
+    1.0
+   ]
+  }
+ },
+ {
+  "id": "KF-004",
+  "area": "keyframes",
+  "title": "Adding a keyframe at an existing time replaces it",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          10,
+          0.2
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": 10,
+    "value": 0.5
+   }
+  },
+  "then": {
+   "kfs": {
+    "a": {
+     "opacity": [
+      [
+       10,
+       0.5
+      ]
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-005",
+  "area": "keyframes",
+  "title": "Value above the property range is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)",
+   "diverges_from_opencut": "OpenCut clamps number params; CapIA commands reject (UI clamps before sending) so plans are never silently altered"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": 10,
+    "value": 1.5
+   }
+  },
+  "then": {
+   "error": "OUT_OF_RANGE"
+  }
+ },
+ {
+  "id": "KF-006",
+  "area": "keyframes",
+  "title": "Value below the property range is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": 10,
+    "value": -0.1
+   }
+  },
+  "then": {
+   "error": "OUT_OF_RANGE"
+  }
+ },
+ {
+  "id": "KF-007",
+  "area": "keyframes",
+  "title": "Trimming out never deletes keyframes; evaluation uses the visible part",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)",
+   "diverges_from_opencut": "OpenCut clampAnimationsToDuration drops keyframes beyond the new duration; CapIA keeps them so re-extending restores the animation"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "scale": [
+         [
+          0,
+          0.0
+         ],
+         [
+          60,
+          6.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": [
+   {
+    "cmd": "trim_clip",
+    "args": {
+     "clip": "a",
+     "edge": "out",
+     "to": 30
+    }
+   },
+   {
+    "cmd": "eval_keyframes",
+    "args": {
+     "clip": "a",
+     "prop": "scale",
+     "at": [
+      29
+     ]
+    }
+   }
+  ],
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ]
+    ]
+   },
+   "values": [
+    2.9
+   ],
+   "clips": {
+    "a": {
+     "kf_count": 2
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-008",
+  "area": "keyframes",
+  "title": "Trim out then extend back restores the original animation",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "scale": [
+         [
+          0,
+          0.0
+         ],
+         [
+          60,
+          6.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": [
+   {
+    "cmd": "trim_clip",
+    "args": {
+     "clip": "a",
+     "edge": "out",
+     "to": 30
+    }
+   },
+   {
+    "cmd": "trim_clip",
+    "args": {
+     "clip": "a",
+     "edge": "out",
+     "to": 60
+    }
+   },
+   {
+    "cmd": "eval_keyframes",
+    "args": {
+     "clip": "a",
+     "prop": "scale",
+     "at": [
+      50
+     ]
+    }
+   }
+  ],
+  "then": {
+   "values": [
+    5.0
+   ],
+   "clips": {
+    "a": {
+     "kf_count": 2
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-009",
+  "area": "keyframes",
+  "title": "Trim in keeps keyframes in content time (animation does not slide)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "scale": [
+         [
+          0,
+          0.0
+         ],
+         [
+          60,
+          6.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": [
+   {
+    "cmd": "trim_clip",
+    "args": {
+     "clip": "a",
+     "edge": "in",
+     "to": 20
+    }
+   },
+   {
+    "cmd": "eval_keyframes",
+    "args": {
+     "clip": "a",
+     "prop": "scale",
+     "at": [
+      20,
+      40
+     ]
+    }
+   }
+  ],
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      20,
+      40
+     ]
+    ]
+   },
+   "values": [
+    2.0,
+    4.0
+   ]
+  }
+ },
+ {
+  "id": "KF-010",
+  "area": "keyframes",
+  "title": "Split inside an animation adds an interpolated boundary keyframe to both halves",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/animation/keyframes.ts",
+     "apps/web/src/animation/interpolation.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   },
+   "diverges_from_opencut": "Boundary keyframe on split matches OpenCut's split-boundary behavior"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0
+         ],
+         [
+          60,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 30,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "a2",
+      30,
+      30
+     ]
+    ]
+   },
+   "kfs": {
+    "a": {
+     "opacity": [
+      [
+       0,
+       0.0
+      ],
+      [
+       30,
+       0.5
+      ]
+     ]
+    },
+    "a2": {
+     "opacity": [
+      [
+       30,
+       0.5
+      ],
+      [
+       60,
+       1.0
+      ]
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-011",
+  "area": "keyframes",
+  "title": "Split exactly on a keyframe does not duplicate it",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/animation/keyframes.ts",
+     "apps/web/src/animation/interpolation.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0
+         ],
+         [
+          30,
+          0.4
+         ],
+         [
+          60,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 30,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "a2",
+      30,
+      30
+     ]
+    ]
+   },
+   "kfs": {
+    "a": {
+     "opacity": [
+      [
+       0,
+       0.0
+      ],
+      [
+       30,
+       0.4
+      ]
+     ]
+    },
+    "a2": {
+     "opacity": [
+      [
+       30,
+       0.4
+      ],
+      [
+       60,
+       1.0
+      ]
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-012",
+  "area": "keyframes",
+  "title": "Split before the first keyframe makes the left half static at the first value",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          40,
+          0.2
+         ],
+         [
+          50,
+          0.8
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 20,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      20
+     ],
+     [
+      "a2",
+      20,
+      40
+     ]
+    ]
+   },
+   "kfs": {
+    "a": {
+     "opacity": []
+    },
+    "a2": {
+     "opacity": [
+      [
+       40,
+       0.2
+      ],
+      [
+       50,
+       0.8
+      ]
+     ]
+    }
+   },
+   "static": {
+    "a": {
+     "opacity": 0.2
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-013",
+  "area": "keyframes",
+  "title": "Text/solid keyframes use clip-local time: right half is re-based",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "t",
+       "start": 0,
+       "dur": 40,
+       "content": "text",
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0
+         ],
+         [
+          40,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "t",
+    "at": 20,
+    "new_id": "t2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "t",
+      0,
+      20
+     ],
+     [
+      "t2",
+      20,
+      20
+     ]
+    ]
+   },
+   "kfs": {
+    "t": {
+     "opacity": [
+      [
+       0,
+       0.0
+      ],
+      [
+       20,
+       0.5
+      ]
+     ]
+    },
+    "t2": {
+     "opacity": [
+      [
+       0,
+       0.5
+      ],
+      [
+       20,
+       1.0
+      ]
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-014",
+  "area": "keyframes",
+  "title": "Retimed clip: keyframes are in source time and show at clip-time = source/speed",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 45,
+       "speed": 2,
+       "src_in": 0,
+       "src_dur": 100,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0
+         ],
+         [
+          60,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "eval_keyframes",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": [
+     15
+    ]
+   }
+  },
+  "then": {
+   "values": [
+    0.5
+   ]
+  }
+ },
+ {
+  "id": "KF-015",
+  "area": "keyframes",
+  "title": "Adding a keyframe on a retimed clip stores source time",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 45,
+       "speed": 2,
+       "src_in": 0,
+       "src_dur": 100,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0
+         ],
+         [
+          60,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": 15,
+    "value": 0.9
+   }
+  },
+  "then": {
+   "kfs": {
+    "a": {
+     "opacity": [
+      [
+       0,
+       0.0
+      ],
+      [
+       30,
+       0.9
+      ],
+      [
+       60,
+       1.0
+      ]
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-016",
+  "area": "keyframes",
+  "title": "Bezier overshoot never leaves the property range",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0,
+          {
+           "bezier": [
+            0.25,
+            1.6,
+            0.75,
+            1.6
+           ]
+          }
+         ],
+         [
+          30,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "eval_keyframes",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16,
+     17,
+     18,
+     19,
+     20,
+     21,
+     22,
+     23,
+     24,
+     25,
+     26,
+     27,
+     28,
+     29,
+     30
+    ]
+   }
+  },
+  "then": {
+   "all_within": {
+    "range": [
+     0.0,
+     1.0
+    ]
+   }
+  }
+ },
+ {
+  "id": "KF-017",
+  "area": "keyframes",
+  "title": "A keyframe exactly on the clip end frame is allowed",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 50,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": 60,
+    "value": 0.5
+   }
+  },
+  "then": {
+   "kfs": {
+    "a": {
+     "opacity": [
+      [
+       50,
+       0.5
+      ]
+     ]
+    }
+   }
+  }
+ },
+ {
+  "id": "KF-018",
+  "area": "keyframes",
+  "title": "A keyframe one frame past the clip end is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 50,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": 61,
+    "value": 0.5
+   }
+  },
+  "then": {
+   "error": "OUT_OF_CLIP_RANGE"
+  }
+ },
+ {
+  "id": "KF-019",
+  "area": "keyframes",
+  "title": "A keyframe before the clip start is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 50,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": 9,
+    "value": 0.5
+   }
+  },
+  "then": {
+   "error": "OUT_OF_CLIP_RANGE"
+  }
+ },
+ {
+  "id": "KF-020",
+  "area": "keyframes",
+  "title": "Keyframe times must be frame-aligned",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "add_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "at": "21/2",
+    "value": 0.5
+   }
+  },
+  "then": {
+   "error": "NOT_FRAME_ALIGNED"
+  }
+ },
+ {
+  "id": "KF-021",
+  "area": "keyframes",
+  "title": "Moving a keyframe onto an occupied time is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §3 keyframes (ADR-025)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          10,
+          0.1
+         ],
+         [
+          20,
+          0.2
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "move_keyframe",
+   "args": {
+    "clip": "a",
+    "prop": "opacity",
+    "from": 10,
+    "to": 20
+   }
+  },
+  "then": {
+   "error": "KEYFRAME_TIME_CONFLICT"
+  }
+ }
+]

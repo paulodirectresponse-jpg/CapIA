@@ -38,7 +38,7 @@ UNDERSTAND → PLAN → VALIDATE_PLAN → ACQUIRE → EDIT → REVIEW → CORREC
 |---|---|---|---|---|
 | UNDERSTAND | Demand Interpreter | DemandInputs, memória | `DemandSpec vN` + perguntas abertas | read-only: documentos, assets, análise de mídia, reference analyzer |
 | PLAN | Producer → Planner | DemandSpec, ReferenceGrammar, inventário de assets | `ProductionPlan` (deliverables, assets necessários) + `EditPlan` por deliverable | read-only + `plan.*` |
-| VALIDATE_PLAN | Orchestrator + Critic | EditPlan | Relatório: dry-run das transações, checagem de assets/duração/formato, custo estimado | `command.dry_run`, read-only |
+| VALIDATE_PLAN | Orchestrator + Critic | EditPlan | Relatório: `preview` das transações (gera `plan_token` + `diff_digest`), checagem de assets/duração/formato, custo estimado | `command.preview`, read-only |
 | ACQUIRE | Producer | lista de assets faltantes | assets importados/baixados/gerados (jobs) | `assets.*`, `gateway.*`, `generate.*` (com orçamento/aprovação) |
 | EDIT | Editor | EditPlan aprovado + assets | transações commitadas | `timeline.*` (escrita) |
 | REVIEW | Critic | timeline (digest + frames amostrados), EditPlan, DemandSpec | `Review { findings[], score }` | read-only + `render.frame` |
@@ -46,7 +46,7 @@ UNDERSTAND → PLAN → VALIDATE_PLAN → ACQUIRE → EDIT → REVIEW → CORREC
 | DONE | Orchestrator | — | resumo, custo, deliverables prontos | — |
 
 Regras:
-- **Assets pendentes no VALIDATE_PLAN:** assets ainda não adquiridos entram no dry-run como *placeholders* com tipo e duração declarados no `ProductionPlan`. Após ACQUIRE, o Editor executa um **dry-run final** com os assets reais antes de cada commit; divergências (ex.: B-roll mais curto que o previsto) voltam ao Planner como ajuste local do plano.
+- **Assets pendentes no VALIDATE_PLAN:** assets ainda não adquiridos entram no preview como *placeholders* com tipo e duração declarados no `ProductionPlan`. Após ACQUIRE, o Editor executa um **novo preview** com os assets reais (novo `plan_token`; aprovação humana, se exigida, referencia o novo `diff_digest`) antes de `apply_plan`; divergências (ex.: B-roll mais curto que o previsto) voltam ao Planner como ajuste local do plano.
 - **Gate de escrita:** tools `timeline.*` de escrita só existem no contexto do agente durante EDIT/CORRECT e só se `EditPlan.status ∈ {Validated, Approved}`.
 - **Checkpoints humanos configuráveis:** aprovar DemandSpec (padrão: só se houver perguntas abertas), aprovar EditPlan (padrão: ligado), aprovar gastos acima do limite (sempre).
 - **Limites de loop:** máx. N ciclos REVIEW→CORRECT (padrão 2) e orçamento de custo/tempo por Run; ao estourar → WAITING_USER com relatório.
@@ -117,7 +117,7 @@ enum Permission { ReadProject, ReadMedia, WriteTimeline, ManageAssets, NetworkFe
 | Namespace | Tools |
 |---|---|
 | `project` | `read_brief`, `get_demand_spec`, `list_sequences`, `list_deliverables` |
-| `timeline` | `get_state` (digest paginado), `query_clips`, `begin_tx`, `apply` (lote de comandos), `validate`, `commit`, `rollback`, `dry_run` |
+| `timeline` | `get_state` (digest paginado), `query_clips`, `preview` (lote de comandos com `operation_id` → `plan_token` + diff), `apply_plan` (só o token), `rollback_preview` |
 | `assets` | `search`, `get`, `import_local` (só de pastas autorizadas), `get_transcript`, `get_analysis` |
 | `media` | `analyze` (job), `sample_frames`, `transcribe` (job), `detect_scenes` |
 | `reference` | `analyze` (job), `get_grammar` |
@@ -130,7 +130,7 @@ enum Permission { ReadProject, ReadMedia, WriteTimeline, ManageAssets, NetworkFe
 Os comandos da timeline expostos à IA são **os mesmos** do Command Engine (schema gerado), embrulhados em `timeline.apply`.
 
 ### Execução de uma tool call
-1. Tool existe e está liberada para (papel, stage)? 2. Input valida no schema? 3. Permissão do Actor e política (orçamento, aprovação, pastas permitidas)? 4. Executa via Engine API com `Actor::Agent{run_id, role}`. 5. Saída validada e **truncada/sumarizada** para caber no contexto. 6. Auditoria (`ai_run_steps`).
+1. Tool existe e está liberada para (papel, stage)? 2. Input valida no schema? 3. Permissão do Actor e política (orçamento, aprovação, pastas permitidas)? 4. Executa via Engine API com `Actor::Agent{run_id, role}`; escritas na timeline só por `preview → apply_plan` (ADR-030), com `operation_id` determinístico derivado de `run_id+stage+índice` (ADR-029). 5. Saída validada e **truncada/sumarizada** para caber no contexto. 6. Auditoria (`ai_run_steps`).
 
 ### Proibições estruturais
 Não existem tools de shell, filesystem arbitrário, rede arbitrária (`http.get` genérico) nem de leitura de settings/credenciais. Rede só pelo Asset Gateway (adapters) e Providers. Isso é garantido por construção (não há implementação), não por prompt.

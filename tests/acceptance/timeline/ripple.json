@@ -1,0 +1,1134 @@
+[
+ {
+  "id": "RPL-001",
+  "area": "ripple",
+  "title": "Magnetic delete closes the gap",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/ripple/shift.ts",
+     "apps/web/src/ripple/apply.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-002",
+  "area": "ripple",
+  "title": "Deleting the last clip shifts nothing",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/ripple/shift.ts",
+     "apps/web/src/ripple/apply.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-003",
+  "area": "ripple",
+  "title": "Non-magnetic delete leaves a gap by default",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/ripple/shift.ts",
+     "apps/web/src/ripple/apply.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 20
+      },
+      {
+       "id": "c",
+       "start": 70,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      70,
+      10
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-004",
+  "area": "ripple",
+  "title": "Non-magnetic ripple delete (track scope) shifts followers by the clip duration",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/ripple/shift.ts",
+     "apps/web/src/ripple/apply.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 20
+      },
+      {
+       "id": "c",
+       "start": 70,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      50,
+      10
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-005",
+  "area": "ripple",
+  "title": "Magnetic tracks cannot delete without ripple",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "a",
+    "ripple": false
+   }
+  },
+  "then": {
+   "error": "INVALID_ARGUMENT"
+  }
+ },
+ {
+  "id": "RPL-006",
+  "area": "ripple",
+  "title": "Sequence-scope ripple delete shifts every unlocked track",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 70,
+       "dur": 10
+      }
+     ]
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "m",
+       "start": 65,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": "sequence"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ],
+    "O1": [
+     [
+      "x",
+      40,
+      10
+     ]
+    ],
+    "A1": [
+     [
+      "m",
+      35,
+      20
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-007",
+  "area": "ripple",
+  "title": "Sequence-scope ripple is rejected if a clip on another track overlaps the removed range (atomic, nothing changes)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "diverges_from_opencut": "OpenCut shifts only elements at/after the cut and leaves straddling clips; CapIA V1 refuses instead of creating overlaps"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "y",
+       "start": 20,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": "sequence"
+   }
+  },
+  "then": {
+   "error": "RIPPLE_CONFLICT"
+  }
+ },
+ {
+  "id": "RPL-008",
+  "area": "ripple",
+  "title": "Sequence-scope ripple leaves locked tracks untouched",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5 lock"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": true,
+     "clips": [
+      {
+       "id": "m",
+       "start": 65,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": "sequence"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-009",
+  "area": "ripple",
+  "title": "Magnetic ripple trim (out edge, shorten) pulls followers left",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/ripple/shift.ts",
+     "apps/web/src/ripple/apply.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 20
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      20
+     ],
+     [
+      "b",
+      20,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-010",
+  "area": "ripple",
+  "title": "Magnetic ripple trim (out edge, extend within handles) pushes followers right",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30,
+       "src_dur": 50
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 40
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      40
+     ],
+     [
+      "b",
+      40,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-011",
+  "area": "ripple",
+  "title": "Extending past the media end is rejected (handles)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30,
+       "src_dur": 50
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 51
+   }
+  },
+  "then": {
+   "error": "INSUFFICIENT_HANDLES"
+  }
+ },
+ {
+  "id": "RPL-012",
+  "area": "ripple",
+  "title": "Magnetic ripple trim (in edge) keeps the clip start and advances source in",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30,
+       "src_dur": 100
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "in",
+    "to": 10
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      20
+     ],
+     [
+      "b",
+      20,
+      30
+     ]
+    ]
+   },
+   "clips": {
+    "a": {
+     "src_in": 10
+    }
+   }
+  }
+ },
+ {
+  "id": "RPL-013",
+  "area": "ripple",
+  "title": "Trimming in before source start is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 20,
+       "dur": 30,
+       "src_in": 5,
+       "src_dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "in",
+    "to": 10
+   }
+  },
+  "then": {
+   "error": "INSUFFICIENT_HANDLES"
+  }
+ },
+ {
+  "id": "RPL-014",
+  "area": "ripple",
+  "title": "Non-magnetic trim that extends into a neighbour is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 45
+   }
+  },
+  "then": {
+   "error": "OVERLAP"
+  }
+ },
+ {
+  "id": "RPL-015",
+  "area": "ripple",
+  "title": "Non-magnetic trim does not ripple by default",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 20
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      20
+     ],
+     [
+      "b",
+      40,
+      10
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-016",
+  "area": "ripple",
+  "title": "Non-magnetic trim with ripple shifts followers by the delta",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/ripple/shift.ts",
+     "apps/web/src/ripple/apply.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "trim_clip",
+   "args": {
+    "clip": "a",
+    "edge": "out",
+    "to": 20,
+    "ripple": true
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      20
+     ],
+     [
+      "b",
+      30,
+      10
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-017",
+  "area": "ripple",
+  "title": "Delete on a locked track is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5 lock"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": true,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "a"
+   }
+  },
+  "then": {
+   "error": "TRACK_LOCKED"
+  }
+ },
+ {
+  "id": "RPL-018",
+  "area": "ripple",
+  "title": "Split exactly at the clip start is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 10,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "error": "INVALID_SPLIT_POINT"
+  }
+ },
+ {
+  "id": "RPL-019",
+  "area": "ripple",
+  "title": "Split exactly at the clip end is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 40,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "error": "INVALID_SPLIT_POINT"
+  }
+ },
+ {
+  "id": "RPL-020",
+  "area": "ripple",
+  "title": "Split one frame inside produces 1-frame and rest clips",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "split_clip",
+   "args": {
+    "clip": "a",
+    "at": 11,
+    "new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      10,
+      1
+     ],
+     [
+      "a2",
+      11,
+      29
+     ]
+    ]
+   }
+  }
+ }
+]

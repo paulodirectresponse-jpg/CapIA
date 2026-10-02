@@ -17,6 +17,13 @@ O núcleo (tempo, modelo, comandos, persistência, render) é onde bugs custam p
 | UI | Componentes (ui-timeline: hit-test, snapping, virtualização), E2E | Vitest, Playwright/WebDriver (`tauri-driver`) |
 | Desempenho | Benchmarks com projetos sintéticos | `criterion`, traces |
 
+## 1.1 Ativos de teste normativos
+
+- **Suíte de aceitação de comportamento da timeline** — `tests/acceptance/timeline/*.json` (108 cenários, S7/ADR-036): critério de aceitação da Fase 2 para `capia-commands`; o harness converte frames→Ticks e exige exatidão e atomicidade nos erros.
+- **Paridade nativo × WASM** (S4/ADR-016): hash de um workload determinístico sobre o modelo real, idêntico no nativo e no WASM, em CI.
+- **Conformidade de mídia** (S2/ADR-035): clipes sintéticos CFR/VFR com índice de frame gravado na imagem (`spikes/s2-frame-exact/generate.sh` como ponto de partida); seek por índice 100% exato; conformação de cadência = `frame_at`; sync A/V ≤ 1 amostra.
+- **Golden frames sem GPU:** wgpu em llvmpipe/WARP no CI (S6 mostrou que roda).
+
 ## 2. Invariantes testadas por propriedade (Command Engine)
 
 Gerador produz projetos e sequências aleatórias de comandos (válidos e inválidos):
@@ -28,6 +35,8 @@ Gerador produz projetos e sequências aleatórias de comandos (válidos e invál
 6. WASM e nativo produzem as mesmas ops para os mesmos comandos (teste cruzado).
 7. Ciclos de nested sempre rejeitados; profundidade respeitada.
 8. Rebase sem conflito ⇒ mesmo resultado que aplicar em sequência.
+9. **Idempotência (ADR-029):** reenviar uma transação com os mesmos `operation_id` (inclusive após kill no meio do commit) nunca duplica efeitos; mesmo id com payload diferente é rejeitado.
+10. **Plan token (ADR-030):** `apply_plan` só aplica o plano revisado: token adulterado/expirado/consumido/de outro ator é rejeitado; mudança de revisão com `diff_digest` diferente ⇒ `PLAN_STATE_CHANGED`; atores `Agent/Api` sem preview ⇒ `PREVIEW_REQUIRED`.
 
 ## 3. Tempo e mídia
 
@@ -69,6 +78,8 @@ Gerador produz projetos e sequências aleatórias de comandos (válidos e invál
 - Secret scanning no CI.
 
 ## 8. Desempenho (benchmarks com orçamento)
+
+**Máquina de referência (ADR-033):** Windows 11 x64; mínima = 4+ cores, 16 GB, GPU DX12/wgpu (iGPU moderna ok), SSD, edição 1080p; recomendada = 8+ cores, 32 GB, dGPU 6 GB+ VRAM, NVMe. As metas abaixo valem na **mínima**, salvo nota. O CI em nuvem (WARP/llvmpipe) valida **correção**, não desempenho.
 
 | Cenário | Meta |
 |---|---|

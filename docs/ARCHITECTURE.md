@@ -114,7 +114,7 @@ Fachada única, assíncrona, serializável (todos os tipos com schema JSON gerad
 | Grupo | Exemplos | Doc |
 |---|---|---|
 | `project.*` | open, create, close, save_snapshot, list_snapshots, restore_snapshot, package | DATA_MODEL |
-| `command.*` | execute(cmd), begin_tx, apply_in_tx, validate_tx, commit_tx, rollback_tx, dry_run, undo, redo | COMMAND_SYSTEM |
+| `command.*` | execute(tx) (User/System), preview(tx) → plan_token, apply_plan(plan_token) (obrigatório para Agent/Api), begin_tx, apply_in_tx, validate_tx, commit_tx, rollback_tx, undo, redo — todo comando carrega `operation_id` | COMMAND_SYSTEM §4 |
 | `query.*` | get_document(rev), get_sequence, find_clips(range/filter), timeline_digest, history | COMMAND_SYSTEM |
 | `assets.*` | import, search, relink, get_representations, generate_version | ASSET_SYSTEM |
 | `gateway.*` | fetch(url), search(query), fetch_comments(url) → jobs | ASSET_SYSTEM |

@@ -48,7 +48,7 @@ WebGL/WebGPU na UI continuam úteis para **desenhar a timeline** (thumbnails/wav
 **Podem diferir no preview (sinalizado):** resolução de render (1/2, 1/4), uso de proxy em vez do original, qualidade de filtro de escala, frames descartados em playback sob carga (nunca deslocados no tempo).
 **Teste de paridade:** render do mesmo frame pelo caminho "preview em resolução total sem proxy" e pelo caminho de export deve ser bit-idêntico antes do encode; com proxy, diferença perceptual abaixo do limiar (`TEST_STRATEGY.md`).
 
-## 5. Apresentação do preview na janela (spike obrigatório — OD-1)
+## 5. Apresentação do preview na janela (spike obrigatório — OD-1: **ABERTA**; ver `docs/spikes/S1-preview-surface.md`)
 
 Abstração:
 ```rust
@@ -103,8 +103,9 @@ Proxies são gerados em background após import (prioridade a clips já na timel
 
 - **In-process (libav* via bindings Rust)** para decode/preview/export (latência e acesso a frames HW).
 - **Sidecar `ffmpeg` CLI** (mesma build) aceitável para jobs batch isolados (proxies, conversões) — isolamento de crash.
-- Build única, versionada e reproduzível, distribuída com o app (DLLs).
-- Licenciamento é **decisão aberta (OD-2)**: produto comercial fechado ⇒ FFmpeg LGPL com linkagem dinâmica, sem x264/x265 (GPL); H.264/HEVC via encoders HW e/ou OpenH264; atenção a royalties de patentes (AAC/HEVC) em distribuição. Produto open-source GPL ⇒ x264 liberado.
+- **Política fechada (ADR-032, OD-2):** build **própria e mínima**, **LGPL** (sem `--enable-version3` → LGPL-2.1+), **bibliotecas compartilhadas**, **sem GPL/nonfree, sem x264/x265**, `--disable-autodetect --disable-network`, origem e build **pinadas e reproduzíveis**, manifesto de licenças por release. Não consumir builds de terceiros "como estão" (a BtbN `lgpl-shared` é LGPL-3.0 com ~70 libs externas).
+- **Encoders atrás de abstração:** NVENC/AMF/QSV e Media Foundation como caminho principal no Windows; fallback por software: OpenH264 (Constrained Baseline) para H.264 e kvazaar para HEVC (lento); ProRes via `prores_ks` quando permitido. Riscos de patentes e do binário OpenH264 em `DECISIONS.md` ADR-032 e `docs/spikes/S3-ffmpeg-lgpl.md`.
+- **Timing é do engine, não do ffmpeg (ADR-035):** nem `-ss` nem o filtro `fps` determinam seleção de frame/cadência; usa-se frame index próprio + `frame_at`.
 
 ## 11. Áudio
 

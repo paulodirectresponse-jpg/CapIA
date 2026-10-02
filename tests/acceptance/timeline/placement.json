@@ -1,0 +1,1108 @@
+[
+ {
+  "id": "PLC-001",
+  "area": "placement",
+  "title": "Adjacent clips do not overlap (half-open intervals)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/overlap.ts",
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "O1",
+    "start": 30,
+    "clip": {
+     "id": "b",
+     "dur": 30
+    }
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "b",
+      30,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "PLC-002",
+  "area": "placement",
+  "title": "Overlap by one frame at the head is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/overlap.ts",
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "O1",
+    "start": 29,
+    "clip": {
+     "id": "b",
+     "dur": 10
+    }
+   }
+  },
+  "then": {
+   "error": "OVERLAP"
+  }
+ },
+ {
+  "id": "PLC-003",
+  "area": "placement",
+  "title": "New clip that overlaps the next clip by one frame is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/overlap.ts",
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "O1",
+    "start": 0,
+    "clip": {
+     "id": "b",
+     "dur": 31
+    }
+   }
+  },
+  "then": {
+   "error": "OVERLAP"
+  }
+ },
+ {
+  "id": "PLC-004",
+  "area": "placement",
+  "title": "Audio clip cannot be inserted on a visual track",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "O1",
+    "start": 0,
+    "clip": {
+     "id": "b",
+     "dur": 10,
+     "kind": "audio"
+    }
+   }
+  },
+  "then": {
+   "error": "WRONG_TRACK_KIND"
+  }
+ },
+ {
+  "id": "PLC-005",
+  "area": "placement",
+  "title": "Locked track rejects insertion",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5 lock"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": true,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "O1",
+    "start": 0,
+    "clip": {
+     "id": "b",
+     "dur": 10
+    }
+   }
+  },
+  "then": {
+   "error": "TRACK_LOCKED"
+  }
+ },
+ {
+  "id": "PLC-006",
+  "area": "placement",
+  "title": "Magnetic track clamps a far-away start to the end (no gaps)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/main-track.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "V1",
+    "start": 100,
+    "clip": {
+     "id": "b",
+     "dur": 20
+    }
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "b",
+      30,
+      20
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "PLC-007",
+  "area": "placement",
+  "title": "Empty magnetic track forces first clip to start at 0",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/main-track.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "V1",
+    "start": 50,
+    "clip": {
+     "id": "b",
+     "dur": 20
+    }
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "b",
+      0,
+      20
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "PLC-008",
+  "area": "placement",
+  "title": "Magnetic insert at a boundary ripples followers",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "V1",
+    "start": 30,
+    "clip": {
+     "id": "c",
+     "dur": 20
+    }
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      20
+     ],
+     [
+      "b",
+      50,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "PLC-009",
+  "area": "placement",
+  "title": "Magnetic insert inside a clip without split flag is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "diverges_from_opencut": "OpenCut resolves drop position in UI; CapIA command is explicit so AI/API plans are unambiguous"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "V1",
+    "start": 10,
+    "clip": {
+     "id": "c",
+     "dur": 20
+    }
+   }
+  },
+  "then": {
+   "error": "NOT_ON_BOUNDARY"
+  }
+ },
+ {
+  "id": "PLC-010",
+  "area": "placement",
+  "title": "Magnetic insert inside a clip with split_at_insert splits and keeps source continuity",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30,
+       "src_dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "V1",
+    "start": 10,
+    "clip": {
+     "id": "c",
+     "dur": 20
+    },
+    "split_at_insert": true,
+    "split_new_id": "a2"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      10
+     ],
+     [
+      "c",
+      10,
+      20
+     ],
+     [
+      "a2",
+      30,
+      20
+     ]
+    ]
+   },
+   "clips": {
+    "a2": {
+     "src_in": 10
+    }
+   }
+  }
+ },
+ {
+  "id": "PLC-011",
+  "area": "placement",
+  "title": "Explicit placement on an incompatible track is rejected",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "explicit",
+     "track": "V2"
+    },
+    "kind": "audio",
+    "spans": [
+     [
+      0,
+      10
+     ]
+    ]
+   }
+  },
+  "then": {
+   "error": "WRONG_TRACK_KIND"
+  }
+ },
+ {
+  "id": "PLC-012",
+  "area": "placement",
+  "title": "Explicit placement on a compatible track returns it (overlap is the insert command's job)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "explicit",
+     "track": "V2"
+    },
+    "kind": "visual",
+    "spans": [
+     [
+      10,
+      10
+     ]
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "kind": "existing",
+    "track": "V2"
+   }
+  }
+ },
+ {
+  "id": "PLC-013",
+  "area": "placement",
+  "title": "first_available picks the topmost free track of the same kind, skipping busy ones and magnetic main",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   },
+   "diverges_from_opencut": "OpenCut may auto-select its main track; CapIA never auto-selects a magnetic track (inserting there ripples)"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V3",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    },
+    {
+     "id": "V2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "m",
+       "start": 0,
+       "dur": 50
+      }
+     ]
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "first_available"
+    },
+    "kind": "visual",
+    "spans": [
+     [
+      10,
+      20
+     ]
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "kind": "existing",
+    "track": "V2"
+   }
+  }
+ },
+ {
+  "id": "PLC-014",
+  "area": "placement",
+  "title": "first_available with every visual overlay busy creates a new track above the top visual track",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    },
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "first_available"
+    },
+    "kind": "visual",
+    "spans": [
+     [
+      10,
+      20
+     ]
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "kind": "new_track",
+    "track_kind": "visual",
+    "insert": "above",
+    "relative_to": "V2"
+   }
+  }
+ },
+ {
+  "id": "PLC-015",
+  "area": "placement",
+  "title": "first_available for audio with all audio tracks busy appends a new track below the last",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    },
+    {
+     "id": "A2",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "y",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "first_available"
+    },
+    "kind": "audio",
+    "spans": [
+     [
+      0,
+      10
+     ]
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "kind": "new_track",
+    "track_kind": "audio",
+    "insert": "below",
+    "relative_to": "A2"
+   }
+  }
+ },
+ {
+  "id": "PLC-016",
+  "area": "placement",
+  "title": "Batch spans: a track is rejected if ANY span overlaps",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/overlap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V3",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 50,
+       "dur": 10
+      }
+     ]
+    },
+    {
+     "id": "V2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "first_available"
+    },
+    "kind": "visual",
+    "spans": [
+     [
+      0,
+      10
+     ],
+     [
+      50,
+      5
+     ]
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "kind": "existing",
+    "track": "V2"
+   }
+  }
+ },
+ {
+  "id": "PLC-017",
+  "area": "placement",
+  "title": "Locked tracks are never auto-selected",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5 lock"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V3",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": true,
+     "clips": []
+    },
+    {
+     "id": "V2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "first_available"
+    },
+    "kind": "visual",
+    "spans": [
+     [
+      0,
+      10
+     ]
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "kind": "existing",
+    "track": "V2"
+   }
+  }
+ },
+ {
+  "id": "PLC-018",
+  "area": "placement",
+  "title": "prefer: busy preferred track yields a new track adjacent above it",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5-§6",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/placement/resolve.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V3",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "V2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    },
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_placement",
+   "args": {
+    "strategy": {
+     "type": "prefer",
+     "track": "V2"
+    },
+    "kind": "visual",
+    "spans": [
+     [
+      10,
+      10
+     ]
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "kind": "new_track",
+    "track_kind": "visual",
+    "insert": "above",
+    "relative_to": "V2"
+   }
+  }
+ },
+ {
+  "id": "PLC-019",
+  "area": "placement",
+  "title": "Ticks are exact at 29.97 fps (frame 30 = 706,305,600 ticks)",
+  "fps": "30000/1001",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §1.2"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "insert_clip",
+   "args": {
+    "track": "O1",
+    "start": 30,
+    "clip": {
+     "id": "b",
+     "dur": 60
+    }
+   }
+  },
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "b",
+      30,
+      60
+     ]
+    ]
+   },
+   "ticks": {
+    "b": [
+     706305600,
+     1412611200
+    ]
+   }
+  }
+ }
+]

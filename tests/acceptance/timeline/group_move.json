@@ -1,0 +1,883 @@
+[
+ {
+  "id": "GRP-001",
+  "area": "group_move",
+  "title": "Free move keeps relative offsets",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a",
+     "b"
+    ],
+    "delta_time": 15,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 15,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-002",
+  "area": "group_move",
+  "title": "Leftward move clamps so the earliest member stops at 0",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a",
+     "b"
+    ],
+    "delta_time": -25,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": -10,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-003",
+  "area": "group_move",
+  "title": "Rightward move clamps against a non-member on the same track",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      },
+      {
+       "id": "n",
+       "start": 50,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": 40,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 20,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-004",
+  "area": "group_move",
+  "title": "Leftward move clamps against a non-member on the same track",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "n",
+       "start": 0,
+       "dur": 10
+      },
+      {
+       "id": "a",
+       "start": 20,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": -30,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": -10,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-005",
+  "area": "group_move",
+  "title": "The most constrained member limits the whole group (multi-track)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    },
+    {
+     "id": "O2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "b",
+       "start": 10,
+       "dur": 20
+      },
+      {
+       "id": "n",
+       "start": 35,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a",
+     "b"
+    ],
+    "delta_time": 30,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 5,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-006",
+  "area": "group_move",
+  "title": "Zero delta is a no-op",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": 0,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-007",
+  "area": "group_move",
+  "title": "A member on a locked track denies the whole move",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §5 lock"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": true,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    },
+    {
+     "id": "O2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "b",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a",
+     "b"
+    ],
+    "delta_time": 5,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "error": "TRACK_LOCKED"
+  }
+ },
+ {
+  "id": "GRP-008",
+  "area": "group_move",
+  "title": "Moving one track down when a free track exists",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    },
+    {
+     "id": "O2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": 0,
+    "delta_tracks": 1
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": 1
+   }
+  }
+ },
+ {
+  "id": "GRP-009",
+  "area": "group_move",
+  "title": "Track delta is clamped to the last existing track",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    },
+    {
+     "id": "O2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": 0,
+    "delta_tracks": 2
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": 1
+   }
+  }
+ },
+ {
+  "id": "GRP-010",
+  "area": "group_move",
+  "title": "Audio members move only among audio tracks (clamped)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "TIMELINE_ENGINE.md §2"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    },
+    {
+     "id": "A2",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": 0,
+    "delta_tracks": 2
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": 1
+   }
+  }
+ },
+ {
+  "id": "GRP-011",
+  "area": "group_move",
+  "title": "Track delta is reduced to 0 when the target track is occupied at that time",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    },
+    {
+     "id": "O2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "n",
+       "start": 15,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": 0,
+    "delta_tracks": 1
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-012",
+  "area": "group_move",
+  "title": "Moving up (negative track delta)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": []
+    },
+    {
+     "id": "O2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "b",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "b"
+    ],
+    "delta_time": 0,
+    "delta_tracks": -1
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": -1
+   }
+  }
+ },
+ {
+  "id": "GRP-013",
+  "area": "group_move",
+  "title": "Group snaps its nearest member edge to an external clip edge",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      },
+      {
+       "id": "b",
+       "start": 40,
+       "dur": 10
+      }
+     ]
+    },
+    {
+     "id": "O3",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 73,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a",
+     "b"
+    ],
+    "delta_time": 20,
+    "delta_tracks": 0,
+    "snap": {
+     "threshold_frames": 5
+    }
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 23,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-014",
+  "area": "group_move",
+  "title": "A member already flush against a non-member cannot move toward it (boundary is exclusive)",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      },
+      {
+       "id": "n",
+       "start": 30,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": 5,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": 0
+   }
+  }
+ },
+ {
+  "id": "GRP-015",
+  "area": "group_move",
+  "title": "Flush on the left side: cannot move further left",
+  "fps": "30",
+  "provenance": {
+   "basis": "opencut-behavior+capia-spec",
+   "capia_ref": "TIMELINE_UX.md §4",
+   "opencut_behavior": {
+    "repo": "OpenCut-app/opencut-classic@cf5e79e",
+    "files": [
+     "apps/web/src/timeline/group-move/resolve-move.ts",
+     "apps/web/src/timeline/group-move/snap.ts"
+    ],
+    "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
+   }
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "n",
+       "start": 0,
+       "dur": 10
+      },
+      {
+       "id": "a",
+       "start": 10,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_group_move",
+   "args": {
+    "members": [
+     "a"
+    ],
+    "delta_time": -5,
+    "delta_tracks": 0
+   }
+  },
+  "then": {
+   "result": {
+    "delta_time": 0,
+    "delta_tracks": 0
+   }
+  }
+ }
+]

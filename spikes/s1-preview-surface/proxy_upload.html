@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><canvas id="gl"></canvas><canvas id="c2d"></canvas>
+<script>
+// S1 PROXY (not a WebView2/Tauri measurement): browser-side cost of showing a CPU-produced RGBA frame that lives in an ArrayBuffer
+// (the shape of WebView2 SharedBuffer -> ArrayBuffer). Software GL (SwiftShader) => pessimistic vs real GPU.
+async function bench(w, h, iters) {
+  const buf = new ArrayBuffer(w * h * 4), u8 = new Uint8Array(buf), src = new Uint8Array(w * h * 4);
+  for (let i = 0; i < src.length; i++) src[i] = (i * 31) & 255;
+  const q = (a, p) => +[...a].sort((x, y) => x - y)[Math.floor(p * (a.length - 1))].toFixed(2);
+  const res = { size: `${w}x${h}`, MB: +(buf.byteLength / 1048576).toFixed(2) };
+  // (a) producer-side copy into the shared region (what native code would do via memcpy; here JS set() as a stand-in)
+  let t = []; for (let i = 0; i < iters; i++) { const a = performance.now(); u8.set(src); t.push(performance.now() - a); }
+  res.memcpy_ms = { p50: q(t, .5), p95: q(t, .95) };
+  // (b) WebGL: texSubImage2D from the ArrayBuffer view + draw quad + force sync
+  const gl = document.getElementById('gl'); gl.width = w; gl.height = h;
+  const g = gl.getContext('webgl2', { antialias: false, preserveDrawingBuffer: true });
+  const vs = g.createShader(g.VERTEX_SHADER); g.shaderSource(vs, `#version 300 es\nin vec2 p;out vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0,1);}`); g.compileShader(vs);
+  const fs = g.createShader(g.FRAGMENT_SHADER); g.shaderSource(fs, `#version 300 es\nprecision mediump float;uniform sampler2D t;in vec2 uv;out vec4 o;void main(){o=texture(t,uv);}`); g.compileShader(fs);
+  const pr = g.createProgram(); g.attachShader(pr, vs); g.attachShader(pr, fs); g.linkProgram(pr); g.useProgram(pr);
+  const vb = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, vb); g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), g.STATIC_DRAW);
+  const loc = g.getAttribLocation(pr, 'p'); g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+  const tex = g.createTexture(); g.bindTexture(g.TEXTURE_2D, tex); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, w, h, 0, g.RGBA, g.UNSIGNED_BYTE, null);
+  g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR); g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
+  const px = new Uint8Array(4); t = [];
+  for (let i = 0; i < iters; i++) { const a = performance.now();
+    g.texSubImage2D(g.TEXTURE_2D, 0, 0, 0, w, h, g.RGBA, g.UNSIGNED_BYTE, u8); g.drawArrays(g.TRIANGLE_STRIP, 0, 4); g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, px);
+    t.push(performance.now() - a); }
+  res.webgl_upload_draw_ms = { p50: q(t, .5), p95: q(t, .95) };
+  // (c) 2D canvas putImageData over the same buffer
+  const c = document.getElementById('c2d'); c.width = w; c.height = h; const x = c.getContext('2d'); const id = new ImageData(new Uint8ClampedArray(buf), w, h); t = [];
+  for (let i = 0; i < iters; i++) { const a = performance.now(); x.putImageData(id, 0, 0); x.getImageData(0, 0, 1, 1); t.push(performance.now() - a); }
+  res.canvas2d_putImageData_ms = { p50: q(t, .5), p95: q(t, .95) };
+  return res;
+}
+window.run = async () => [await bench(960, 540, 150), await bench(1280, 720, 150), await bench(1920, 1080, 100)];
+</script>

@@ -1,0 +1,16 @@
+# SPIKE S6 — throwaway probe. Uses ONLY the public API of OpenCut Classic crates (MIT) via path deps.
+# Requires a checkout of https://github.com/OpenCut-app/opencut-classic at the commit in docs/spikes/S6-compositor.md.
+# No OpenCut code is copied into this repository.
+[package]
+name = "s6-compositor-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+gpu = { path = "/home/user/opencut-app/opencut-classic/rust/crates/gpu" }
+compositor = { path = "/home/user/opencut-app/opencut-classic/rust/crates/compositor" }
+pollster = "0.4"
+serde_json = "1"

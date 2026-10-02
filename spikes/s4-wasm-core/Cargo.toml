@@ -1,0 +1,23 @@
+# SPIKE S4 — throwaway. Question: does an IO-free Ticks/model/ghost-move core compile to WASM with bit-exact parity
+# vs native, at acceptable per-call latency and binary size? No wasm-bindgen (raw C ABI) to keep the probe minimal.
+[package]
+name = "s4-wasm-core"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "native_parity"
+path = "src/bin/native_parity.rs"
+
+[workspace]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
