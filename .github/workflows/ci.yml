@@ -104,6 +104,8 @@ jobs:
         with:
           command: check advisories
       - name: Varredura de segredos
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # CLI sobre o histórico completo: o gitleaks-action usa `<primeiro commit do push>^`, inválido
+        # quando o push inclui o commit raiz (primeiro push do repositório).
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
+            detect --source /repo --redact --verbose
