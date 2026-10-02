@@ -33,6 +33,7 @@ Estado atual e próxima missão: **leia `docs/STATUS.md` primeiro.**
 | `docs/ROADMAP.md` | 6 fases com critérios objetivos de conclusão |
 | `docs/TEST_STRATEGY.md` | Estratégia de testes por subsistema |
 | `docs/DECISIONS.md` | ADRs: decisões, alternativas, requisitos reformulados |
+| `docs/OPEN_SOURCE_AUDIT.md` | Due diligence de projetos open-source: licenças, reuso, estratégia recomendada (M02) |
 
 ## Regras de trabalho
 
