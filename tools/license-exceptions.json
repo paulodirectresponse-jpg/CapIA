@@ -1,0 +1,4 @@
+{
+  "_comment": "Exceções de licença JS APROVADAS POR HUMANO (docs/PROVENANCE.md §2.6). Formato: { \"pacote@versão\": { \"license\": \"...\", \"reason\": \"...\", \"approvedBy\": \"...\", \"date\": \"AAAA-MM-DD\" } }. Vazio por padrão; a ferramenta não aprova nada sozinha.",
+  "exceptions": {}
+}

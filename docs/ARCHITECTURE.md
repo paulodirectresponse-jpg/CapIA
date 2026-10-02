@@ -53,6 +53,8 @@ Alternativas avaliadas e rejeitadas: Electron (sem ganho real — o trabalho pes
 
 ## 3. Estrutura do repositório (alvo — criada a partir da Fase 1/2)
 
+> **Estado real (M04, ADR-038):** existem hoje `crates/{capia-time,capia-model,capia-commands,capia-project}`, `apps/desktop` (Vite + Tauri; crate `capia-desktop`), `packages/{engine-bindings,editor-ui}`, `tests/acceptance`, `tools/`, `spikes/`. `capia-project` cumpre inicialmente o papel de `capia-store` + `capia-engine`; `engine-bindings` é o `engine-client`. Os demais itens abaixo nascem quando sua fase começa.
+
 ```
 /crates                      Rust workspace
   capia-time                 Ticks, Rational, FrameRate, TimeRange, conversões (no_std-friendly, WASM)

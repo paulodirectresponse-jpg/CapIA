@@ -37,6 +37,25 @@ Estado atual e próxima missão: **leia `docs/STATUS.md` primeiro.**
 | `docs/PROVENANCE.md` | Política obrigatória de proveniência/licenças de terceiros + registro (ADR-031) |
 | `docs/spikes/README.md` | Resultados dos spikes S1–S7 (M03) e relatórios individuais |
 | `tests/acceptance/` | Suíte de aceitação de comportamento da timeline (critério da Fase 2, ADR-036) |
+| `tools/` | `check-architecture.mjs` (fronteiras), `check-licenses.mjs` (licenças JS), `s1-preview-spike/` (medição S1 em Windows) |
+
+## Gates de fase (ADR-037)
+
+- **Fase 2 (motor headless) pode iniciar com OD-1 aberto.** Não construir preview embutido nem UI de editor nela.
+- **Fase 3 (editor/preview) NÃO inicia sem OD-1 fechado** (S1 executado em Windows via `tools/s1-preview-spike`). `OUTPUT-H264` (export MP4/H.264 confiável no Windows) deve estar definido antes da entrega do Editor.
+- As 8 decisões `D-S7-*` estão **PROVISIONAL** (`docs/STATUS.md`): não implemente comportamento que dependa delas sem aprovação do PO.
+
+## Comandos (workspace)
+
+```
+cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands   # núcleo sem IO
+pnpm install && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:tools && pnpm build
+pnpm check:arch && pnpm check:licenses && cargo deny check licenses bans sources
+pnpm desktop:build        # tauri build --no-bundle  (o front precisa estar construído: pnpm --filter @capia/desktop build)
+```
+
+Direção de dependência (verificada por `pnpm check:arch`): `capia-time → capia-model → capia-commands → capia-project → apps/desktop`. O núcleo não conhece Tauri, UI, IA, providers, render nem FFmpeg. Novo crate/pacote ⇒ atualizar a matriz em `tools/check-architecture.mjs` de propósito (ADR-038).
 
 ## Regras de trabalho
 

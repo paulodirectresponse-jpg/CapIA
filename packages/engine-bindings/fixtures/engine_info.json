@@ -1,0 +1,8 @@
+{
+  "name": "capia-engine",
+  "version": "0.0.0",
+  "engine_api_version": 1,
+  "document_schema_version": 1,
+  "command_schema_version": 1,
+  "ticks_per_second": 705600000
+}

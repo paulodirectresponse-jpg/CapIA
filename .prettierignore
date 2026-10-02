@@ -1,0 +1,12 @@
+node_modules
+dist
+target
+pnpm-lock.yaml
+Cargo.lock
+spikes
+tests/acceptance/timeline
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/icons
+docs
+*.md
+tools/s1-preview-spike

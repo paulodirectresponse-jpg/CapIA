@@ -1,0 +1,30 @@
+{
+  "name": "@capia/desktop",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Shell desktop: Vite + Tauri. Adaptador fino; a lógica de produto vive em crates/ e packages/.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@capia/editor-ui": "workspace:*",
+    "@capia/engine-bindings": "workspace:*",
+    "@tauri-apps/api": "^2.12.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "catalog:",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

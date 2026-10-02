@@ -1,0 +1,65 @@
+# Política de licenças/fontes do CapIA (docs/PROVENANCE.md §1–§2.6, ADR-031/032).
+# Objetivo: nascer apto a distribuição comercial/closed-source. A detecção automática NÃO substitui a
+# auditoria humana: qualquer licença fora da lista falha o CI e exige revisão (e, se aceita, exceção
+# registrada abaixo com justificativa e data).
+
+[graph]
+# Alvo de produto (Windows) + Linux (CI headless) + WASM (núcleo sem IO, ADR-016).
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "wasm32-unknown-unknown",
+]
+
+[licenses]
+# Permissivas (SAFE_WITH_OBLIGATIONS). Atribuição/NOTICE vão para THIRD_PARTY_LICENSES na release.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "CC0-1.0",
+    "Unlicense",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    # Copyleft fraco **por arquivo**: permitido apenas como dependência não modificada; revisar a cada
+    # nova ocorrência (PROVENANCE.md). Modificar arquivos MPL obriga a publicá-los.
+    "MPL-2.0",
+]
+confidence-threshold = 0.9
+
+# Exceções humanas (crate + licença + justificativa + data). Vazio por padrão.
+exceptions = []
+# Informativo: não avisar sobre licenças permitidas que o grafo atual não usa.
+unused-allowed-license = "allow"
+
+# Crates do próprio workspace são `publish = false`; a licença do repositório é decisão pendente do PO.
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Nada de crates que embutam código GPL/nonfree de mídia no build padrão (ADR-032).
+deny = [
+    { crate = "x264", reason = "GPL — ADR-032" },
+    { crate = "x265", reason = "GPL — ADR-032" },
+    { crate = "x264-sys", reason = "GPL — ADR-032" },
+    { crate = "x265-sys", reason = "GPL — ADR-032" },
+    { crate = "openh264-sys2", reason = "binário OpenH264 só via política de download (ADR-032), nunca embutido por crate" },
+]
+
+[advisories]
+ignore = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -57,4 +57,4 @@ Medir, para cada harness: (1) **latência de apresentação** (timestamp de comp
 
 - Fase 2 (motor headless, render, export, CLI) **não depende** de S1: o `PreviewPresenter` é um trait e o compositor produz uma textura/frames independentemente do destino.
 - Dependem de OD-1: o presenter nativo de `capia-preview` e toda a Fase 3 (UI do editor).
-- Recomendação: executar S1 antes do fim da Fase 2 e **antes** de qualquer trabalho de UI da Fase 3. A decisão de começar a Fase 2 antes de S1 é do Product Owner (ver `STATUS.md`).
+- **Decisão do PO (ADR-037):** a Fase 2 pode iniciar com OD-1 aberto; **OD-1 é hard gate da Fase 3**. Para executar: `tools/s1-preview-spike/` (`.\run.ps1` em Windows 11; gera um `.zip` com o relatório estruturado para análise). O pacote só foi compilado/cross-linkado e testado no que não é específico de Windows — ver o README dele.

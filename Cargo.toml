@@ -1,0 +1,43 @@
+# CapIA Rust workspace. Direção de dependência (ADR-002, ARCHITECTURE.md §4), verificada por tools/check-architecture.mjs:
+#   capia-time -> capia-model -> capia-commands -> capia-project -> apps/desktop (Tauri = shell/adaptador)
+# Os 3 primeiros crates não fazem IO e compilam para WASM (ADR-016). Nenhum crate de IA/provider/render/FFmpeg ainda.
+[workspace]
+resolver = "3"
+members = [
+    "crates/capia-time",
+    "crates/capia-model",
+    "crates/capia-commands",
+    "crates/capia-project",
+    "apps/desktop/src-tauri",
+]
+# Experimentos descartáveis e ferramentas com workspace próprio: fora do build principal.
+exclude = ["spikes", "tools/s1-preview-spike"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+[workspace.dependencies]
+capia-time = { path = "crates/capia-time", version = "0.0.0" }
+capia-model = { path = "crates/capia-model", version = "0.0.0" }
+capia-commands = { path = "crates/capia-commands", version = "0.0.0" }
+capia-project = { path = "crates/capia-project", version = "0.0.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

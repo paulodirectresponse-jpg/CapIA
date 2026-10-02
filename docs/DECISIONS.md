@@ -194,6 +194,30 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 **Status:** Accepted (M03, spike S7 — `docs/spikes/S7-timeline-acceptance.md`)
 **Decisão:** `tests/acceptance/timeline/*.json` (108 cenários em formato de dados, independentes de implementação) são o **critério de aceitação da Fase 2** de `capia-commands` e fonte de verdade de comportamento (placement, snapping, ripple, retime, group move, keyframes). Cada cenário tem `provenance` e, onde o CapIA diverge do OpenCut, `diverges_from_opencut`. As regras D-S7-1..8 (S7) são **propostas** a confirmar pelo Product Owner; mudanças nelas alteram cenários, não código. Nenhum teste de terceiros foi copiado.
 
+### ADR-037 — Gates de fase: Fase 2 inicia com OD-1 aberto; OD-1 é hard gate da Fase 3
+**Status:** Accepted (M04, decisão do Product Owner)
+**Contexto:** o S1 (presenter do preview em Tauri/WebView2) exige Windows 11 com WebView2 e GPU; a sessão de nuvem não consegue executá-lo (`docs/spikes/S1-preview-surface.md`). O motor headless da Fase 2 (modelo, comandos, store, mídia, render, export, CLI) não depende do presenter: o `PreviewPresenter` é um trait e o compositor produz frames independentemente do destino.
+**Decisão:**
+```
+Fase 2 — Motor (headless)   pode iniciar com OD-1 aberto.
+Fase 3 — Editor/Preview     NÃO pode iniciar sem OD-1 fechado.
+```
+Fechar OD-1 = relatório do S1 executado em Windows (`tools/s1-preview-spike`), analisado pela regra de decisão de `S1-preview-surface.md` §4, e um ADR de presenter. `OUTPUT-H264` (caminho confiável de exportação MP4/H.264 no Windows) deve estar definido **antes da entrega do Editor** (saída da Fase 3).
+**Consequências:** na Fase 2 não se constrói preview embutido nem UI de editor (só o trait e um *frame sink* headless); se o S1 mostrar que P1 e P2 são inviáveis, a revisão da ADR-001 afeta **apenas** a Fase 3; a Fase 2 não é retrabalhada.
+
+### ADR-038 — Estrutura do scaffold: crates, pacotes e ferramentas
+**Status:** Accepted (M04)
+**Decisão:**
+- **Crates Rust** (workspace Cargo, direção única): `capia-time → capia-model → capia-commands → capia-project`; o shell `apps/desktop/src-tauri` (`capia-desktop`) depende **só** de `capia-project`. `capia-time/model/commands` não têm dependências de terceiros, não fazem IO e compilam para WASM (ADR-016, verificado no CI).
+- **`capia-project`** assume, no scaffold, o papel de fachada do núcleo que a M01 chamou de `capia-store` + `capia-engine` (persistência `.capia`/SQLite, sessão de projeto, Engine API). Se crescer, divide-se por novo ADR. Os demais crates da M01 (`capia-media`, `-assets`, `-render`, `-preview`, `-jobs`, `-secrets`, `-ai`, `-gateway`, `-cli`, `-server`) **não** são criados vazios: nascem quando sua fase começa e entram na matriz de arquitetura.
+- **Pacotes TS** (pnpm): `packages/engine-bindings` (= `engine-client` da M01; contrato tipado, **sem** Tauri/React), `packages/editor-ui` (React; depende apenas da interface `EngineClient`), `apps/desktop` (Vite + Tauri; único ponto que conhece o Tauri). `ui-timeline`, `design-system` e `core-wasm` nascem na Fase 3.
+- **Fronteiras verificadas por máquina:** `tools/check-architecture.mjs` (matriz de dependências permitidas por crate/pacote, ciclos, imports proibidos de Tauri/wgpu/ffmpeg/IA/providers no núcleo e de `@tauri-apps` na UI) + `deny.toml` + job WASM do CI. Adicionar crate/pacote exige atualizar a matriz **de propósito**.
+- **Contrato Rust ↔ TypeScript:** fixture JSON compartilhada (`packages/engine-bindings/fixtures/engine_info.json`) testada nos dois lados, até haver geração de tipos.
+- **Toolchain pinada:** Rust `1.97.0` (`rust-toolchain.toml`, com `wasm32`), Node ≥ 22, pnpm 10 (workspace + *catalog*), **TypeScript 6.0.3** (o `typescript-eslint` ainda não suporta TS 7; revisar quando suportar), Vitest, ESLint flat `strictTypeChecked`, Prettier. Lints do workspace: `unsafe_code = forbid`, `unwrap_used = warn`.
+- **Shell Tauri:** capabilities mínimas (`core:default`), CSP estrita, `bundle.active = false` (sem instalador até a Fase 6); ícone é **placeholder** gerado por script, não identidade visual.
+- **Licenças:** `cargo-deny` (allow-list; GPL/AGPL/non-commercial falham) + `tools/check-licenses.mjs` (JS). MPL-2.0 é *permitido para revisão* (5 crates Rust do Tauri e `lightningcss` no build do Vite, hoje); `exceptions` humanas ficam vazias.
+**Consequências:** o grafo é pequeno e auditável; o preço é manter a matriz atualizada a cada crate novo.
+
 ---
 
 ## B. Requisitos reformulados (o pedido original tinha ambiguidade ou problema técnico)
@@ -223,7 +247,7 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 ## C. Decisões abertas (precisam ser fechadas antes da Fase 2)
 
 ### OD-1 — Presenter do preview na janela Tauri/WebView2
-**Estado (M03): ABERTA.** S1 **não pôde ser medido** no ambiente da sessão (sem Windows/GPU/WebView2). Evidência documental e de proxy, protocolo de medição e **regra de decisão** definidos em `docs/spikes/S1-preview-surface.md`. Achado verificado: o `wry` 0.57 (Tauri 2.12) só faz *windowed hosting* do WebView2 (sem visual hosting/DirectComposition).
+**Estado (M04): ABERTA — hard gate da Fase 3, não da Fase 2 (ADR-037).** Pacote de medição pronto em `tools/s1-preview-spike/` (`.\run.ps1` em Windows 11). *(M03:)* S1 **não pôde ser medido** no ambiente da sessão (sem Windows/GPU/WebView2). Evidência documental e de proxy, protocolo de medição e **regra de decisão** definidos em `docs/spikes/S1-preview-surface.md`. Achado verificado: o `wry` 0.57 (Tauri 2.12) só faz *windowed hosting* do WebView2 (sem visual hosting/DirectComposition).
 Opções: P1 superfície nativa filha (preferida), P2 WebView2 SharedBuffer + canvas. **Como decidir:** spike S1 com os critérios de `PREVIEW_RENDER.md` §5. Se nenhuma atender, reavaliar ADR-001 (ex.: shell nativo com UI web embutida em região, ou Qt).
 
 ### OD-2 — Modelo de licença do produto e build do FFmpeg
@@ -233,3 +257,6 @@ Se o produto for **comercial e de código fechado** (recomendação implícita d
 ### OD-3 — Baseline de plataforma e hardware de referência
 **Estado (M03): FECHADA pela ADR-033.**
 Proposta: Windows 10 22H2+ e Windows 11, x64 (ARM64 depois); GPU com D3D12 (feature level 11_0+); 16 GB RAM; hardware de referência para metas de desempenho: notebook com CPU de 8 núcleos (≈2021+) e GPU integrada Intel Iris Xe **e** uma máquina com GPU NVIDIA dedicada. Afeta backend wgpu, decode/encode HW e metas de `TEST_STRATEGY.md` §8.
+
+### OD-4 / OUTPUT-H264 — Caminho confiável de exportação MP4/H.264 no Windows
+**Estado (M04): ABERTA — não resolvida de propósito.** Precisa estar definida **antes da entrega do Editor** (saída da Fase 3). Requisitos: encoder de hardware quando disponível (NVENC/AMF/QSV); Media Foundation/FFmpeg quando adequado; fallback por software **legal e de qualidade aceitável**; **sem x264/x265 GPL** no build padrão (ADR-032). Fatos e incógnitas em `docs/STATUS.md` ("OUTPUT-H264"). Decide: Product Owner, com apoio jurídico para patentes (H.264/HEVC/AAC e binário OpenH264).

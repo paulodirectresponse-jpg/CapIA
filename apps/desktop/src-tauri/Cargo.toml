@@ -1,0 +1,26 @@
+[package]
+name = "capia-desktop"
+description = "Shell desktop do CapIA (Tauri 2): adaptador fino sobre capia-project; sem lógica de produto."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+default-run = "capia-desktop"
+
+[lib]
+name = "capia_desktop_lib"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "capia-desktop"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+capia-project.workspace = true

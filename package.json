@@ -1,0 +1,32 @@
+{
+  "name": "capia",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "build": "pnpm --filter @capia/desktop build",
+    "test:tools": "node --test \"tools/*.test.mjs\"",
+    "check:arch": "node tools/check-architecture.mjs",
+    "check:licenses": "node tools/check-licenses.mjs",
+    "desktop:dev": "pnpm --filter @capia/desktop tauri dev",
+    "desktop:build": "pnpm --filter @capia/desktop tauri build --no-bundle"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.71.0"
+  }
+}

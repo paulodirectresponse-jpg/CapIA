@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "S1 harness: IPC mínimo (comandos do app + eventos).",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  # Produto-alvo: Windows. Compila e testa o workspace inteiro, incluindo o shell Tauri, e gera o .exe.
+  desktop-windows:
+    name: Rust + desktop (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      # O Tauri embute apps/desktop/dist em tempo de compilação: o front precisa existir antes do cargo.
+      - run: pnpm --filter @capia/desktop build
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Build do aplicativo desktop (sem instalador)
+        run: pnpm desktop:build
+
+  # Testes headless rápidos do núcleo (sem dependências de sistema do Tauri) + regra WASM (ADR-016).
+  core-linux:
+    name: Núcleo Rust (Linux, headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - name: Clippy do núcleo
+        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-project --all-targets -- -D warnings
+      - name: Testes do núcleo
+        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-project
+      - name: Núcleo sem IO compila para WASM (ADR-016)
+        run: cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands
+
+  web:
+    name: TypeScript (lint, typecheck, testes, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:tools
+      - run: pnpm build
+
+  # Política: fronteiras arquiteturais, licenças (docs/PROVENANCE.md) e segredos. Não substitui auditoria humana.
+  policy:
+    name: Arquitetura, licenças e segredos
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Fronteiras de arquitetura
+        run: pnpm check:arch
+      - name: Licenças JS
+        run: pnpm check:licenses
+      - name: Licenças, bans e fontes Rust (cargo-deny)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses bans sources
+      - name: Avisos de segurança Rust (informativo)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        continue-on-error: true
+        with:
+          command: check advisories
+      - name: Varredura de segredos
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

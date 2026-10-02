@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>CapIA S1 spike</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; font: 13px system-ui, sans-serif; color: #eee; }
+      #toolbar { position: absolute; left: 0; right: 0; top: 0; height: 48px; background: #202020; display: flex; gap: 8px; align-items: center; padding: 0 12px; z-index: 5; }
+      #stage { position: absolute; left: 0; right: 0; top: 48px; bottom: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      /* A caixa do preview é TRANSPARENTE (P1 revela o HWND nativo); o resto do palco é opaco via box-shadow. */
+      #box { position: relative; width: min(calc(100% - 32px), calc((100vh - 48px - 32px) * 16 / 9)); aspect-ratio: 16 / 9; background: transparent; box-shadow: 0 0 0 9999px #202020; }
+      #cv { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+      /* Overlay HTML sobre o preview: vermelho 50% cobrindo parte da zona-sonda cinza do padrão. */
+      #overlay { position: absolute; left: 15%; top: 10%; width: 20%; height: 15%; background: rgba(255, 0, 0, 0.5); display: none; z-index: 3; }
+      #btn-overlay { position: absolute; right: 4px; bottom: 4px; width: 60px; height: 24px; }
+      #menu { position: absolute; left: 36%; top: 12%; background: #333; border: 1px solid #999; padding: 4px 8px; display: none; z-index: 4; }
+      #info { position: absolute; left: 12px; bottom: 6px; z-index: 5; opacity: 0.7; }
+    </style>
+  </head>
+  <body>
+    <div id="toolbar"><button id="btn-toolbar">Toolbar</button><span id="mode">modo: —</span></div>
+    <div id="stage">
+      <div id="box">
+        <canvas id="cv"></canvas>
+        <div id="overlay"><button id="btn-overlay">Overlay</button></div>
+        <div id="menu">menu HTML sobre o preview</div>
+      </div>
+    </div>
+    <div id="info"></div>
+    <script>
+      const invoke = (cmd, args) => window.__TAURI__.core.invoke(cmd, args);
+      const $ = (id) => document.getElementById(id);
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+
+      let mode = 'none', sharedBuf = null, lastSeen = 0, rafOn = false, stats = null, gl = null, tex = null, texW = 0, texH = 0;
+
+      function report() {
+        const payload = {
+          dpr: window.devicePixelRatio, inner: [window.innerWidth, window.innerHeight], ua: navigator.userAgent, mode,
+          box: rect($('box')), overlay_btn: rect($('btn-overlay')), toolbar_btn: rect($('btn-toolbar')),
+          screen: { w: screen.width, h: screen.height },
+        };
+        return invoke('s1_layout', { payload });
+      }
+
+      function initGl() {
+        const cv = $('cv');
+        gl = cv.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
+        if (!gl) throw new Error('WebGL2 indisponível');
+        const vs = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vs, '#version 300 es\nin vec2 p;out vec2 uv;void main(){uv=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0,1);}');
+        gl.compileShader(vs);
+        const fs = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fs, '#version 300 es\nprecision highp float;uniform sampler2D t;in vec2 uv;out vec4 o;void main(){o=texture(t,uv);}');
+        gl.compileShader(fs);
+        const pr = gl.createProgram();
+        gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr); gl.useProgram(pr);
+        const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+        const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+        tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      }
+
+      function frameLoop(ts) {
+        if (mode !== 'p2') { rafOn = false; return; }
+        requestAnimationFrame(frameLoop);
+        if (stats) { if (stats.lastTs) stats.rafIntervals.push(ts - stats.lastTs); stats.lastTs = ts; }
+        if (!sharedBuf || !gl) return;
+        const hdr = new Uint32Array(sharedBuf, 0, 4); // [contador, w, h, -]
+        const counter = hdr[0], w = hdr[1], h = hdr[2];
+        if (counter === 0 || counter === lastSeen || !w || !h) return;
+        const t0 = performance.now();
+        if (w !== texW || h !== texH) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); texW = w; texH = h; }
+        gl.viewport(0, 0, $('cv').width, $('cv').height);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(sharedBuf, 64, w * h * 4));
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const ms = performance.now() - t0;
+        if (stats) {
+          stats.displayed++; stats.uploadMs.push(ms);
+          const jump = (counter - lastSeen) >>> 0;
+          if (lastSeen && jump > 1 && jump < 1000) stats.producedNotDisplayed += jump - 1;
+        }
+        lastSeen = counter;
+      }
+
+      const q = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.round((s.length - 1) * p)]; };
+      const summarize = (a) => ({ count: a.length, p50: q(a, 0.5), p95: q(a, 0.95), p99: q(a, 0.99), max: q(a, 1) });
+
+      window.s1 = {
+        report,
+        setOverlay(on) { $('overlay').style.display = on ? 'block' : 'none'; $('menu').style.display = on ? 'block' : 'none'; return report(); },
+        setMode(m, w, h) {
+          mode = m; $('mode').textContent = 'modo: ' + m;
+          const cv = $('cv');
+          cv.style.display = m === 'p2' ? 'block' : 'none';
+          if (m === 'p2') {
+            cv.width = w || 960; cv.height = h || 540;
+            if (!gl) initGl();
+            lastSeen = 0; texW = texH = 0;
+            if (!rafOn) { rafOn = true; requestAnimationFrame(frameLoop); }
+          }
+          return report();
+        },
+        startStats() { stats = { displayed: 0, producedNotDisplayed: 0, uploadMs: [], rafIntervals: [], lastTs: 0 }; },
+        stopStats() {
+          if (!stats) return;
+          const s = stats; stats = null;
+          invoke('s1_page_stats', { stats: { displayed_frames: s.displayed, produced_but_not_displayed: s.producedNotDisplayed,
+            js_upload_and_draw_ms: summarize(s.uploadMs), raf_interval_ms: summarize(s.rafIntervals), note: 'tempo JS (a GPU do navegador é assíncrona)' } });
+        },
+      };
+
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.addEventListener('sharedbufferreceived', (e) => {
+          sharedBuf = e.getBuffer();
+          invoke('s1_event', { kind: 'p2_buffer_received', detail: { bytes: sharedBuf.byteLength, extra: e.additionalData || null } });
+        });
+      }
+      $('btn-toolbar').addEventListener('click', () => invoke('s1_event', { kind: 'click_toolbar', detail: {} }));
+      $('btn-overlay').addEventListener('click', (ev) => { ev.stopPropagation(); invoke('s1_event', { kind: 'click_overlay_btn', detail: {} }); });
+      $('box').addEventListener('click', () => invoke('s1_event', { kind: 'click_box', detail: {} }));
+      window.addEventListener('keydown', (ev) => invoke('s1_event', { kind: 'keydown', detail: { key: ev.key } }));
+      let moves = 0; window.addEventListener('mousemove', () => { moves++; if (moves % 20 === 1) invoke('s1_event', { kind: 'mousemove', detail: { n: moves } }); });
+      new ResizeObserver(() => report()).observe(document.documentElement);
+      window.addEventListener('load', () => { $('info').textContent = 'CapIA S1 spike — não feche: o teste é automático.'; report(); });
+      window.addEventListener('resize', () => report());
+    </script>
+  </body>
+</html>

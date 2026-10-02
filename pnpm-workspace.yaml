@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Uma versão por dependência compartilhada em todo o workspace.
+catalog:
+  # typescript-eslint ainda não suporta TypeScript 7 (peer < 6.1): manter 6.0.x até suportar.
+  typescript: 6.0.3

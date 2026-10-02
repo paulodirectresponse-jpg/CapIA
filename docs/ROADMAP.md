@@ -21,17 +21,17 @@ Missões (numeração real das sessões):
 1. ✅ **M01 — Arquitetura e documentação.**
 2. ✅ **M02 — Auditoria de bases open-source e estratégia de reuso** (`OPEN_SOURCE_AUDIT.md`; estratégia C aprovada).
 3. ✅ **M03 — Fechamento da fundação e spikes de risco** (`docs/spikes/`; ADR-029..036). Resultado: S2, S3, S4, S5, S6 e S7 **medidos/concluídos**; **S1 não mensurável no ambiente de nuvem** (sem Windows/GPU).
-4. ⏳ **M04 — Pendências para fechar a Fase 1:**
-   - **S1 em Windows 11** (protocolo e regra de decisão em `docs/spikes/S1-preview-surface.md`) → fecha **OD-1**;
-   - **Scaffold do repositório:** workspace Cargo + pnpm, crates vazios com regras de dependência verificadas (`cargo-deny`/check customizado), lint/format, CI no GitHub Actions (Windows), secret scanning, `cargo-deny`/verificador de licenças (PROVENANCE §2.6);
-   - **Acesso de escrita ao GitHub** (hoje bloqueado por 403) para o CI poder rodar.
+4. ✅ **M04 — Scaffold, CI e preparação** (workspace Rust+pnpm, shell Tauri, CI, verificação de licenças e de fronteiras, pacote S1 para Windows; ADR-037/038). Pendências remanescentes:
+   - **Primeira execução do CI em runner real** (workflow escrito e validado com `actionlint`, ainda não executado: depende do push);
+   - **S1 em Windows 11** (`tools/s1-preview-spike`, `.\run.ps1`) → fecha **OD-1** — **hard gate da Fase 3, não da Fase 2** (ADR-037).
 
 Spikes da Fase 1 (relatórios em `docs/spikes/`): S1 preview surface · S2 decode frame-exato/VFR · S3 FFmpeg LGPL · S4 core em WASM · S5 timeline em canvas · S6 compositor OpenCut (`REIMPLEMENT_WITH_REFERENCE`) · S7 suíte de aceitação de timeline.
 
 **Critérios de conclusão:**
-- [ ] Todas as decisões abertas (OD-*) de `DECISIONS.md` resolvidas e registradas como ADR aceitos. *(OD-2 e OD-3 fechadas na M03; **OD-1 aberta**.)*
-- [ ] Relatórios de S1–S7 com resultados contra as metas declaradas; presenter escolhido. *(S2–S7 entregues; **S1 pendente de medição em Windows**.)*
-- [ ] CI verde em Windows para workspace vazio (build, lint, testes vazios, secret scan).
+- [x] Decisões bloqueantes da **Fase 2** fechadas (OD-2, OD-3). **OD-1** é gate da **Fase 3** (ADR-037); **OUTPUT-H264** é gate de saída da Fase 3.
+- [x] Relatórios dos spikes S2–S7; pacote do S1 pronto para execução em Windows (S1 medido = gate da Fase 3).
+- [ ] CI verde em Windows para o workspace (build, lint, testes, secret scan) — *workflow pronto; aguardando a primeira execução real.*
+- [x] Workspace compila, testa, passa lint/format; fronteiras e licenças verificadas por ferramenta.
 - [x] Nenhum ADR "Proposed" bloqueando a Fase 2 (ADR-016 aceito na M03).
 
 ---
@@ -39,6 +39,8 @@ Spikes da Fase 1 (relatórios em `docs/spikes/`): S1 preview surface · S2 decod
 ## FASE 2 — Motor (headless, sem UI de produto)
 
 **Objetivo:** todo o núcleo funcionando e testado via CLI/testes, sem interface.
+
+**Gate de entrada:** nenhum bloqueio por OD-1 — a Fase 2 **pode iniciar com OD-1 aberto** (ADR-037). **Fora do escopo da Fase 2:** preview embutido na janela e UI de editor (só o trait `PreviewPresenter` e um *frame sink* headless). O export H.264 da Fase 2 usa encoders atrás de abstração (ADR-032); a decisão final do caminho de produção é `OUTPUT-H264`.
 
 Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, `preview`/`apply_plan` com plan token, `operation_id`/idempotência, refs simbólicas, conflitos), `capia-store` (formato `.capia`, autosave, snapshots, backups, migrations, recovery), `capia-assets` (import, fingerprint, dedup, relink, offline, versões), `capia-media` (probe, frame index, decode, thumbnails, waveforms, proxies), `capia-jobs`, `capia-render` (render graph, compositor wgpu **próprio** — ADR-034, RGBA16F linear —, texto, transições básicas, mixer, export H.264 via encoders atrás de abstração — ADR-032), `capia-preview` (scheduler + presenter escolhido, demo mínima), `capia-engine`, `capia-cli`.
 
@@ -60,6 +62,9 @@ Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, 
 ## FASE 3 — Editor (manual, sem IA)
 
 **Objetivo:** editor utilizável de ponta a ponta sem IA, com fluidez próxima ao CapCut Desktop.
+
+**Gates de entrada (hard):** **OD-1 fechado** — S1 executado em Windows (`tools/s1-preview-spike`), relatório em `docs/spikes/`, presenter decidido por ADR segundo a regra de `S1-preview-surface.md` §4. Sem isso, **nenhum** trabalho de preview/editor visual começa.
+**Gate de saída:** `OUTPUT-H264` — caminho confiável de exportação MP4/H.264 no Windows (hardware quando disponível; Media Foundation/FFmpeg quando adequado; fallback por software legal e de qualidade aceitável; sem x264/x265 GPL) definido e validado **antes da entrega do Editor**.
 
 Escopo: shell UI + design system, `ui-timeline` (canvas), painel Project (árvore) + abas de sequence + `+`, biblioteca (projeto/global), drag-and-drop, trim/split/snapping/zoom/ripple/grupos/copy-paste, tracks (lock/mute/solo/hide/magnetic), nested (abrir, make unique, flatten, follow length), inspector, keyframes, texto, legendas manuais + estilos, transições, áudio (volume/fades/detach), preview com proxies, export de deliverables em lote, histórico visível, relink UI, atalhos configuráveis, pt-BR/en.
 
