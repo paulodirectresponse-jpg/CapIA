@@ -1,0 +1,4 @@
+
+# fixtures binárias e goldens: sem conversão de fim de linha (testes comparam bytes/JSON)
+tests/fixtures/media/* -text
+crates/*/tests/golden/*.json text eol=lf

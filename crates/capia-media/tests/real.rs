@@ -66,7 +66,10 @@ fn golden(name: &str, info: &MediaInfo) {
         std::fs::write(&path, &got).unwrap();
         return;
     }
-    let want = std::fs::read_to_string(&path).unwrap_or_default();
+    // no Windows o checkout pode converter LF → CRLF: o conteúdo é o que importa
+    let want = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
     assert_eq!(
         got, want,
         "golden mismatch for {name} (CAPIA_BLESS=1 to bless)"
