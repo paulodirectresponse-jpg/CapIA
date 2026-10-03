@@ -10,3 +10,7 @@ apps/desktop/src-tauri/icons
 docs
 *.md
 tools/s1-preview-spike
+
+# goldens gerados por serde_json (comparados byte a byte nos testes Rust)
+crates/*/tests/golden/
+tests/fixtures/media/

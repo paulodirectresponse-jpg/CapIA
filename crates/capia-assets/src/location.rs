@@ -254,3 +254,51 @@ mod tests {
         assert_eq!(l.to_path_buf(), PathBuf::from("/fallback"));
     }
 }
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    #[test]
+    fn drive_letters_decide_whether_a_relative_path_exists() {
+        let r = |a: &str, b: &str| relative_path(Path::new(a), Path::new(b));
+        assert_eq!(
+            r("C:\\p\\proj", "C:\\p\\proj\\media\\a.mp4").as_deref(),
+            Some("media/a.mp4")
+        );
+        assert_eq!(
+            r("C:\\p\\proj", "C:\\p\\other\\a.mp4").as_deref(),
+            Some("../other/a.mp4")
+        );
+        // outro drive: não existe caminho relativo
+        assert_eq!(r("C:\\p\\proj", "D:\\media\\a.mp4"), None);
+    }
+
+    #[test]
+    fn unicode_paths_roundtrip_and_resolve_with_native_separators() {
+        let u = Path::new("C:\\media\\vídeo 日本\\ação.mp4");
+        let l = AssetLocation::from_path(u, Some(Path::new("C:\\media")));
+        assert_eq!(l.to_path_buf(), u);
+        assert_eq!(l.relative.as_deref(), Some("vídeo 日本/ação.mp4"));
+        // o relativo (com `/`) vira caminho nativo ao resolver
+        let c = resolve_candidates(&l, &[], Some(Path::new("D:\\other")));
+        assert_eq!(
+            c[0],
+            PathBuf::from("D:\\other")
+                .join("vídeo 日本")
+                .join("ação.mp4")
+        );
+    }
+
+    #[test]
+    fn hostile_relative_strings_are_ignored() {
+        let l = AssetLocation {
+            path: "C:\\x\\y".into(),
+            path_bytes_hex: None,
+            relative: Some("a\\b/c:d".into()),
+        };
+        let c = resolve_candidates(&l, &[], Some(Path::new("C:\\p")));
+        assert_eq!(c, vec![PathBuf::from("C:\\x\\y")]);
+    }
+}

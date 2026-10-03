@@ -17,23 +17,54 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Mídia externa como entrada hostil (ADR-047): probe/ffprobe atrás de um trait. IO de processos;
+  // não compila para WASM. Só conhece o tempo (Ticks/Rational).
+  "capia-media": {
+    workspace: ["capia-time"],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
+  },
+  // Domínio de assets (ADR-046..049): identidade, hash em streaming, import, verify, relink, cache.
+  // Sem SQLite e sem Command Engine.
+  "capia-assets": {
+    workspace: ["capia-time", "capia-model", "capia-media"],
+    normal: ["serde", "serde_json", "sha2"],
+    build: [],
+    dev: [],
+  },
   // Única camada com SQLite (ADR-042). Não é "núcleo puro": não compila para WASM.
   "capia-store": {
-    workspace: ["capia-time", "capia-model", "capia-commands"],
+    workspace: ["capia-time", "capia-model", "capia-commands", "capia-assets", "capia-media"],
     normal: ["serde", "serde_json", "rusqlite", "getrandom"],
     build: [],
     // a auto-dependência de dev habilita a feature `failpoints` só nos testes (ver Cargo.toml)
     dev: [],
   },
   "capia-project": {
-    workspace: ["capia-time", "capia-model", "capia-commands", "capia-store"],
+    workspace: [
+      "capia-time",
+      "capia-model",
+      "capia-commands",
+      "capia-store",
+      "capia-assets",
+      "capia-media",
+    ],
     normal: ["serde", "serde_json"],
     build: [],
     dev: [],
   },
   // Cliente de linha de comando do engine (headless): só usa a fachada e os tipos do núcleo.
   "capia-cli": {
-    workspace: ["capia-time", "capia-model", "capia-commands", "capia-store", "capia-project"],
+    workspace: [
+      "capia-time",
+      "capia-model",
+      "capia-commands",
+      "capia-store",
+      "capia-project",
+      "capia-assets",
+      "capia-media",
+    ],
     normal: ["serde", "serde_json"],
     build: [],
     dev: [],

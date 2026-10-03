@@ -167,6 +167,8 @@ fn probing_is_deterministic_across_runs() {
     }
 }
 
+// nomes com `:` e `|` não existem no Windows
+#[cfg(unix)]
 #[test]
 fn protocol_looking_names_are_treated_as_files_not_urls() {
     // um arquivo cujo NOME parece um protocolo não pode ser interpretado como tal

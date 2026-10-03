@@ -515,7 +515,7 @@ fn run_case(seed: u64, steps: usize, tally: &mut Tally) {
         let views = p.assets().unwrap();
         let from_catalog = views.iter().filter(|v| v.catalog.is_some()).count();
         assert_eq!(from_catalog, m.cat.len(), "{ctx}: catalog size");
-        for (c, _) in &m.cat {
+        for c in m.cat.keys() {
             let v = p.asset(&Model::id(*c)).unwrap();
             assert_eq!(
                 v.catalog.unwrap().status,
@@ -536,7 +536,7 @@ fn run_case(seed: u64, steps: usize, tally: &mut Tally) {
 }
 
 fn cases() -> u64 {
-    std::env::var("CAPIA_PROP_CASES")
+    std::env::var("CAPIA_IO_PROP_CASES")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(200)

@@ -5,7 +5,7 @@
 //! auditoria) e os dois têm que responder igual a qualquer comando seguinte (inclusive erros).
 //!
 //! Orçamento: 1.000 sequências por padrão em cada gerador (≈ 28 mil comandos e ≈ 8 mil reaberturas no total);
-//! `CAPIA_PROP_CASES` altera. É menos que os 10.000 da M05 porque cada reabertura faz IO real
+//! `CAPIA_IO_PROP_CASES` altera (só os testes com IO; os de lógica pura usam `CAPIA_PROP_CASES`). É menos que os 10.000 da M05 porque cada reabertura faz IO real
 //! (SQLite com `synchronous=NORMAL`: a atomicidade vem do WAL, o fsync só importa para queda de
 //! energia, que os testes de crash cobrem à parte).
 
@@ -31,7 +31,7 @@ fn opts(snapshot_every: u64) -> StoreOptions {
 }
 
 fn cases(default: u64) -> u64 {
-    std::env::var("CAPIA_PROP_CASES")
+    std::env::var("CAPIA_IO_PROP_CASES")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(default)

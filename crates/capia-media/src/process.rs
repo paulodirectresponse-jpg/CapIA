@@ -236,3 +236,61 @@ mod tests {
         assert!(!Path::new("/tmp/capia-pwn").exists());
     }
 }
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    fn lim(ms: u64, out: usize) -> RunLimits {
+        RunLimits {
+            timeout: Duration::from_millis(ms),
+            max_stdout: out,
+            max_stderr: 1024,
+        }
+    }
+
+    fn cmd(script: &str) -> (std::path::PathBuf, Vec<OsString>) {
+        (
+            "cmd.exe".into(),
+            vec!["/d".into(), "/c".into(), script.into()],
+        )
+    }
+
+    #[test]
+    fn captures_output_and_status() {
+        let (p, a) = cmd("echo hello& exit 3");
+        let o = run_bounded(&p, &a, &lim(10_000, 1024)).unwrap();
+        assert!(String::from_utf8_lossy(&o.stdout).contains("hello"));
+        assert_eq!(o.status.code(), Some(3));
+    }
+
+    #[test]
+    fn a_hung_process_is_killed_at_the_timeout() {
+        // `ping -n 30` segura ~30 s
+        let (p, a) = cmd("ping -n 30 127.0.0.1 > nul");
+        let t = Instant::now();
+        let e = run_bounded(&p, &a, &lim(500, 1024)).unwrap_err();
+        assert_eq!(e.code, MediaErrorCode::MediaProbeTimeout);
+        assert!(
+            t.elapsed() < Duration::from_secs(15),
+            "was not killed promptly"
+        );
+    }
+
+    #[test]
+    fn runaway_stdout_is_capped_and_the_process_killed() {
+        let (p, a) = cmd("for /l %i in (1,1,100000000) do @echo AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        let t = Instant::now();
+        let e = run_bounded(&p, &a, &lim(60_000, 64 * 1024)).unwrap_err();
+        assert_eq!(e.code, MediaErrorCode::MediaProbeOutputTooLarge);
+        assert!(t.elapsed() < Duration::from_secs(30));
+    }
+
+    #[test]
+    fn missing_program_is_backend_not_found() {
+        let e =
+            run_bounded(Path::new("C:\\no\\such\\ffprobe.exe"), &[], &lim(1000, 10)).unwrap_err();
+        assert_eq!(e.code, MediaErrorCode::MediaBackendNotFound);
+    }
+}

@@ -10,10 +10,21 @@ const base = () => [
   pkg("capia-time"),
   pkg("capia-model", [["capia-time"]]),
   pkg("capia-commands", [["capia-time"], ["capia-model"]]),
+  pkg("capia-media", [["capia-time"], ["serde"], ["serde_json"]]),
+  pkg("capia-assets", [
+    ["capia-time"],
+    ["capia-model"],
+    ["capia-media"],
+    ["serde"],
+    ["serde_json"],
+    ["sha2"],
+  ]),
   pkg("capia-store", [
     ["capia-time"],
     ["capia-model"],
     ["capia-commands"],
+    ["capia-assets"],
+    ["capia-media"],
     ["serde"],
     ["serde_json"],
     ["rusqlite"],
@@ -25,6 +36,8 @@ const base = () => [
     ["capia-model"],
     ["capia-commands"],
     ["capia-store"],
+    ["capia-assets"],
+    ["capia-media"],
     ["serde"],
     ["serde_json"],
   ]),
@@ -83,6 +96,39 @@ test("SQLite lives only in capia-store (self dev-dependency for failpoints is al
   const cli = r.findIndex((x) => x.name === "capia-cli");
   r[cli] = pkg("capia-cli", [["capia-project"], ["rusqlite"]]);
   assert.match(checkRust({ packages: r }).join("\n"), /capia-cli.*rusqlite/);
+});
+
+test("media and assets layers keep their boundaries (M07)", () => {
+  const swap = (name, deps) => {
+    const p = base();
+    p[p.findIndex((x) => x.name === name)] = pkg(name, deps);
+    return checkRust({ packages: p }).join("\n");
+  };
+  // capia-media só conhece o tempo: nada de modelo, comandos, store ou SQLite
+  assert.match(
+    swap("capia-media", [["capia-time"], ["capia-model"]]),
+    /capia-media não pode depender de capia-model/,
+  );
+  assert.match(swap("capia-media", [["capia-time"], ["rusqlite"]]), /capia-media.*rusqlite/);
+  // capia-assets não fala com o engine nem com o banco
+  assert.match(
+    swap("capia-assets", [["capia-media"], ["capia-commands"]]),
+    /capia-assets não pode depender de capia-commands/,
+  );
+  assert.match(
+    swap("capia-assets", [["capia-media"], ["capia-store"]]),
+    /capia-assets não pode depender de capia-store/,
+  );
+  assert.match(swap("capia-assets", [["capia-media"], ["rusqlite"]]), /capia-assets.*rusqlite/);
+  // o núcleo puro continua sem mídia
+  assert.match(
+    swap("capia-commands", [["capia-time"], ["capia-model"], ["capia-media"]]),
+    /capia-commands não pode depender de capia-media/,
+  );
+  assert.match(
+    swap("capia-model", [["capia-time"], ["capia-assets"]]),
+    /capia-model não pode depender de capia-assets/,
+  );
 });
 
 test("a normal (non-dev) self dependency is still a cycle", () => {
