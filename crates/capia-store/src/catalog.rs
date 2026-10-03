@@ -94,11 +94,12 @@ fn to_i64(v: u64) -> StoreResult<i64> {
 pub(crate) fn apply_op(tx: &Transaction<'_>, op: &CatalogOp) -> StoreResult<()> {
     let r = &op.record;
     tx.execute(
-        "INSERT INTO media_assets(asset_id, kind, content_hash, size_bytes, display_name, location_json, known_paths_json, media_info_json, status, status_checked_ms, imported_ms) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
+        "INSERT INTO media_assets(asset_id, kind, content_hash, size_bytes, display_name, location_json, known_paths_json, media_info_json, status, status_checked_ms, imported_ms, fingerprint) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) \
          ON CONFLICT(asset_id) DO UPDATE SET kind = excluded.kind, content_hash = excluded.content_hash, size_bytes = excluded.size_bytes, \
             display_name = excluded.display_name, location_json = excluded.location_json, known_paths_json = excluded.known_paths_json, \
-            media_info_json = excluded.media_info_json, status = excluded.status, status_checked_ms = excluded.status_checked_ms",
+            media_info_json = excluded.media_info_json, status = excluded.status, status_checked_ms = excluded.status_checked_ms, \
+            fingerprint = COALESCE(excluded.fingerprint, fingerprint)",
         params![
             r.asset_id.as_str(),
             r.kind.as_str(),
@@ -111,6 +112,7 @@ pub(crate) fn apply_op(tx: &Transaction<'_>, op: &CatalogOp) -> StoreResult<()> 
             r.status.as_str(),
             to_i64(r.status_checked_ms)?,
             to_i64(r.imported_ms)?,
+            r.fingerprint,
         ],
     )?;
     tx.execute(
@@ -137,9 +139,10 @@ struct Raw {
     status: String,
     status_checked_ms: i64,
     imported_ms: i64,
+    fingerprint: Option<String>,
 }
 
-const COLUMNS: &str = "asset_id, kind, content_hash, size_bytes, display_name, location_json, known_paths_json, media_info_json, status, status_checked_ms, imported_ms";
+const COLUMNS: &str = "asset_id, kind, content_hash, size_bytes, display_name, location_json, known_paths_json, media_info_json, status, status_checked_ms, imported_ms, fingerprint";
 
 fn raw_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Raw> {
     Ok(Raw {
@@ -154,6 +157,7 @@ fn raw_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Raw> {
         status: r.get(8)?,
         status_checked_ms: r.get(9)?,
         imported_ms: r.get(10)?,
+        fingerprint: r.get(11)?,
     })
 }
 
@@ -187,6 +191,7 @@ fn to_record(raw: Raw) -> StoreResult<AssetRecord> {
             .ok_or_else(|| corrupted(format!("catalog status of {id} is unknown")))?,
         status_checked_ms: non_neg(raw.status_checked_ms, "status time")?,
         imported_ms: non_neg(raw.imported_ms, "import time")?,
+        fingerprint: raw.fingerprint,
         asset_id: AssetId::new(id),
     })
 }

@@ -3,7 +3,7 @@
 //! atômica) se tudo isto tiver dado certo — probe falho não deixa meio asset registrado.
 
 use crate::error::{AssetError, AssetErrorCode};
-use crate::hash::{ContentHash, hash_file};
+use crate::hash::{ContentHash, hash_file, hash_file_job};
 use crate::location::AssetLocation;
 use crate::record::{AssetRecord, Availability};
 use capia_media::{MAX_PATH_BYTES, MediaProbe};
@@ -73,6 +73,47 @@ pub fn prepare_import(
     probe: &dyn MediaProbe,
     now_ms: u64,
 ) -> Result<PreparedAsset, AssetError> {
+    prepare_import_ctl(
+        path,
+        project_dir,
+        probe,
+        now_ms,
+        AssetErrorCode::AssetChangedDuringImport,
+        &|| false,
+        &mut |_, _| {},
+    )
+}
+
+/// Igual a [`prepare_import`], para **jobs**: cancelável, com progresso do hash e erro
+/// `ASSET_CHANGED_DURING_PROCESSING` se o arquivo mudar enquanto é processado. Não escreve nada.
+pub fn prepare_import_job(
+    path: &Path,
+    project_dir: Option<&Path>,
+    probe: &dyn MediaProbe,
+    now_ms: u64,
+    cancel: &dyn Fn() -> bool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<PreparedAsset, AssetError> {
+    prepare_import_ctl(
+        path,
+        project_dir,
+        probe,
+        now_ms,
+        AssetErrorCode::AssetChangedDuringProcessing,
+        cancel,
+        progress,
+    )
+}
+
+fn prepare_import_ctl(
+    path: &Path,
+    project_dir: Option<&Path>,
+    probe: &dyn MediaProbe,
+    now_ms: u64,
+    change_code: AssetErrorCode,
+    cancel: &dyn Fn() -> bool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<PreparedAsset, AssetError> {
     let abs = absolute_checked(path)?;
     let before = stat(&abs)?;
     if !before.is_file() {
@@ -87,14 +128,24 @@ pub fn prepare_import(
             format!("`{}` is empty", abs.display()),
         ));
     }
-    let digest = hash_file(&abs)?;
+    let digest = if change_code == AssetErrorCode::AssetChangedDuringProcessing {
+        hash_file_job(&abs, cancel, progress)?
+    } else {
+        hash_file(&abs)?
+    };
+    if cancel() {
+        return Err(AssetError::new(
+            AssetErrorCode::AssetCancelled,
+            "import was cancelled",
+        ));
+    }
     let media = probe.probe(&abs)?;
     // o arquivo não pode ter mudado entre o hash e o probe (ADR-046): senão hash e metadados
     // descreveriam conteúdos diferentes
     let after = stat(&abs)?;
     if after.len() != before.len() || after.modified().ok() != before.modified().ok() {
         return Err(AssetError::new(
-            AssetErrorCode::AssetChangedDuringImport,
+            change_code,
             format!("`{}` changed while it was being imported", abs.display()),
         ));
     }
@@ -107,6 +158,9 @@ pub fn prepare_import(
         location: AssetLocation::from_path(&abs, project_dir),
         known_paths: Vec::new(),
         media,
+        fingerprint: crate::fingerprint::fingerprint_file(&abs)
+            .ok()
+            .map(|f| f.to_text()),
         status: Availability::Online,
         status_checked_ms: now_ms,
         imported_ms: now_ms,

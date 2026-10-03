@@ -8,7 +8,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
 
 /// Versão de schema que este software escreve e entende.
-pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+pub const CURRENT_SCHEMA_VERSION: u32 = 3;
 
 /// `PRAGMA application_id` de todo `.capia` ("CAPI").
 pub const APPLICATION_ID: i64 = 0x4341_5049;
@@ -42,7 +42,59 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "media catalog (assets, events)",
         up: m002_media_catalog,
     },
+    Migration {
+        version: 3,
+        name: "media jobs (jobs, import_tickets) + asset fingerprint",
+        up: m003_media_jobs,
+    },
 ];
+
+/// Schema 3 (ADR-052/053): fila de jobs de mídia persistida (estado/progresso/resultado/erro, para
+/// sobreviver a fechar/crash: `running` vira `interrupted` ao reabrir) e tickets de import
+/// assíncrono. Aditiva: projetos v1/v2 ganham tabelas vazias e uma coluna anulável; nada existente
+/// é reescrito. Nada daqui entra no documento nem no undo.
+const MEDIA_JOBS_SQL: &str = "
+ALTER TABLE media_assets ADD COLUMN fingerprint TEXT;
+
+CREATE TABLE jobs (
+    job_id          TEXT    PRIMARY KEY NOT NULL CHECK (length(job_id) BETWEEN 1 AND 128),
+    kind            TEXT    NOT NULL CHECK (length(kind) BETWEEN 1 AND 64),
+    priority        TEXT    NOT NULL CHECK (priority IN ('interactive', 'normal', 'background')),
+    state           TEXT    NOT NULL CHECK (state IN ('queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted')),
+    progress_done   INTEGER NOT NULL CHECK (progress_done >= 0),
+    progress_total  INTEGER NOT NULL CHECK (progress_total >= 0),
+    dedup_key       TEXT,
+    label           TEXT    NOT NULL,
+    params_json     TEXT    NOT NULL CHECK (json_valid(params_json)),
+    result_json     TEXT    CHECK (result_json IS NULL OR json_valid(result_json)),
+    error_json      TEXT    CHECK (error_json IS NULL OR json_valid(error_json)),
+    cancel_requested INTEGER NOT NULL DEFAULT 0 CHECK (cancel_requested IN (0, 1)),
+    created_ms      INTEGER NOT NULL CHECK (created_ms >= 0),
+    started_ms      INTEGER CHECK (started_ms IS NULL OR started_ms >= 0),
+    finished_ms     INTEGER CHECK (finished_ms IS NULL OR finished_ms >= 0),
+    updated_ms      INTEGER NOT NULL CHECK (updated_ms >= 0)
+) STRICT;
+CREATE INDEX jobs_state ON jobs(state);
+
+CREATE TABLE import_tickets (
+    ticket_id    TEXT    PRIMARY KEY NOT NULL CHECK (length(ticket_id) BETWEEN 1 AND 128),
+    path         TEXT    NOT NULL,
+    size_bytes   INTEGER NOT NULL CHECK (size_bytes >= 0),
+    fingerprint  TEXT,
+    state        TEXT    NOT NULL CHECK (state IN ('pending', 'finalized', 'failed', 'cancelled', 'interrupted')),
+    job_id       TEXT,
+    asset_id     TEXT,
+    outcome_json TEXT    CHECK (outcome_json IS NULL OR json_valid(outcome_json)),
+    error_json   TEXT    CHECK (error_json IS NULL OR json_valid(error_json)),
+    created_ms   INTEGER NOT NULL CHECK (created_ms >= 0),
+    updated_ms   INTEGER NOT NULL CHECK (updated_ms >= 0)
+) STRICT;
+CREATE INDEX import_tickets_state ON import_tickets(state);
+";
+
+fn m003_media_jobs(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(MEDIA_JOBS_SQL)
+}
 
 /// Schema 2 (ADR-048): catálogo de mídia. Aditiva: projetos v1 ganham tabelas vazias; nenhuma linha
 /// existente é tocada. O arquivo de mídia nunca entra no `.capia`.

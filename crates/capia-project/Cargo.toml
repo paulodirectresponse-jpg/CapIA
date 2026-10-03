@@ -15,5 +15,6 @@ capia-commands.workspace = true
 capia-store.workspace = true
 capia-assets.workspace = true
 capia-media.workspace = true
+capia-jobs.workspace = true
 serde.workspace = true
 serde_json.workspace = true

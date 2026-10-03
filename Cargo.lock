@@ -319,6 +319,7 @@ version = "0.0.0"
 dependencies = [
  "capia-assets",
  "capia-commands",
+ "capia-jobs",
  "capia-media",
  "capia-model",
  "capia-store",
@@ -333,6 +334,7 @@ version = "0.0.0"
 dependencies = [
  "capia-assets",
  "capia-commands",
+ "capia-jobs",
  "capia-media",
  "capia-model",
  "capia-store",

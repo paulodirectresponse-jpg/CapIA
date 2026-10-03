@@ -87,6 +87,9 @@ pub struct AssetRecord {
     #[serde(default)]
     pub known_paths: Vec<String>,
     pub media: MediaInfo,
+    /// Impressão rápida amostrada (`fp1:…`), só para triagem/relink — **nunca** identidade.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
     pub status: Availability,
     /// Instante da última checagem de `status` (volátil: nunca entra no documento).
     pub status_checked_ms: u64,

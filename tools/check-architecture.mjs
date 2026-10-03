@@ -42,7 +42,14 @@ export const RUST_RULES = {
   },
   // Única camada com SQLite (ADR-042). Não é "núcleo puro": não compila para WASM.
   "capia-store": {
-    workspace: ["capia-time", "capia-model", "capia-commands", "capia-assets", "capia-media"],
+    workspace: [
+      "capia-time",
+      "capia-model",
+      "capia-commands",
+      "capia-assets",
+      "capia-media",
+      "capia-jobs",
+    ],
     normal: ["serde", "serde_json", "rusqlite", "getrandom"],
     build: [],
     // a auto-dependência de dev habilita a feature `failpoints` só nos testes (ver Cargo.toml)
@@ -56,6 +63,7 @@ export const RUST_RULES = {
       "capia-store",
       "capia-assets",
       "capia-media",
+      "capia-jobs",
     ],
     normal: ["serde", "serde_json"],
     build: [],

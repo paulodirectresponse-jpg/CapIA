@@ -162,6 +162,7 @@ fn synthetic_record(i: usize, dir: &Path, with_file: bool) -> AssetRecord {
         location: AssetLocation::from_path(&path, Some(dir)),
         known_paths: Vec::new(),
         media: synthetic_info(MediaKind::Video, 10),
+        fingerprint: None,
         status: Availability::Online,
         status_checked_ms: 1,
         imported_ms: 1,
