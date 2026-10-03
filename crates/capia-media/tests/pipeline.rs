@@ -871,3 +871,52 @@ fn a_frame_range_equals_the_individual_frames_in_a_single_process() {
     .unwrap_err();
     assert_eq!(e.code, MediaErrorCode::MediaCancelled);
 }
+
+// ---- um decode que falha no meio nunca vira resultado -------------------------------------------------
+
+/// ffmpeg falso: escreve PCM válido e **sai com erro** (disco/arquivo corrompido no meio).
+#[cfg(unix)]
+fn failing_ffmpeg(real: &MediaToolchain) -> (MediaToolchain, PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("capia-fake-ffmpeg-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("ffmpeg");
+    std::fs::write(&script, "#!/bin/sh\nhead -c 400000 /dev/zero\nexit 3\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut tc = real.clone();
+    tc.ffmpeg = Some(script);
+    (tc, dir)
+}
+
+#[cfg(unix)]
+#[test]
+fn a_decode_that_dies_midway_is_an_error_never_a_partial_waveform_or_pcm() {
+    let real = need!();
+    let (tc, dir) = failing_ffmpeg(&real);
+    let e = generate_waveform(
+        &tc,
+        &fixture("tone_44k.wav"),
+        0,
+        44_100,
+        std::time::Duration::from_secs(30),
+        &never,
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(
+        e.code,
+        MediaErrorCode::MediaDecodeFailed,
+        "partial PCM must not become a waveform"
+    );
+    let e = decode_audio(
+        &tc,
+        &fixture("tone_44k.wav"),
+        &audio_req(44_100, 1, Ticks(0), Ticks(TICKS_PER_SECOND * 5)),
+        DEFAULT_MAX_PCM_BYTES,
+        std::time::Duration::from_secs(30),
+        &never,
+    )
+    .unwrap_err();
+    assert_eq!(e.code, MediaErrorCode::MediaDecodeFailed);
+    let _ = std::fs::remove_dir_all(dir);
+}

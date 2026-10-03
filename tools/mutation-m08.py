@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mutation testing manual da M08 (13 mutações). Aplica UMA alteração por vez num arquivo do
+"""Mutation testing manual da M08 (13 mutações; #10 e #13 removem as duas camadas de defesa em profundidade — remover só uma sobrevive por desenho). Aplica UMA alteração por vez num arquivo do
 workspace, roda o(s) teste(s) que deveriam detectá-la e restaura o arquivo. Uma mutação é
 DETECTADA quando o comando de teste falha. Uso: `python3 tools/mutation-m08.py [id ...]`.
 Pré-requisitos: árvore limpa (git status) e FFmpeg no PATH. O arquivo original é sempre restaurado
@@ -68,7 +68,7 @@ M = [
         file="crates/capia-media/src/decode.rs",
         old="        Some(s) if s.success() => Ok(total),\n        _ => Err(MediaError::new(",
         new="        Some(s) if s.success() => Ok(total),\n        _ if true => Ok(total),\n        _ => Err(MediaError::new(",
-        cmd="cargo test -p capia-media --test pipeline waveform_from_a_real_file",
+        cmd="cargo test -p capia-media --test pipeline a_decode_that_dies_midway",
     ),
     dict(
         id=8,
@@ -88,10 +88,12 @@ M = [
     ),
     dict(
         id=10,
-        name="relink em lote por tamanho único (match fraco)",
+        name="relink em lote por tamanho único (sem impressão nem SHA-256)",
         file="crates/capia-assets/src/scan.rs",
-        old="            match d {\n                Ok(d) if d.hash == t.hash => verified.push(f.path.clone()),",
-        new="            match d {\n                Ok(_) if by_size.get(&t.size).map(Vec::len) == Some(1) => verified.push(f.path.clone()),\n                Ok(d) if d.hash == t.hash => verified.push(f.path.clone()),",
+        edits=[
+            ("                if got.as_deref() != Some(want.as_str()) {", "                if false && got.as_deref() != Some(want.as_str()) {"),
+            ("            match d {\n                Ok(d) if d.hash == t.hash => verified.push(f.path.clone()),", "            match d {\n                Ok(_) if by_size.get(&t.size).map(Vec::len) == Some(1) => verified.push(f.path.clone()),\n                Ok(d) if d.hash == t.hash => verified.push(f.path.clone()),"),
+        ],
         cmd="cargo test -p capia-project --test pipeline batch_relink_matches_by_content",
     ),
     dict(
@@ -112,10 +114,12 @@ M = [
     ),
     dict(
         id=13,
-        name="lock por chave do cache removido",
+        name="lock por chave do cache removido (as DUAS camadas: em-processo e do SO)",
         file="crates/capia-assets/src/cache.rs",
-        old="            while held.contains(&final_path) {",
-        new="            while false && held.contains(&final_path) {",
+        edits=[
+            ("            while held.contains(&final_path) {", "            while false && held.contains(&final_path) {"),
+            ("                Ok(()) => break,\n                Err(std::fs::TryLockError::WouldBlock) => {", "                _ if true => break,\n                Ok(()) => break,\n                Err(std::fs::TryLockError::WouldBlock) => {"),
+        ],
         cmd="cargo test -p capia-assets --test cache concurrent_producers",
     ),
 ]
@@ -137,11 +141,16 @@ def main() -> int:
         shutil.copy(path, backup)
         t0 = time.time()
         try:
-            if m["old"] not in original:
+            edits = m.get("edits") or [(m["old"], m["new"])]
+            mutated = original
+            missing = [o for o, _ in edits if o not in mutated]
+            if missing:
                 results.append((m["id"], m["name"], "PATTERN-NOT-FOUND", 0))
-                print(f"[{m['id']:>2}] PATTERN NOT FOUND in {m['file']}")
+                print(f"[{m['id']:>2}] PATTERN NOT FOUND in {m['file']}: {missing[0][:60]!r}")
                 continue
-            path.write_text(original.replace(m["old"], m["new"], 1))
+            for o, n in edits:
+                mutated = mutated.replace(o, n, 1)
+            path.write_text(mutated)
             r = subprocess.run(m["cmd"], shell=True, cwd=ROOT, capture_output=True, text=True)
             built = "could not compile" not in (r.stdout + r.stderr)
             detected = r.returncode != 0
