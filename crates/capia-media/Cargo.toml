@@ -13,3 +13,11 @@ workspace = true
 capia-time.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
+
+[features]
+# Injeção de falhas (park/abort em pontos de jobs de mídia) — SÓ para testes de crash.
+failpoints = []
+
+[dev-dependencies]
+capia-media = { path = ".", features = ["failpoints"] }

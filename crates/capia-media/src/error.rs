@@ -14,6 +14,11 @@ pub enum MediaErrorCode {
     MediaUnsupportedFormat,
     MediaInvalidPath,
     MediaIo,
+    MediaCancelled,
+    MediaIndexInvalid,
+    MediaFrameNotFound,
+    MediaEncoderUnavailable,
+    MediaLimitExceeded,
 }
 
 impl MediaErrorCode {
@@ -28,6 +33,11 @@ impl MediaErrorCode {
             Self::MediaUnsupportedFormat => "MEDIA_UNSUPPORTED_FORMAT",
             Self::MediaInvalidPath => "MEDIA_INVALID_PATH",
             Self::MediaIo => "MEDIA_IO_ERROR",
+            Self::MediaCancelled => "MEDIA_CANCELLED",
+            Self::MediaIndexInvalid => "MEDIA_INDEX_INVALID",
+            Self::MediaFrameNotFound => "MEDIA_FRAME_NOT_FOUND",
+            Self::MediaEncoderUnavailable => "MEDIA_ENCODER_UNAVAILABLE",
+            Self::MediaLimitExceeded => "MEDIA_LIMIT_EXCEEDED",
         }
     }
 }

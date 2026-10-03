@@ -28,7 +28,7 @@ export const RUST_RULES = {
   // não compila para WASM. Só conhece o tempo (Ticks/Rational).
   "capia-media": {
     workspace: ["capia-time"],
-    normal: ["serde", "serde_json"],
+    normal: ["serde", "serde_json", "sha2"],
     build: [],
     dev: [],
   },

@@ -324,3 +324,227 @@ mod windows_tests {
         assert_eq!(e.code, MediaErrorCode::MediaBackendNotFound);
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Execução em *streaming*, cancelável (ADR-053): stdout é entregue incrementalmente a um callback
+// (índices de milhões de quadros, PCM, vídeo cru) sem acumular a saída inteira; o cancelamento
+// MATA o processo; o timeout também.
+// ---------------------------------------------------------------------------------------------
+
+use std::sync::atomic::AtomicU32;
+use std::sync::mpsc;
+
+/// Limites de uma execução em streaming. O stdout **não** tem teto aqui (quem consome decide);
+/// o stderr tem.
+#[derive(Clone, Debug)]
+pub struct StreamLimits {
+    pub timeout: Duration,
+    pub max_stderr: usize,
+    /// Registra o pid do filho assim que ele nasce (testes provam que o pid some ao cancelar).
+    pub pid_sink: Option<Arc<AtomicU32>>,
+}
+
+impl StreamLimits {
+    pub fn new(timeout: Duration) -> Self {
+        Self {
+            timeout,
+            max_stderr: 64 * 1024,
+            pid_sink: None,
+        }
+    }
+}
+
+/// O callback pode pedir para encerrar cedo (ex.: já tem o quadro que queria).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Flow {
+    Continue,
+    /// Para de ler e mata o processo; **não** é erro.
+    Stop,
+}
+
+#[derive(Debug)]
+pub struct StreamOutput {
+    /// `None` se o processo foi encerrado por `Flow::Stop`.
+    pub status: Option<ExitStatus>,
+    pub stderr: Vec<u8>,
+    pub stopped_early: bool,
+}
+
+/// Executa `program args…` entregando o stdout em pedaços ao `on_chunk`. `cancel()` consultado a
+/// cada ≤ 20 ms: verdadeiro ⇒ processo morto e `MEDIA_CANCELLED`.
+pub fn run_streaming(
+    program: &Path,
+    args: &[OsString],
+    limits: &StreamLimits,
+    cancel: &dyn Fn() -> bool,
+    on_chunk: &mut dyn FnMut(&[u8]) -> Result<Flow, MediaError>,
+) -> Result<StreamOutput, MediaError> {
+    let mut cmd = Command::new(program);
+    cmd.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let mut attempt = 0;
+    let mut child = loop {
+        match cmd.spawn() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy && attempt < 50 => {
+                attempt += 1;
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(e) => {
+                let code = if e.kind() == std::io::ErrorKind::NotFound {
+                    MediaErrorCode::MediaBackendNotFound
+                } else {
+                    MediaErrorCode::MediaBackendFailed
+                };
+                return Err(MediaError::new(
+                    code,
+                    format!("cannot start `{}`: {e}", program.display()),
+                ));
+            }
+            Ok(c) => break c,
+        }
+    };
+    if let Some(sink) = &limits.pid_sink {
+        sink.store(child.id(), Ordering::SeqCst);
+    }
+    let (Some(mut out), Some(err)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(MediaError::new(
+            MediaErrorCode::MediaBackendFailed,
+            "cannot capture the process output",
+        ));
+    };
+    let exceeded = Arc::new(AtomicBool::new(false));
+    let err_t = drain(err, limits.max_stderr, Arc::clone(&exceeded));
+    // leitor de stdout num thread, com fila LIMITADA (contrapressão: o filho bloqueia no pipe)
+    let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(8);
+    std::thread::spawn(move || {
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            match out.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    let started = Instant::now();
+    let kill = |child: &mut std::process::Child| {
+        let _ = child.kill();
+        let _ = child.wait();
+    };
+    let mut stopped_early = false;
+    loop {
+        if cancel() {
+            kill(&mut child);
+            return Err(MediaError::new(
+                MediaErrorCode::MediaCancelled,
+                "the operation was cancelled and its process killed",
+            ));
+        }
+        if started.elapsed() >= limits.timeout {
+            kill(&mut child);
+            return Err(MediaError::new(
+                MediaErrorCode::MediaProbeTimeout,
+                format!(
+                    "`{}` did not finish within {} ms and was killed",
+                    program.display(),
+                    limits.timeout.as_millis()
+                ),
+            ));
+        }
+        match rx.recv_timeout(Duration::from_millis(20)) {
+            Ok(chunk) => match on_chunk(&chunk) {
+                Ok(Flow::Continue) => {}
+                Ok(Flow::Stop) => {
+                    stopped_early = true;
+                    kill(&mut child);
+                    break;
+                }
+                Err(e) => {
+                    kill(&mut child);
+                    return Err(e);
+                }
+            },
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    let status = if stopped_early {
+        None
+    } else {
+        // stdout fechou: o processo está terminando; espera com o mesmo timeout/cancel
+        loop {
+            match child.try_wait() {
+                Ok(Some(s)) => break Some(s),
+                Ok(None) => {}
+                Err(e) => {
+                    kill(&mut child);
+                    return Err(MediaError::new(
+                        MediaErrorCode::MediaBackendFailed,
+                        format!("wait failed: {e}"),
+                    ));
+                }
+            }
+            if cancel() || started.elapsed() >= limits.timeout {
+                kill(&mut child);
+                return Err(MediaError::new(
+                    if cancel() {
+                        MediaErrorCode::MediaCancelled
+                    } else {
+                        MediaErrorCode::MediaProbeTimeout
+                    },
+                    "the process did not finish and was killed",
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    };
+    Ok(StreamOutput {
+        status,
+        stderr: err_t.take(Duration::from_secs(2)),
+        stopped_early,
+    })
+}
+
+/// Atalho: coleta o stdout inteiro com **teto** de bytes (PCM/PNG/quadro cru), cancelável.
+pub fn run_collect(
+    program: &Path,
+    args: &[OsString],
+    limits: &StreamLimits,
+    max_stdout: usize,
+    cancel: &dyn Fn() -> bool,
+) -> Result<RunOutput, MediaError> {
+    let mut stdout: Vec<u8> = Vec::new();
+    let out = run_streaming(program, args, limits, cancel, &mut |chunk| {
+        if stdout.len().saturating_add(chunk.len()) > max_stdout {
+            return Err(MediaError::new(
+                MediaErrorCode::MediaLimitExceeded,
+                format!("the output exceeds the {max_stdout}-byte limit"),
+            ));
+        }
+        stdout.extend_from_slice(chunk);
+        Ok(Flow::Continue)
+    })?;
+    let Some(status) = out.status else {
+        return Err(MediaError::new(
+            MediaErrorCode::MediaBackendFailed,
+            "the process was stopped early",
+        ));
+    };
+    Ok(RunOutput {
+        status,
+        stdout,
+        stderr: out.stderr,
+    })
+}

@@ -297,9 +297,11 @@ dependencies = [
 name = "capia-media"
 version = "0.0.0"
 dependencies = [
+ "capia-media",
  "capia-time",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
