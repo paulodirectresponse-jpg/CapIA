@@ -242,6 +242,14 @@ dependencies = [
 [[package]]
 name = "capia-assets"
 version = "0.0.0"
+dependencies = [
+ "capia-media",
+ "capia-model",
+ "capia-time",
+ "serde",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "capia-cli"
