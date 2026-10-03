@@ -46,7 +46,8 @@ jobs:
       # Propriedades com IO (SQLite + fsync no NTFS) em orçamento *smoke*: o orçamento completo roda no
       # Linux (release). Os crash tests reais, as migrations e a lógica pura seguem integrais (ADR-051).
       - name: Testes do workspace
-        run: cargo test --workspace
+        # --no-fail-fast: uma falha não esconde as dos crates seguintes (diagnóstico em uma única rodada)
+        run: cargo test --workspace --no-fail-fast
         env:
           CAPIA_REQUIRE_FFMPEG: "1"
           CAPIA_IO_PROP_CASES: "100"
