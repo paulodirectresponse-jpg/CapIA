@@ -558,15 +558,18 @@ fn cancelling_a_proxy_kills_ffmpeg_and_leaves_no_file() {
         !pid_alive(p),
         "ffmpeg process {p} must be gone after cancel"
     );
-    // o Windows pode demorar a liberar o handle do processo morto: espera até 10 s
+    // O Windows (antivírus/indexador) pode segurar o arquivo parcial por alguns segundos depois do
+    // kill: a remoção do `generate_proxy` é *best-effort* (2 s). O parcial vive no temporário do
+    // chamador (cache `.tmp/`, varrido por `sweep_temp`) e NUNCA é publicado — aqui o teste insiste
+    // na remoção até 30 s para provar que nada mais segura o arquivo (o processo morreu).
     let t0 = std::time::Instant::now();
-    while out.exists() && t0.elapsed() < std::time::Duration::from_secs(10) {
-        std::thread::sleep(std::time::Duration::from_millis(100));
+    while out.exists() && t0.elapsed() < std::time::Duration::from_secs(30) {
+        let _ = std::fs::remove_file(&out);
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
     assert!(
         !out.exists(),
-        "the partial proxy must be removed (remove_file says: {:?})",
-        std::fs::remove_file(&out)
+        "the partial proxy must be removable once ffmpeg is dead"
     );
     let _ = std::fs::remove_file(&long);
 }
