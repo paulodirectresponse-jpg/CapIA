@@ -19,6 +19,8 @@ pub enum MediaErrorCode {
     MediaFrameNotFound,
     MediaEncoderUnavailable,
     MediaLimitExceeded,
+    MediaDecodeFailed,
+    MediaEncodeFailed,
 }
 
 impl MediaErrorCode {
@@ -38,6 +40,8 @@ impl MediaErrorCode {
             Self::MediaFrameNotFound => "MEDIA_FRAME_NOT_FOUND",
             Self::MediaEncoderUnavailable => "MEDIA_ENCODER_UNAVAILABLE",
             Self::MediaLimitExceeded => "MEDIA_LIMIT_EXCEEDED",
+            Self::MediaDecodeFailed => "MEDIA_DECODE_FAILED",
+            Self::MediaEncodeFailed => "MEDIA_ENCODE_FAILED",
         }
     }
 }

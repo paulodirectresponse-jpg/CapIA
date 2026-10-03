@@ -20,3 +20,12 @@ $F -f lavfi -i "color=c=red:size=32x24:duration=1" -frames:v 1 -pix_fmt rgba ima
 $F -f lavfi -i "color=c=blue:size=40x30:duration=1" -frames:v 1 -pix_fmt yuvj420p image.jpg
 # inválido: bytes que parecem mídia mas não são
 printf 'this is not media at all\n' > invalid.mp4
+# --- M08: quadros identificáveis (luma = 10 + passo·N) para provar o decode exato ---
+# CFR, GOP longo (1 keyframe em 50 quadros) com B-frames: o quadro N tem luma 20+4N
+$F -f lavfi -i "nullsrc=size=64x48:rate=25:duration=2,format=yuv420p,geq=lum='20+4*N':cb=128:cr=128" \
+   -c:v libx264 -preset veryfast -crf 12 -pix_fmt yuv420p -g 50 -bf 2 -x264-params scenecut=0 -an cfr_gop.mp4
+# VFR: 24 quadros (luma 20+8N) com um buraco de 2 quadros a cada 4 (timestamps irregulares reais)
+$F -f lavfi -i "nullsrc=size=64x48:rate=25:duration=1,format=yuv420p,geq=lum='20+8*N':cb=128:cr=128,setpts='(N+floor(N/4)*2)/(25*TB)'" \
+   -fps_mode passthrough -c:v libx264 -preset veryfast -crf 12 -pix_fmt yuv420p -g 12 -bf 2 -x264-params scenecut=0 -an vfr.mp4
+# áudio 44,1 kHz estéreo PCM, 1 s
+$F -f lavfi -i "sine=frequency=523:sample_rate=44100:duration=1" -c:a pcm_s16le -ac 2 tone_44k.wav

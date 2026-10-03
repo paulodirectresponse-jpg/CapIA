@@ -2,6 +2,7 @@
 //! e execução limitada de processos. O resto do CapIA só enxerga [`MediaInfo`]; nunca a saída
 //! textual/JSON do ffprobe. Este crate faz IO (processos) e **não** compila para WASM.
 
+mod decode;
 mod error;
 mod failpoints;
 mod ffprobe;
@@ -13,6 +14,11 @@ mod process;
 mod thumbnail;
 mod toolchain;
 
+pub use decode::{
+    AudioPcm, AudioRequest, DEFAULT_MAX_FRAME_BYTES, DEFAULT_MAX_PCM_BYTES, DecodeLimits,
+    PixelFormat, RawFrame, decode_audio, decode_audio_blocks, decode_frame_at,
+    decode_frame_by_index, samples_to_ticks, ticks_to_samples,
+};
 pub use error::{MediaError, MediaErrorCode};
 pub use ffprobe::{FfprobeBackend, MediaProbe};
 pub use index::{
