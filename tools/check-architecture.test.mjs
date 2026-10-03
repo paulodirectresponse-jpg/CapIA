@@ -26,7 +26,7 @@ const base = () => [
     ["capia-commands"],
     ["capia-store"],
     ["serde"],
-    ["serde_json", "dev"],
+    ["serde_json"],
   ]),
   pkg("capia-cli", [["capia-project"], ["capia-commands"], ["capia-model"], ["serde_json"]]),
   pkg("capia-desktop", [["capia-project"], ["tauri"], ["tauri-build", "build"]]),
