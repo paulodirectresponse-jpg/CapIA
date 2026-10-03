@@ -6,6 +6,10 @@
 
 use serde::Serialize;
 
+mod project;
+
+pub use project::{ParseError, Project, parse_transaction};
+
 /// Versão da Engine API exposta aos adaptadores.
 pub const ENGINE_API_VERSION: u32 = 1;
 

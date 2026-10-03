@@ -10,13 +10,25 @@ const base = () => [
   pkg("capia-time"),
   pkg("capia-model", [["capia-time"]]),
   pkg("capia-commands", [["capia-time"], ["capia-model"]]),
-  pkg("capia-project", [
+  pkg("capia-store", [
     ["capia-time"],
     ["capia-model"],
     ["capia-commands"],
     ["serde"],
+    ["serde_json"],
+    ["rusqlite"],
+    ["getrandom"],
+    ["capia-store", "dev"],
+  ]),
+  pkg("capia-project", [
+    ["capia-time"],
+    ["capia-model"],
+    ["capia-commands"],
+    ["capia-store"],
+    ["serde"],
     ["serde_json", "dev"],
   ]),
+  pkg("capia-cli", [["capia-project"], ["capia-commands"], ["capia-model"], ["serde_json"]]),
   pkg("capia-desktop", [["capia-project"], ["tauri"], ["tauri-build", "build"]]),
 ];
 
@@ -54,9 +66,35 @@ test("Tauri/wgpu/AI/IO crates are rejected in the core", () => {
   }
 });
 
+test("SQLite lives only in capia-store (self dev-dependency for failpoints is allowed)", () => {
+  assert.deepEqual(checkRust({ packages: base() }), []);
+  const p = base();
+  const project = p.findIndex((x) => x.name === "capia-project");
+  p[project] = pkg("capia-project", [["capia-commands"], ["rusqlite"]]);
+  assert.match(checkRust({ packages: p }).join("\n"), /capia-project.*rusqlite/);
+  const q = base();
+  const store = q.findIndex((x) => x.name === "capia-store");
+  q[store] = pkg("capia-store", [["capia-project"]]);
+  assert.match(
+    checkRust({ packages: q }).join("\n"),
+    /capia-store não pode depender de capia-project/,
+  );
+  const r = base();
+  const cli = r.findIndex((x) => x.name === "capia-cli");
+  r[cli] = pkg("capia-cli", [["capia-project"], ["rusqlite"]]);
+  assert.match(checkRust({ packages: r }).join("\n"), /capia-cli.*rusqlite/);
+});
+
+test("a normal (non-dev) self dependency is still a cycle", () => {
+  const p = base();
+  const store = p.findIndex((x) => x.name === "capia-store");
+  p[store] = pkg("capia-store", [["capia-store"]]);
+  assert.notDeepEqual(checkRust({ packages: p }), []);
+});
+
 test("Tauri is allowed only in the desktop shell", () => {
   const p = base();
-  p[3] = pkg("capia-project", [
+  p[p.findIndex((x) => x.name === "capia-project")] = pkg("capia-project", [
     ["capia-time"],
     ["capia-model"],
     ["capia-commands"],

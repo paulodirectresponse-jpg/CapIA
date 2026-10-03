@@ -17,11 +17,26 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
-  "capia-project": {
+  // Única camada com SQLite (ADR-042). Não é "núcleo puro": não compila para WASM.
+  "capia-store": {
     workspace: ["capia-time", "capia-model", "capia-commands"],
-    normal: ["serde"],
+    normal: ["serde", "serde_json", "rusqlite", "getrandom"],
     build: [],
-    dev: ["serde_json"],
+    // a auto-dependência de dev habilita a feature `failpoints` só nos testes (ver Cargo.toml)
+    dev: [],
+  },
+  "capia-project": {
+    workspace: ["capia-time", "capia-model", "capia-commands", "capia-store"],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
+  },
+  // Cliente de linha de comando do engine (headless): só usa a fachada e os tipos do núcleo.
+  "capia-cli": {
+    workspace: ["capia-time", "capia-model", "capia-commands", "capia-store", "capia-project"],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
   },
   "capia-desktop": {
     workspace: ["capia-project"],
@@ -80,12 +95,14 @@ export function checkRust(metadata, rules = RUST_RULES) {
     graph[pkg.name] = [];
     for (const dep of pkg.dependencies) {
       const kind = dep.kind ?? "normal";
+      // dev-dependency de um crate nele mesmo = truque de features de teste (não é aresta do grafo)
+      if (dep.name === pkg.name && kind === "dev") continue;
       const isWorkspace = names.has(dep.name);
       if (isWorkspace) {
         graph[pkg.name].push(dep.name);
         if (!rule.workspace.includes(dep.name)) {
           errors.push(
-            `${pkg.name} não pode depender de ${dep.name} (direção: time → model → commands → project → desktop)`,
+            `${pkg.name} não pode depender de ${dep.name} (direção: time → model → commands → store → project → cli/desktop)`,
           );
         }
       } else if (!(rule[kind] ?? []).includes(dep.name)) {

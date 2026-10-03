@@ -1,0 +1,27 @@
+[package]
+name = "capia-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Persistência do CapIA: arquivo .capia (SQLite), journal atômico, migrations e recuperação."
+
+[lints]
+workspace = true
+
+[features]
+# Injeção de falhas (abort/park em pontos do commit) — SÓ para testes de crash.
+failpoints = []
+
+[dependencies]
+capia-time.workspace = true
+capia-model.workspace = true
+capia-commands.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+getrandom.workspace = true
+
+[dev-dependencies]
+# habilita `failpoints` nos testes deste crate sem expor a feature no build normal
+capia-store = { path = ".", features = ["failpoints"] }

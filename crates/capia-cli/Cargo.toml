@@ -1,17 +1,23 @@
 [package]
-name = "capia-project"
+name = "capia-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+description = "Cliente de linha de comando do engine CapIA (headless)."
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "capia"
+path = "src/main.rs"
 
 [dependencies]
 capia-time.workspace = true
 capia-model.workspace = true
 capia-commands.workspace = true
 capia-store.workspace = true
+capia-project.workspace = true
 serde.workspace = true
 serde_json.workspace = true
