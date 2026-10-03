@@ -3,7 +3,7 @@
 //! formato. **Nunca** `CREATE TABLE IF NOT EXISTS` como substituto de migration.
 
 use crate::error::{StoreError, StoreErrorCode, StoreResult};
-use rusqlite::{Connection, OpenFlags, Transaction, TransactionBehavior};
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
 
 /// Versão de schema que este software escreve e entende.
@@ -126,6 +126,7 @@ pub(crate) struct Peek {
 }
 
 pub(crate) fn peek(path: &Path) -> StoreResult<Peek> {
+    use std::io::Read as _;
     if !path.exists() {
         return Err(StoreError::new(
             StoreErrorCode::ProjectNotFound,
@@ -138,16 +139,44 @@ pub(crate) fn peek(path: &Path) -> StoreResult<Peek> {
             "the path is a directory",
         ));
     }
-    if std::fs::metadata(path)?.len() == 0 {
+    // Lê o cabeçalho de 100 bytes direto do arquivo: nenhuma conexão SQLite, logo nenhum efeito
+    // colateral (nem `-wal`/`-shm`) ao examinar um arquivo que talvez nem seja nosso.
+    let mut header = [0u8; 100];
+    let mut file = std::fs::File::open(path)?;
+    let mut read = 0;
+    while read < header.len() {
+        match file.read(&mut header[read..])? {
+            0 => break,
+            n => read += n,
+        }
+    }
+    if read == 0 {
         return Err(StoreError::new(
             StoreErrorCode::NotACapiaProject,
             "the file is empty",
         ));
     }
-    let conn = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
+    if read < header.len() || &header[..16] != b"SQLite format 3\0" {
+        return Err(StoreError::new(
+            StoreErrorCode::NotACapiaProject,
+            "the file is not a SQLite database",
+        ));
+    }
+    let be32 = |at: usize| {
+        u32::from_be_bytes([header[at], header[at + 1], header[at + 2], header[at + 3]])
+    };
+    Ok(Peek {
+        // application_id em 68..72; user_version em 60..64 (big-endian, ver formato de arquivo do SQLite)
+        application_id: i64::from(i32::from_be_bytes([
+            header[68], header[69], header[70], header[71],
+        ])),
+        user_version: be32(60),
+    })
+}
+
+/// Releitura **autêntica** da assinatura pela conexão (já com o WAL recuperado): o cabeçalho do
+/// arquivo principal pode estar defasado se houver páginas só no `-wal` após uma queda.
+pub(crate) fn peek_connection(conn: &Connection) -> StoreResult<Peek> {
     let application_id: i64 = conn.pragma_query_value(None, "application_id", |r| r.get(0))?;
     let user_version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
     Ok(Peek {

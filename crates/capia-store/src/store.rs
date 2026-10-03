@@ -331,13 +331,17 @@ impl ProjectStore {
         let peeked = schema::peek(path)?;
         schema::check_signature(peeked, supported)?;
         let mut conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+        // O cabeçalho do arquivo principal pode estar defasado (páginas só no WAL após uma queda):
+        // a assinatura e a versão valem pela leitura da conexão — ainda antes de qualquer escrita.
+        let authoritative = schema::peek_connection(&conn)?;
+        schema::check_signature(authoritative, supported)?;
         configure(&conn, opts)?;
-        if peeked.user_version < supported {
+        if authoritative.user_version < supported {
             schema::run_migrations(
                 &mut conn,
                 Some(path),
                 migrations,
-                peeked.user_version,
+                authoritative.user_version,
                 supported,
                 now_ms(),
             )?;
@@ -474,9 +478,16 @@ impl ProjectStore {
     // ---- ferramentas somente leitura -------------------------------------------------------
 
     fn open_read_only(path: &Path) -> StoreResult<Connection> {
-        let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        // Preferimos uma conexão de leitura-escrita com `query_only`: ao fechar como última conexão
+        // o SQLite limpa `-wal`/`-shm`, deixando o diretório como encontrou. Sem permissão de
+        // escrita, caímos para somente leitura.
+        let conn = match Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE) {
+            Ok(c) => c,
+            Err(_) => Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?,
+        };
         conn.busy_timeout(Duration::from_millis(5_000))?;
         conn.pragma_update(None, "foreign_keys", true)?;
+        conn.pragma_update(None, "query_only", true)?;
         Ok(conn)
     }
 

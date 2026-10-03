@@ -337,6 +337,29 @@ fn load_inner(conn: &Connection) -> StoreResult<Loaded> {
             commit_results.insert(id, json("commit result", &text)?);
         }
     }
+    // o log de operações, os resultados e as entradas de histórico precisam se corresponder
+    for (op_id, op) in &applied {
+        if !commit_results.contains_key(&op.history_entry_id)
+            || !affected_by_entry.contains_key(&op.history_entry_id)
+        {
+            return Err(StoreError::corrupted(format!(
+                "operation {op_id} points to entry {} which has no stored result",
+                op.history_entry_id
+            )));
+        }
+    }
+    for id in affected_by_entry.keys() {
+        if !commit_results.contains_key(id) {
+            return Err(StoreError::corrupted(format!(
+                "history entry {id} has no stored result"
+            )));
+        }
+    }
+    if commit_results.len() != affected_by_entry.len() {
+        return Err(StoreError::corrupted(
+            "commit results and history entries do not match",
+        ));
+    }
     let max_entry: Option<i64> =
         conn.query_row("SELECT MAX(id) FROM history_entries", [], |r| r.get(0))?;
     let next_entry = match max_entry {
