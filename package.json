@@ -17,6 +17,7 @@
     "test:tools": "node --test \"tools/*.test.mjs\"",
     "check:arch": "node tools/check-architecture.mjs",
     "check:licenses": "node tools/check-licenses.mjs",
+    "check:parity": "node tools/check-wasm-parity.mjs",
     "desktop:dev": "pnpm --filter @capia/desktop tauri dev",
     "desktop:build": "pnpm --filter @capia/desktop tauri build --no-bundle"
   },

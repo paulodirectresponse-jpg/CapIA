@@ -132,6 +132,12 @@ pub fn canonical_json<T: Serialize>(value: &T) -> String {
     }
 }
 
+/// Digest SHA-256 (hex) do documento em JSON canônico: identidade de estado independente de
+/// plataforma. Base da paridade nativo × WASM (ADR-016) e de golden tests.
+pub fn document_digest(doc: &capia_model::Document) -> String {
+    sha256_hex(canonical_json(doc).as_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

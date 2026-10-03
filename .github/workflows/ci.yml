@@ -57,6 +57,11 @@ jobs:
         run: cargo test --release -p capia-commands --test perf -- --ignored --nocapture
       - name: Núcleo sem IO compila para WASM (ADR-016)
         run: cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Paridade nativo × WASM por digest do documento (ADR-016)
+        run: node tools/check-wasm-parity.mjs
 
   web:
     name: TypeScript (lint, typecheck, testes, build)

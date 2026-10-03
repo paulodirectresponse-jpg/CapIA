@@ -35,6 +35,7 @@ pub use engine::{
 };
 pub use error::{CommandError, Result};
 pub use group_move::{GroupMove, GroupMoveRequest, GroupSnap, resolve_group_move};
+pub use hash::document_digest;
 pub use placement::{InsertSide, Placement, PlacementStrategy, resolve_placement};
 pub use query::eval_property;
 pub use snap::{
