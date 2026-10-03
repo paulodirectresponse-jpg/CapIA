@@ -1,6 +1,6 @@
 # STATUS
 
-**Última atualização:** 2026-10-03 · **Fase atual:** FASE 2 — Motor (headless) · **Missão corrente:** M05 concluída (Core Engine Foundation) · **Próxima:** M06 (ver "Próxima missão")
+**Última atualização:** 2026-10-03 · **Fase atual:** FASE 2 — Motor (headless) · **Missão corrente:** M06 concluída (Persistência `.capia` + CLI + nested) · **Próxima:** M07 (ver "Próxima missão")
 
 ## Gates de fase (decisão do Product Owner, ADR-037)
 
@@ -19,10 +19,50 @@ OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto
 | Modelo (`capia-model`) | ✅ Document com compartilhamento estrutural, Sequence/Track/Clip/Marker/Asset, keyframes (Bézier exato), **ops primitivas invertíveis**, invariantes (sobreposição, magnética, alinhamento, família, fonte, nested DAG/profundidade 16, limites) — 20 testes |
 | Command Engine (`capia-commands`) | ✅ 19 comandos, transações atômicas, histórico/undo/redo, `operation_id` idempotente (ADR-029), `preview → apply_plan` por token HMAC (ADR-030), rebase/`CONFLICT`, refs `$nome`, auditoria — ver "O que existe" |
 | Suíte de aceitação (ADR-036) | ✅ **120/120** cenários no engine real (108 + 12 da M05); mutação detecta regressões |
-| Persistência `.capia`, assets, mídia, render, preview, CLI | ❌ ainda não (restante da Fase 2) |
+| Persistência (`capia-store`) | ✅ M06: `.capia` = SQLite v1 (STRICT, WAL, `synchronous=FULL`), journal de eventos + snapshots, migrations explícitas, commit atômico, idempotência durável, undo/redo após reabrir, crash tests com processo morto (ADR-042..044) |
+| Facade + CLI (`capia-project`, `capia-cli`) | ✅ M06: `capia create/inspect/validate/apply/undo/redo/history/dump` |
+| Nested (comandos) | ✅ M06: `delete/rename_sequence`, `insert_nested`, `set_nested_target`, `set_follow_length` (ADR-045) |
+| Assets, mídia, render, preview | ❌ ainda não (restante da Fase 2) |
 | CI | ✅ executa em runner real desde a M05 (ver "Validação"); jobs Linux verdes incl. perf e paridade WASM |
 | Decisões abertas | **OD-1** (gate da Fase 3) · **OUTPUT-H264** (antes da entrega do Editor). **As 8 decisões S7 estão definitivas** (ADR-039) |
-| Git | `main` = M01–M04 + correção de CI; M05 em `claude/m05-core-engine` (sem PR aberto: não solicitado) |
+| Git | `main` = M01–M04; M05 em `claude/m05-core-engine`; M06 em `claude/m06-persistence-cli` (sem PR aberto: não solicitado) |
+
+## O que existe (M06)
+
+**Formato `.capia` v1** (ADR-042): um arquivo SQLite (tabelas `STRICT`): `meta`, `schema_migrations`, `history_entries`, `events`, `applied_operations`, `commit_results`, `snapshots`; triggers *append-only*; `application_id = 0x43415049`. O documento **não** é espalhado em tabelas: estado = último snapshot (JSON canônico + digest) + replay dos eventos posteriores (ADR-043: histórico completo persistido, undo/redo funcionam após reabrir).
+**Commit** (ADR-044): entrada de histórico + resultado + `operation_id`s + evento (+ snapshot no cadence) numa única `BEGIN IMMEDIATE`; o engine persiste **antes** de publicar (falha ⇒ memória intacta, `PERSISTENCE_FAILED`). Escritor único pelo lock do SQLite + checagem de *stale head* (`STORE_BUSY` / `STORE_CONFLICT`).
+**PRAGMAs:** WAL · `synchronous=FULL` (padrão) · `foreign_keys=ON` · `busy_timeout=5000` · `trusted_schema=OFF` · `cell_size_check=ON` · `quick_check` ao abrir, `integrity_check`+`foreign_key_check` em `validate`.
+**Migrations:** só para frente, cada uma em transação própria, backup `VACUUM INTO` (`<arq>.v<N>.bak`) antes de migrar; schema mais novo é **rejeitado sem tocar o arquivo**. Testadas com versão 2 sintética (sucesso, falha com rollback, lacuna, downgrade).
+**Erros estruturados:** `PROJECT_NOT_FOUND` · `PROJECT_ALREADY_EXISTS` · `NOT_A_CAPIA_PROJECT` · `PROJECT_CORRUPTED` · `UNSUPPORTED_SCHEMA_VERSION` · `MIGRATION_FAILED` · `STORE_IO_ERROR` · `STORE_BUSY` · `STORE_CONFLICT` · `TRANSACTION_FAILED` · `INVALID_ARGUMENT`. Nenhum erro bruto do SQLite escapa.
+**CLI** (`capia`): `create` · `inspect` · `validate` · `apply` · `undo` · `redo` · `history` · `dump` (JSON determinístico). Usa o mesmo parser (`capia_project::parse_transaction`) e o mesmo engine; atores `agent`/`api` passam por `preview → apply_plan`. Saída 0 ok · 1 falha (JSON estruturado em stderr) · 2 uso.
+**Nested (ADR-045):** `delete_sequence` · `rename_sequence` · `insert_nested` · `set_nested_target` · `set_follow_length`; ciclo (A→A, A→B→A), profundidade máx. 16 e referência inválida rejeitados; `follow_length` reconciliado após cada comando (magnética: ripple; livre: limitado ao espaço com aviso; travada: intocada com aviso).
+
+## Validação M06 (container Linux, Rust 1.97)
+
+| Verificação | Resultado |
+|---|---|
+| `cargo fmt` · `clippy --workspace --all-targets -D warnings` · `cargo test --workspace` | ✅ · ✅ · ✅ **163 testes** (time 25 · model 20+5+4 · commands 9+21+1+18+2+2+2 (+1 acc.+1 golden) · store 11 schema + 18 store + 5 crash + 2 properties · cli 12+4 · project 1 …) + 4 de desempenho `#[ignore]` |
+| Crash real (`tests/crash.rs`) | ✅ filho morto por `abort` e por `kill` externo em `before_begin` / `in_tx_after_entry` / `in_tx_after_writes` / `before_commit` / `after_commit` (10 combinações): sempre **estado A completo ou B completo**, `integrity_check` ok, log coerente, reenvio idempotente; + 14 rodadas de SIGKILL em instantes aleatórios com snapshots; repetido 15× sem flakiness |
+| Propriedade (lockstep persistido × memória, reabrindo aleatoriamente) | ✅ 1.000 sequências por gerador (timeline e nested) por padrão (~90 s em debug por ser I/O com fsync); **CI release: 5.000 por gerador (10.000 no total, ~147 s)**. Rodada medida: 21.000 comandos / 6.395 reaberturas (timeline), 21.000 / 6.368 (nested). Orçamento escolhido por custo de I/O; `CAPIA_PROP_CASES` ajusta |
+| Propriedade nested em memória | ✅ 3.000 casos, 25.586 comandos aceitos, 6.103 edições nested |
+| Corrupção (`tests/schema.rs`) | ✅ vazio, não-SQLite, SQLite sem schema, schema novo, blob inválido, registro inconsistente, ids inválidos, 300 rodadas de *byte-fuzz*: sempre erro estruturado, **nunca pânico, arquivo intocado** |
+| Concorrência | ✅ 2 escritores: `STORE_BUSY`/`STORE_CONFLICT`; threads com retry nunca corrompem e cada escrita entra exatamente uma vez |
+| Desempenho (`--release`, 10.000 clips, `synchronous=FULL`, arquivo 2,4 MiB) | ✅ criar 238 ms · **abrir 81 ms** (meta < 2 s) · recarregar 68 ms · **commit comum mediana 7,2 ms, pior 10 ms** (meta < 200 ms) · commit com snapshot de 10 k clips 118 ms · abrir com cauda de 300 eventos 83 ms |
+| Mutação manual (11) | ✅ todas detectadas: `operation_id` duplicado ignorado, erro de insert engolido, evento fora da transação, validação de ciclo/profundidade removida, stale-head removido (defesa em profundidade: a PK também barra), digest do snapshot sem checagem, publicar antes do journal, ids não persistidos, cursor de undo não restaurado, `follow_length` desligado, `synchronous` enfraquecido |
+| M05 preservado | ✅ aceitação 120/120, golden digest estável, paridade WASM, `cargo check wasm32-unknown-unknown` |
+| CI no GitHub (Linux + Windows) | ver relatório final |
+
+**Achados da auditoria (corrigidos):** carga inconsistente (snapshot e eventos de instantes diferentes) → leitura em transação única; *peek* criava sidecars `-wal/-shm` → leitura crua do cabeçalho; `applied_operations` sem resultado não era detectado → cruzamento em `load`; aritmética sem *checked* sobre revisão/seq vindas do arquivo → `checked_add` e *guards*; blobs gigantes de arquivo hostil → `max_blob_bytes`.
+
+### Limitações restantes (M06)
+
+- Histórico completo e todos os `operation_id` são carregados em memória ao abrir (sem retenção/poda).
+- O limite de 512 MiB por blob só foi testado com limite configurado pequeno.
+- Custo de fsync por commit (`FULL`); `Normal`/`Off` só para testes de volume.
+- Se `tx.commit()` falhar *depois* de o banco ter commitado, a memória fica atrasada; a reabertura recupera (`STORE_CONFLICT`).
+- Planos (`preview`) não são persistidos (por desenho).
+- Mover clips para track magnética continua `UNSUPPORTED_COMMAND`; permissões por ator continuam adiadas.
+- Crash tests foram executados em Linux localmente; Windows roda na CI.
 
 ## O que existe (M05)
 
@@ -32,8 +72,7 @@ OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto
 
 ### Ainda NÃO implementado (escopo declarado fora da M05)
 
-- Persistência `.capia` (SQLite), `applied_operations`/histórico em disco, teste de *kill -9* no commit (depende do `capia-store`).
-- Comandos: pastas/organização, `duplicate/delete/rename_sequence`, `reorder_*`, `duplicate_clip`, `replace_clip_media`, `freeze_frame`, `detach_audio`, nested (`create_nested_from_selection`, `make_unique`, `flatten_nested`, `set_follow_length`, `generate_variants` — o **modelo** e as invariantes de nested/ciclo/profundidade já existem), efeitos, transições, texto/legendas, grupos de clips, clipboard, deliverables, comandos de assets além de `register_asset`.
+- Comandos: pastas/organização, `duplicate_sequence`, `reorder_*`, `duplicate_clip`, `replace_clip_media`, `freeze_frame`, `detach_audio`, nested restante (`create_nested_from_selection`, `make_unique`, `flatten_nested`, `generate_variants`), efeitos, transições, texto/legendas, grupos de clips, clipboard, deliverables, comandos de assets além de `register_asset`.
 - Mover clips **para/de track magnética** (semântica de *reorder*, Fase 3) → `UNSUPPORTED_COMMAND`.
 - Caminhos de ref (`$seq.tracks.main`); só `$nome` simples.
 - `permissions` por ator (`PERMISSION_DENIED`; Fase 4) e gate humano de aprovação do plano (`plan_id + diff_digest`).
@@ -49,6 +88,7 @@ OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto
 | M03 — Fechamento e spikes S1–S7 | ✅ S2–S7 medidos; ADR-029..036; `PROVENANCE.md`; `tests/acceptance` (108 cenários) |
 | M04 — Scaffold, CI e preparação | ✅ workspace Rust+TS, shell Tauri, CI, licenças/arquitetura, pacote S1, ADR-037/038 |
 | **M05 — Core Engine Foundation (Fase 2)** | ✅ tempo, modelo, Command Engine, suíte de aceitação 120/120, propriedade 10.000, idempotência/plano, paridade WASM, ADR-039..041 |
+| **M06 — Persistência, nested e CLI (Fase 2)** | ✅ `capia-store`, `capia-project`, `capia-cli`, comandos nested, crash tests reais, propriedade com salvar/reabrir, ADR-042..045 |
 
 ## Validação M05 (saída real; container Linux, Rust 1.97.0, Node 22, pnpm 10.28)
 
@@ -91,11 +131,7 @@ Antes da **entrega do Editor** (saída da Fase 3) é preciso um caminho **confi�
 
 ## Próxima missão (sugestão)
 
-**M06 — Persistência e Engine API headless (resto do critério 1 da Fase 2):**
-1. `capia-store` (arquivo `.capia` = SQLite): documento, `applied_operations` e histórico **na mesma transação** do commit; autosave por transação; migrations; recovery; **teste de kill -9 no meio do commit** (fecha o item de idempotência da Fase 2) e abrir 10.000 clips < 2 s.
-2. `capia-cli` mínimo sobre a Engine API: criar projeto com 3 sequences (2 hooks + `BODY_MASTER` *nested*), transações, undo/redo (script reproduzível).
-3. Comandos de nested (`create_nested_from_selection`, `make_unique`, `flatten_nested`, `set_follow_length`) e `generate_variants`, usando o modelo/invariantes já prontos.
-Depois: `capia-assets` → `capia-media` (probe/frame index/decode) → `capia-render` (compositor wgpu) → export. Não iniciar Fase 3 antes de OD-1.
+**M07 — Comandos nested restantes e início de assets:** `make_unique`, `flatten_nested`, `duplicate_sequence`, `create_nested_from_selection`, `generate_variants` (sobre o modelo/journal já prontos); depois `capia-assets` → `capia-media` (probe/frame index/decode) → `capia-render` (compositor wgpu) → export (critério 1 da Fase 2). Não iniciar Fase 3 antes de OD-1.
 
 ## Blockers
 

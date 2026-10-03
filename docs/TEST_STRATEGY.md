@@ -97,3 +97,10 @@ Regressões > 10% falham o CI de benchmark (rodado em máquina dedicada, não em
 - PR: build Windows (+ Linux para crates puros), clippy, fmt, testes unitários/propriedade (orçamento de casos reduzido), testes de integração rápidos, secret scan, verificação de regras de dependência entre crates.
 - Noturno: propriedade com orçamento alto, corpus de mídia completo, crash tests, fuzzing curto, benchmarks, golden de GPU real.
 - Mídia de teste: gerada por script ou baixada de fonte licenciada; nunca mídia de clientes no repositório.
+
+## Persistência (M06)
+
+- **Crash real:** `crates/capia-store/tests/crash.rs` re-executa o binário de teste como filho e o mata (`abort` ou `kill` externo) em `before_begin`, `in_tx_after_entry`, `in_tx_after_writes`, `before_commit`, `after_commit`, além de SIGKILL aleatório em loop. Invariante: estado A completo **ou** B completo, `integrity_check`, log de operações coerente, reenvio idempotente.
+- **Propriedade com salvar/reabrir:** `properties.rs` roda engine persistido × engine em memória em *lockstep*, reabrindo aleatoriamente, e compara `export_state()`. Orçamento: 1.000 sequências por gerador por padrão (cada commit faz fsync); CI release com `CAPIA_PROP_CASES=5000`.
+- **Corrupção/migrations:** `schema.rs` (12 variantes + byte-fuzz de 300 rodadas; migration v2 sintética).
+- **Mutação manual** registrada em `docs/STATUS.md` (11 mutações, todas detectadas).

@@ -176,3 +176,7 @@ Implementado em `crates/capia-commands` (ver `docs/STATUS.md` para o que falta).
 - `Agent`/`Api` → `PREVIEW_REQUIRED` em `execute`. `PERMISSION_DENIED` por comando e o gate humano ficam para a Fase 4.
 - Refs: só `$nome` (sem caminhos `$seq.tracks.main`).
 - Digests usam JSON canônico interno (chaves ordenadas; subconjunto de RFC 8785), não interoperável com terceiros.
+
+## Journal e nested (M06)
+
+O engine recebe um `Journal` (`set_journal`); cada commit/undo/redo chama `Journal::append` **antes** de publicar o novo estado. Falha ⇒ `PERSISTENCE_FAILED` e memória intacta. `Engine::restore(EngineState)` / `export_state()` reconstroem/inspecionam o estado (documento, histórico, cursor, `operation_id`s, resultados). Comandos nested novos: `delete_sequence` (`IN_USE` se referenciada), `rename_sequence`, `insert_nested`, `set_nested_target`, `set_follow_length` — ver ADR-045.

@@ -35,6 +35,7 @@ Estado atual e próxima missão: **leia `docs/STATUS.md` primeiro.**
 | `docs/DECISIONS.md` | ADRs: decisões, alternativas, requisitos reformulados |
 | `docs/OPEN_SOURCE_AUDIT.md` | Due diligence de projetos open-source: licenças, reuso, estratégia recomendada (M02) |
 | `docs/PROVENANCE.md` | Política obrigatória de proveniência/licenças de terceiros + registro (ADR-031) |
+| `crates/capia-store/README.md` · `crates/capia-cli/README.md` | Formato `.capia`/persistência (ADR-042..044) e CLI `capia` (M06) |
 | `docs/spikes/README.md` | Resultados dos spikes S1–S7 (M03) e relatórios individuais |
 | `tests/acceptance/` | Suíte de aceitação de comportamento da timeline (critério da Fase 2, ADR-036) |
 | `tools/` | `check-architecture.mjs` (fronteiras), `check-licenses.mjs` (licenças JS), `s1-preview-spike/` (medição S1 em Windows) |
@@ -54,12 +55,17 @@ pnpm install && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test &&
 pnpm check:arch && pnpm check:licenses && cargo deny check licenses bans sources
 pnpm check:parity         # paridade nativo × WASM (precisa do target wasm32-wasip1)
 cargo test --release -p capia-commands --test perf -- --ignored --nocapture   # metas de desempenho
+cargo test --release -p capia-store --test perf -- --ignored --nocapture      # 10k clips: abrir/commit/reload
+CAPIA_PROP_CASES=5000 cargo test --release -p capia-store --test properties   # salvar/reabrir (padrão 1000/gerador)
+cargo run -p capia-cli -- create|inspect|validate|apply|undo|redo|history|dump <arq.capia> ...
 pnpm desktop:build        # tauri build --no-bundle  (o front precisa estar construído: pnpm --filter @capia/desktop build)
 ```
 
-Direção de dependência (verificada por `pnpm check:arch`): `capia-time → capia-model → capia-commands → capia-project → apps/desktop`. O núcleo não conhece Tauri, UI, IA, providers, render nem FFmpeg. Novo crate/pacote ⇒ atualizar a matriz em `tools/check-architecture.mjs` de propósito (ADR-038).
+Direção de dependência (verificada por `pnpm check:arch`): `capia-time → capia-model → capia-commands → capia-store → capia-project → {capia-cli, apps/desktop}`. O núcleo puro (time/model/commands) não conhece Tauri, UI, IA, providers, render, FFmpeg nem SQLite (compila para WASM); só `capia-store` fala com SQLite (`rusqlite` bundled). Novo crate/pacote ⇒ atualizar a matriz em `tools/check-architecture.mjs` de propósito (ADR-038).
 
 ## Regras de trabalho
+
+- **Persistência (M06):** o engine persiste **antes** de publicar (`Journal`); uma única transação SQLite por commit; `synchronous=FULL`; migrations só para frente e explícitas; schema mais novo é rejeitado sem tocar o arquivo. Mudar o schema ⇒ nova migration + teste + ADR. Erros do store são sempre `StoreError` estruturado (nunca SQLite bruto).
 
 - Não pule fases do `docs/ROADMAP.md`. Uma missão por vez; atualize `docs/STATUS.md` ao final.
 - Mudou uma decisão arquitetural? Registre um ADR novo em `docs/DECISIONS.md` (não reescreva o antigo; marque como *Superseded*).

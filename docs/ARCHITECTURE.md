@@ -185,3 +185,7 @@ Regras de minimização: para transcrição envia-se **áudio extraído e compri
 ## 11. Mapa de documentos por subsistema
 
 Time/tracks/clips/nested → `TIMELINE_ENGINE.md` · UX → `TIMELINE_UX.md` · Comandos → `COMMAND_SYSTEM.md` · Entidades/persistência → `DATA_MODEL.md` · Preview/render → `PREVIEW_RENDER.md` · IA → `AI_SYSTEM.md`, `AI_PROVIDERS.md` · Assets → `ASSET_SYSTEM.md` · Segurança → `SECURITY.md`.
+
+## Persistência, facade e CLI (M06)
+
+`capia-store` (SQLite, journal) → `capia-project` (facade: `Project`, `parse_transaction`) → `capia-cli`. Matriz de dependências em `tools/check-architecture.mjs`.

@@ -158,3 +158,7 @@ Cópia consistente (SQLite Online Backup API) do `.capia` para a pasta de backup
 
 ### Auditoria
 `history_entries` (append-only, com `actor`, `label`, `run_id`, timestamp, tamanho) + `ai_runs` permitem responder "quem mudou o quê, quando e por quê" — inclusive para alterações via API/MCP.
+
+## Formato `.capia` v1 (M06)
+
+Implementado em `capia-store` conforme ADR-042..044. **Divergências deliberadas** desta seção §6: `synchronous=FULL` (não NORMAL) e schema mais novo é **rejeitado** (não abre read-only). O documento é persistido como snapshot + eventos, não como tabelas por entidade.
