@@ -53,6 +53,8 @@ jobs:
         run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-project --all-targets -- -D warnings
       - name: Testes do núcleo
         run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-project
+      - name: Metas de desempenho do núcleo (release)
+        run: cargo test --release -p capia-commands --test perf -- --ignored --nocapture
       - name: Núcleo sem IO compila para WASM (ADR-016)
         run: cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands
 
