@@ -558,7 +558,16 @@ fn cancelling_a_proxy_kills_ffmpeg_and_leaves_no_file() {
         !pid_alive(p),
         "ffmpeg process {p} must be gone after cancel"
     );
-    assert!(!out.exists(), "the partial proxy must be removed");
+    // o Windows pode demorar a liberar o handle do processo morto: espera até 10 s
+    let t0 = std::time::Instant::now();
+    while out.exists() && t0.elapsed() < std::time::Duration::from_secs(10) {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        !out.exists(),
+        "the partial proxy must be removed (remove_file says: {:?})",
+        std::fs::remove_file(&out)
+    );
     let _ = std::fs::remove_file(&long);
 }
 
