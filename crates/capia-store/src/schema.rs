@@ -7,7 +7,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
 
 /// Versão de schema que este software escreve e entende.
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub const CURRENT_SCHEMA_VERSION: u32 = 2;
 
 /// `PRAGMA application_id` de todo `.capia` ("CAPI").
 pub const APPLICATION_ID: i64 = 0x4341_5049;
@@ -30,11 +30,53 @@ impl core::fmt::Debug for Migration {
 }
 
 /// Migrations conhecidas por este software (contíguas a partir de 1).
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial schema",
-    up: m001_initial,
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial schema",
+        up: m001_initial,
+    },
+    Migration {
+        version: 2,
+        name: "media catalog (assets, events)",
+        up: m002_media_catalog,
+    },
+];
+
+/// Schema 2 (ADR-048): catálogo de mídia. Aditiva: projetos v1 ganham tabelas vazias; nenhuma linha
+/// existente é tocada. O arquivo de mídia nunca entra no `.capia`.
+const MEDIA_CATALOG_SQL: &str = "
+CREATE TABLE media_assets (
+    asset_id          TEXT    PRIMARY KEY NOT NULL CHECK (length(asset_id) BETWEEN 1 AND 128),
+    kind              TEXT    NOT NULL CHECK (kind IN ('video', 'audio', 'image')),
+    content_hash      TEXT    NOT NULL CHECK (length(content_hash) = 71 AND substr(content_hash, 1, 7) = 'sha256:'),
+    size_bytes        INTEGER NOT NULL CHECK (size_bytes >= 0),
+    display_name      TEXT    NOT NULL,
+    location_json     TEXT    NOT NULL CHECK (json_valid(location_json)),
+    known_paths_json  TEXT    NOT NULL CHECK (json_valid(known_paths_json)),
+    media_info_json   TEXT    NOT NULL CHECK (json_valid(media_info_json)),
+    status            TEXT    NOT NULL CHECK (status IN ('online', 'offline', 'modified')),
+    status_checked_ms INTEGER NOT NULL CHECK (status_checked_ms >= 0),
+    imported_ms       INTEGER NOT NULL CHECK (imported_ms >= 0)
+) STRICT;
+-- Deduplicação no próprio banco: um asset por conteúdo (ADR-046 §4).
+CREATE UNIQUE INDEX media_assets_content_hash ON media_assets(content_hash);
+
+CREATE TABLE asset_events (
+    seq         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    asset_id    TEXT    NOT NULL REFERENCES media_assets(asset_id),
+    kind        TEXT    NOT NULL CHECK (kind IN ('import', 'reimport', 'alias', 'relink', 'force_relink', 'verify')),
+    detail_json TEXT    NOT NULL CHECK (json_valid(detail_json)),
+    at_ms       INTEGER NOT NULL CHECK (at_ms >= 0)
+) STRICT;
+CREATE INDEX asset_events_asset ON asset_events(asset_id);
+CREATE TRIGGER asset_events_no_update BEFORE UPDATE ON asset_events BEGIN SELECT RAISE(ABORT, 'asset_events is append-only'); END;
+CREATE TRIGGER asset_events_no_delete BEFORE DELETE ON asset_events BEGIN SELECT RAISE(ABORT, 'asset_events is append-only'); END;
+";
+
+fn m002_media_catalog(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(MEDIA_CATALOG_SQL)
+}
 
 const INITIAL_SQL: &str = "
 CREATE TABLE meta (

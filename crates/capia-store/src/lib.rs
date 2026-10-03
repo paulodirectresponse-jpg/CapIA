@@ -8,12 +8,14 @@
 //! Este crate faz IO e **não** compila para WASM; o núcleo puro (`capia-time/model/commands`) segue
 //! livre de SQLite (verificado por `tools/check-architecture.mjs`).
 
+mod catalog;
 mod error;
 mod failpoints;
 mod load;
 mod schema;
 mod store;
 
+pub use catalog::{Catalog, CatalogEvent, CatalogEventKind, CatalogOp, PendingCatalog};
 pub use error::{StoreError, StoreErrorCode, StoreResult};
 pub use load::StoreStats;
 pub use schema::{APPLICATION_ID, CURRENT_SCHEMA_VERSION, MIGRATIONS, Migration};

@@ -317,7 +317,9 @@ dependencies = [
 name = "capia-store"
 version = "0.0.0"
 dependencies = [
+ "capia-assets",
  "capia-commands",
+ "capia-media",
  "capia-model",
  "capia-store",
  "capia-time",

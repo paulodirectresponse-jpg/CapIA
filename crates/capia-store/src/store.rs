@@ -1,6 +1,7 @@
 //! `ProjectStore`: o arquivo `.capia` aberto. Sem lógica de edição — só persiste o que o engine
 //! entrega (journal atômico), carrega o estado e valida o arquivo.
 
+use crate::catalog::{self, PendingCatalog};
 use crate::error::{StoreError, StoreErrorCode, StoreResult};
 use crate::failpoints::fp;
 use crate::load::{self, Loaded, Mirror, StoreStats, kind_str};
@@ -122,6 +123,9 @@ pub struct ProjectInfo {
     pub total_tracks: usize,
     pub total_clips: usize,
     pub assets: usize,
+    /// Assets com arquivo no catálogo de mídia (schema ≥ 2).
+    #[serde(default)]
+    pub media_assets: u64,
     pub stats: StoreStats,
 }
 
@@ -147,6 +151,8 @@ pub struct ProjectStore {
     mirror: Mirror,
     project_id: String,
     schema_version: u32,
+    /// Efeitos laterais do catálogo, aplicados na transação do próximo commit (import atômico).
+    pending: PendingCatalog,
 }
 
 impl core::fmt::Debug for ProjectStore {
@@ -231,6 +237,27 @@ impl ProjectStore {
         doc: &Document,
         opts: &StoreOptions,
     ) -> StoreResult<(Self, EngineState)> {
+        Self::create_inner(path, doc, opts, MIGRATIONS, CURRENT_SCHEMA_VERSION)
+    }
+
+    /// Cria um projeto num schema **anterior** ao atual (fixture real de projeto antigo para os
+    /// testes de migration). Não use em produção.
+    #[doc(hidden)]
+    pub fn create_at_schema(
+        path: &Path,
+        opts: &StoreOptions,
+        schema_version: u32,
+    ) -> StoreResult<(Self, EngineState)> {
+        Self::create_inner(path, &Document::new(), opts, MIGRATIONS, schema_version)
+    }
+
+    fn create_inner(
+        path: &Path,
+        doc: &Document,
+        opts: &StoreOptions,
+        migrations: &[Migration],
+        schema_target: u32,
+    ) -> StoreResult<(Self, EngineState)> {
         if path.exists() {
             return Err(StoreError::new(
                 StoreErrorCode::ProjectAlreadyExists,
@@ -249,7 +276,7 @@ impl ProjectStore {
             .unwrap_or_default();
         tmp_name.push(format!(".creating-{}", random_hex(4)?));
         let tmp = path.with_file_name(tmp_name);
-        let built = Self::build_new_file(&tmp, doc, opts);
+        let built = Self::build_new_file(&tmp, doc, opts, migrations, schema_target);
         if let Err(e) = built {
             remove_with_sidecars(&tmp);
             return Err(e);
@@ -277,17 +304,23 @@ impl ProjectStore {
                 StoreError::from(e)
             }
         })?;
-        Self::open(path, opts)
+        Self::open_with_migrations(path, opts, migrations, schema_target)
     }
 
-    fn build_new_file(tmp: &Path, doc: &Document, opts: &StoreOptions) -> StoreResult<()> {
+    fn build_new_file(
+        tmp: &Path,
+        doc: &Document,
+        opts: &StoreOptions,
+        migrations: &[Migration],
+        schema_target: u32,
+    ) -> StoreResult<()> {
         let mut conn = Connection::open_with_flags(
             tmp,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )?;
         configure(&conn, opts)?;
         let now = now_ms();
-        schema::run_migrations(&mut conn, None, MIGRATIONS, 0, CURRENT_SCHEMA_VERSION, now)?;
+        schema::run_migrations(&mut conn, None, migrations, 0, schema_target, now)?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         for (k, v) in [
             ("project_id", format!("prj_{}", random_hex(16)?)),
@@ -359,6 +392,7 @@ impl ProjectStore {
             mirror,
             project_id,
             schema_version: supported,
+            pending: PendingCatalog::default(),
         };
         Ok((store, state))
     }
@@ -401,6 +435,11 @@ impl ProjectStore {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Fila de efeitos do catálogo que o próximo commit aplica **na mesma transação** (ADR-048 §2).
+    pub fn pending_catalog(&self) -> PendingCatalog {
+        PendingCatalog::clone(&self.pending)
     }
 
     pub fn project_id(&self) -> &str {
@@ -560,6 +599,12 @@ impl ProjectStore {
             Ok(_) => {}
             Err(e) => return fail(vec![e]),
         }
+        if peeked.user_version >= 2 {
+            let bad = catalog::validate(&conn);
+            if !bad.is_empty() {
+                return fail(bad);
+            }
+        }
         match info_from(&conn, path, peeked.user_version) {
             Ok(info) => ValidationReport {
                 ok: true,
@@ -673,6 +718,14 @@ impl ProjectStore {
             "INSERT INTO events(seq, kind, entry_id, revision_after, timestamp_ms, actor_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![seq, kind_str(event.kind), to_i64(event.entry_id)?, to_i64(event.revision)?, to_i64(event.timestamp_ms)?, ser("actor", &event.actor)?],
         )?;
+        // efeitos laterais do catálogo (import): na MESMA transação do commit do documento
+        let ops: Vec<catalog::CatalogOp> = match self.pending.lock() {
+            Ok(mut q) => std::mem::take(&mut *q),
+            Err(_) => return Err(StoreError::corrupted("catalog queue is poisoned")),
+        };
+        for op in &ops {
+            catalog::apply_op(&tx, op)?;
+        }
         next.head_seq = seq;
         next.head_revision = event.revision;
         next.events_since_snapshot += 1;
@@ -742,6 +795,11 @@ fn info_from(conn: &Connection, path: &Path, schema_version: u32) -> StoreResult
         total_tracks: sequences.iter().map(|s| s.tracks).sum(),
         total_clips: sequences.iter().map(|s| s.clips).sum(),
         assets: doc.assets().count(),
+        media_assets: if schema_version >= 2 {
+            catalog::count(conn)?
+        } else {
+            0
+        },
         sequences,
         stats: loaded.stats,
     })

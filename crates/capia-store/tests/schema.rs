@@ -12,9 +12,14 @@ use common::*;
 use rusqlite::{Connection, Transaction};
 use std::path::{Path, PathBuf};
 
+/// Projeto REAL de schema 1 (o que a M06 produzia), com histórico e ramo de redo.
 fn project_with_history(dir: &TempDir) -> PathBuf {
     let path = dir.file("p.capia");
-    let mut e = create(&path, &fast());
+    let (store, state) = ProjectStore::create_at_schema(&path, &fast(), 1).unwrap();
+    assert_eq!(store.schema_version(), 1);
+    let mut e = store
+        .into_engine(state, key(), capia_commands::EngineConfig::default())
+        .unwrap();
     e.execute(&user(), setup_tx("a"), 1).unwrap();
     e.execute(
         &user(),
@@ -81,8 +86,8 @@ fn with(extra: &[Migration]) -> Vec<Migration> {
 }
 
 #[test]
-fn the_current_schema_is_one_and_migrations_are_contiguous() {
-    assert_eq!(CURRENT_SCHEMA_VERSION, 1);
+fn the_current_schema_is_two_and_migrations_are_contiguous() {
+    assert_eq!(CURRENT_SCHEMA_VERSION, 2);
     for (i, m) in MIGRATIONS.iter().enumerate() {
         assert_eq!(
             m.version,
@@ -98,14 +103,15 @@ fn an_older_project_is_migrated_forward_with_a_backup_and_keeps_its_history() {
     let dir = TempDir::new("migrate");
     let path = project_with_history(&dir);
     let digest_before = ProjectStore::inspect(&path).unwrap().digest;
-    let m2 = Migration {
-        version: 2,
+    let m3 = Migration {
+        version: 3,
         name: "add extra table",
         up: m2_ok,
     };
-    let list = with(&[m2]);
-    let (store, state) = ProjectStore::open_with_migrations(&path, &fast(), &list, 2).unwrap();
-    assert_eq!(store.schema_version(), 2);
+    let list = with(&[m3]);
+    // v1 → v2 (REAL, catálogo de mídia) → v3 (sintética), na mesma abertura
+    let (store, state) = ProjectStore::open_with_migrations(&path, &fast(), &list, 3).unwrap();
+    assert_eq!(store.schema_version(), 3);
     assert_eq!(
         capia_commands::document_digest(&state.doc),
         digest_before,
@@ -121,7 +127,7 @@ fn an_older_project_is_migrated_forward_with_a_backup_and_keeps_its_history() {
     let v: i64 = c
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 2);
+    assert_eq!(v, 3);
     let versions: Vec<i64> = c
         .prepare("SELECT version FROM schema_migrations ORDER BY version")
         .unwrap()
@@ -129,7 +135,12 @@ fn an_older_project_is_migrated_forward_with_a_backup_and_keeps_its_history() {
         .unwrap()
         .map(Result::unwrap)
         .collect();
-    assert_eq!(versions, [1, 2]);
+    assert_eq!(versions, [1, 2, 3]);
+    // a migration real criou o catálogo (vazio: nada do projeto v1 foi tocado)
+    let media: i64 = c
+        .query_row("SELECT COUNT(*) FROM media_assets", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(media, 0);
     let marker: String = c
         .query_row("SELECT value FROM meta WHERE key='m2'", [], |r| r.get(0))
         .unwrap();
@@ -138,7 +149,9 @@ fn an_older_project_is_migrated_forward_with_a_backup_and_keeps_its_history() {
     // o backup pré-migração é um projeto v1 íntegro e abre com o software "antigo"
     let backup = dir.file("p.capia.v1.bak");
     assert!(backup.exists(), "backup is mandatory before migrating");
-    let (old, old_state) = ProjectStore::open(&backup, &fast()).unwrap();
+    // (o software "antigo" é simulado com a lista de migrations só até a versão 1)
+    let (old, old_state) =
+        ProjectStore::open_with_migrations(&backup, &fast(), &MIGRATIONS[..1], 1).unwrap();
     assert_eq!(old.schema_version(), 1);
     assert_eq!(
         capia_commands::document_digest(&old_state.doc),
@@ -151,23 +164,23 @@ fn a_failing_migration_rolls_back_and_leaves_the_project_usable() {
     let dir = TempDir::new("migfail");
     let path = project_with_history(&dir);
     let list = with(&[Migration {
-        version: 2,
+        version: 3,
         name: "broken",
         up: m2_fails_midway,
     }]);
-    let err = ProjectStore::open_with_migrations(&path, &fast(), &list, 2).unwrap_err();
+    let err = ProjectStore::open_with_migrations(&path, &fast(), &list, 3).unwrap_err();
     assert_eq!(err.code, StoreErrorCode::MigrationFailed);
-    assert_eq!(err.details.as_ref().unwrap()["failed_version"], 2);
+    assert_eq!(err.details.as_ref().unwrap()["failed_version"], 3);
     assert!(
         err.cause.is_some(),
         "the SQLite cause is kept for diagnosis"
     );
-    // nada ficou pela metade: continua schema 1, sem a tabela da migration falha
+    // nada ficou pela metade: a migration real (2) ficou aplicada, a falha (3) foi desfeita
     let c = Connection::open(&path).unwrap();
     let v: i64 = c
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 1);
+    assert_eq!(v, 2);
     let tables: i64 = c
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE name='half_done'",
@@ -179,7 +192,7 @@ fn a_failing_migration_rolls_back_and_leaves_the_project_usable() {
     drop(c);
     assert!(
         ProjectStore::open(&path, &fast()).is_ok(),
-        "the software at schema 1 still opens it"
+        "the software at schema 2 still opens it"
     );
     assert!(dir.file("p.capia.v1.bak").exists());
 }
@@ -190,27 +203,27 @@ fn each_migration_is_its_own_transaction() {
     let path = project_with_history(&dir);
     let list = with(&[
         Migration {
-            version: 2,
+            version: 3,
             name: "ok",
             up: m2_ok,
         },
         Migration {
-            version: 3,
+            version: 4,
             name: "broken",
             up: m3_fails,
         },
     ]);
-    let err = ProjectStore::open_with_migrations(&path, &fast(), &list, 3).unwrap_err();
+    let err = ProjectStore::open_with_migrations(&path, &fast(), &list, 4).unwrap_err();
     assert_eq!(err.code, StoreErrorCode::MigrationFailed);
     assert_eq!(
         err.details.as_ref().unwrap()["applied"],
-        serde_json::json!([2])
+        serde_json::json!([2, 3])
     );
     let c = Connection::open(&path).unwrap();
     let v: i64 = c
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(v, 2, "migration 2 stays applied; only 3 rolled back");
+    assert_eq!(v, 3, "migrations 2 and 3 stay applied; only 4 rolled back");
     let never: i64 = c
         .query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE name='never'",
@@ -226,11 +239,11 @@ fn a_gap_in_the_migration_list_is_refused() {
     let dir = TempDir::new("migrgap");
     let path = project_with_history(&dir);
     let list = with(&[Migration {
-        version: 3,
-        name: "skips 2",
+        version: 4,
+        name: "skips 3",
         up: m2_ok,
     }]);
-    let err = ProjectStore::open_with_migrations(&path, &fast(), &list, 3).unwrap_err();
+    let err = ProjectStore::open_with_migrations(&path, &fast(), &list, 4).unwrap_err();
     assert_eq!(err.code, StoreErrorCode::MigrationFailed);
     let v: i64 = Connection::open(&path)
         .unwrap()
@@ -255,7 +268,7 @@ fn a_newer_schema_is_rejected_and_the_file_is_not_touched() {
         let e = result.unwrap_err();
         assert_eq!(e.code, StoreErrorCode::UnsupportedSchemaVersion);
         assert_eq!(e.details.as_ref().unwrap()["found"], 99);
-        assert_eq!(e.details.as_ref().unwrap()["supported"], 1);
+        assert_eq!(e.details.as_ref().unwrap()["supported"], 2);
     }
     let report = ProjectStore::validate_file(&path);
     assert!(!report.ok);
@@ -275,11 +288,11 @@ fn a_project_migrated_by_a_newer_build_is_refused_by_the_older_one() {
     let dir = TempDir::new("downgrade");
     let path = project_with_history(&dir);
     let list = with(&[Migration {
-        version: 2,
+        version: 3,
         name: "add extra table",
         up: m2_ok,
     }]);
-    ProjectStore::open_with_migrations(&path, &fast(), &list, 2)
+    ProjectStore::open_with_migrations(&path, &fast(), &list, 3)
         .unwrap()
         .0
         .close()
