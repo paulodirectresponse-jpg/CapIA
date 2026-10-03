@@ -8,8 +8,7 @@ use capia_commands::{
     RippleScope, Transaction,
 };
 use capia_model::{
-    Asset, ClipContent, ClipId, Document, EntityKind, EntityRef, ErrorCode, SequenceId, TrackId,
-    TrackKind,
+    ClipContent, ClipId, Document, EntityKind, EntityRef, ErrorCode, SequenceId, TrackId, TrackKind,
 };
 use capia_time::{FrameRate, Rational, Ticks};
 
