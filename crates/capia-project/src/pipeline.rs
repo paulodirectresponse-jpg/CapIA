@@ -522,20 +522,29 @@ impl Project {
         let tracked = std::mem::take(&mut p.tracked);
         let mut keep = Vec::new();
         let mut events = Vec::new();
+        let mut first_err: Option<ProjectError> = None;
         for t in tracked {
             let done = match &t {
                 Tracked::Import { handle, .. } | Tracked::Relink { handle } => handle.is_done(),
             };
-            if !done {
+            // job vivo — ou um erro anterior neste pump: o item volta para a fila (nada se perde)
+            if !done || first_err.is_some() {
                 keep.push(t);
                 continue;
             }
-            match t {
+            let result = match &t {
                 Tracked::Import { ticket_id, handle } => {
-                    events.push(self.finish_import(actor, &ticket_id, &handle.snapshot())?);
+                    self.finish_import(actor, ticket_id, &handle.snapshot())
                 }
-                Tracked::Relink { handle } => {
-                    events.push(self.finish_relink(&handle.snapshot())?);
+                Tracked::Relink { handle } => self.finish_relink(&handle.snapshot()),
+            };
+            match result {
+                Ok(ev) => events.push(ev),
+                Err(e) => {
+                    // falha ao gravar (ex.: banco ocupado): o ticket continua `pending` e será
+                    // finalizado no próximo `pump`
+                    first_err = Some(e);
+                    keep.push(t);
                 }
             }
         }
@@ -543,7 +552,10 @@ impl Project {
             keep.append(&mut p.tracked);
             p.tracked = keep;
         }
-        Ok(events)
+        match first_err {
+            Some(e) if events.is_empty() => Err(e),
+            _ => Ok(events),
+        }
     }
 
     fn finish_import(

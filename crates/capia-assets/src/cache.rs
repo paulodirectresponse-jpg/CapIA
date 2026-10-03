@@ -304,7 +304,10 @@ impl CacheDir {
             )));
         }
         validate(&tmp).map_err(cleanup)?;
-        std::fs::File::open(&tmp)
+        // aberto para ESCRITA: no Windows `FlushFileBuffers` exige acesso de escrita
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&tmp)
             .and_then(|f| f.sync_all())
             .map_err(|e| cleanup(io_err("cannot flush the cache entry", e)))?;
         let dir = final_path

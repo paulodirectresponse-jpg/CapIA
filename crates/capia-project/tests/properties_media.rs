@@ -385,16 +385,27 @@ fn run_case(seed: u64, tc: &MediaToolchain) {
             // relink em lote numa pasta com cópias novas de nomes aleatórios
             7 => {
                 env.settle();
-                let offline: Vec<usize> = env
+                // offline para o modelo E para o projeto (um alias ainda online mantém o asset
+                // online: ele nem entra como alvo do relink em lote)
+                let candidates: Vec<usize> = env
                     .assets
                     .keys()
                     .copied()
                     .filter(|c| env.expected_status(*c) == Availability::Offline)
                     .collect();
+                let mut offline = Vec::new();
+                for c in candidates {
+                    let id = env.assets[&c].0.clone();
+                    if env.p().asset(&id).unwrap().catalog.unwrap().status == Availability::Offline
+                    {
+                        offline.push(c);
+                    }
+                }
                 if offline.is_empty() {
                     continue;
                 }
                 let dir = format!("found{step}");
+                std::fs::create_dir_all(root.join(&dir)).unwrap();
                 let mut copies: BTreeMap<usize, usize> = BTreeMap::new();
                 for _ in 0..rng.below(4) {
                     let c = rng.below(4) as usize;

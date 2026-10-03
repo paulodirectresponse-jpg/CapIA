@@ -98,7 +98,8 @@ fn growing_or_rewriting_the_file_during_hashing_is_detected() {
         if first {
             first = false;
             std::thread::sleep(std::time::Duration::from_millis(60));
-            std::fs::rename(&other, &p).unwrap();
+            // no Windows o rename por cima de um arquivo aberto pode falhar: aí nada muda
+            let _ = std::fs::rename(&other, &p);
         }
     });
     // em Windows o rename por cima de arquivo aberto pode falhar no próprio teste; só valida se rodou

@@ -1,6 +1,6 @@
 # STATUS
 
-**Última atualização:** 2026-10-03 · **Fase atual:** FASE 2 — Motor (headless) · **Missão corrente:** M07 concluída (Assets + Mídia + composição de nested) · **Próxima:** M08 (proposta em "Próxima missão"; **não iniciada**)
+**Última atualização:** 2026-10-03 · **Fase atual:** FASE 2 — Motor (headless) · **Missão corrente:** M08 concluída (Jobs + pipeline de mídia derivada) · **Próxima:** M09 (proposta em "Próxima missão"; **não iniciada**)
 
 ## Gates de fase (decisão do Product Owner, ADR-037)
 
@@ -26,10 +26,104 @@ OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto
 | Assets (`capia-assets`) | ✅ M07: identidade por conteúdo (`sha256:` em streaming), import, dedup, online/offline/modified, relink por conteúdo, cache derivado descartável (ADR-046/048/049) |
 | Catálogo de mídia no `.capia` | ✅ M07: schema 2 (`media_assets`, `asset_events`), migration real v1→v2, import atômico (documento + catálogo na mesma transação) |
 | Composição de nested | ✅ M07: `duplicate_sequence`, `make_unique`, `flatten_nested`, `create_nested_from_selection`, `generate_variants`, `delete_asset` (ADR-050) |
-| Frame index/decode, jobs, render, preview, export | ❌ ainda não (restante da Fase 2) |
+| Jobs (`capia-jobs`) | ✅ M08: executor bounded, prioridades por créditos (sem starvation), cancelamento real (mata o FFmpeg), dedup, persistência e recuperação (`interrupted`) — ADR-052 |
+| Import não bloqueante | ✅ M08: `ImportTicket` (pending → finalized), impressão rápida × SHA-256 em background, `ASSET_CHANGED_DURING_PROCESSING` — ADR-053 |
+| Índice de quadros / decode exato | ✅ M08: `CIDX` (CFR/VFR/B-frames/GOP longo), `RawFrame` RGBA8, decode de intervalo — ADR-054 |
+| Áudio PCM / waveform / proxy | ✅ M08: f32 intercalado com intervalos exatos, waveform `CWFM` multirresolução, `ProxyProfileV1` (MJPEG LGPL; H.264 só por hardware) — ADR-055/056 |
+| Cache derivado v2 | ✅ M08: produção atômica, lock por chave (em-processo + SO), validação, GC — ADR-057 |
+| Force relink / relink em lote | ✅ M08: `update_asset` (clips dependentes validados, sem trim), relink por pasta (tamanho → impressão → SHA-256, nunca por nome) — ADR-058 |
+| Schema | ✅ M08: schema 3 (`jobs`, `import_tickets`, `media_assets.fingerprint`), migration real v2→v3 |
+| Render, preview, export | ❌ ainda não (restante da Fase 2) |
 | CI | ✅ executa em runner real desde a M05 (ver "Validação"); jobs Linux verdes incl. perf e paridade WASM |
 | Decisões abertas | **OD-1** (gate da Fase 3) · **OUTPUT-H264** (antes da entrega do Editor). **As 8 decisões S7 estão definitivas** (ADR-039) |
-| Git | `main` = M01–M04; M05 em `claude/m05-core-engine`; M06 em `claude/m06-persistence-cli`; M07 em `claude/m07-assets-media` (sem PR aberto: não solicitado) |
+| Git | `main` = M01–M04; M05 em `claude/m05-core-engine`; M06 em `claude/m06-persistence-cli`; M07 em `claude/m07-assets-media`; **M08 em `claude/m08-media-pipeline`** (sem PR aberto: não solicitado) |
+
+## O que existe (M08)
+
+**Jobs (ADR-052):** `capia-jobs` — N workers fixos, fila limitada por categoria (`interactive`/`normal`/`background`, créditos 6/3/1: o background sempre avança), `CancelToken` que chega ao processo filho (o FFmpeg é **morto**; o PID some), `dedup_key`, *panic* contido, `shutdown ⇒ interrupted`. Persistência no `.capia` (schema 3) por `JobStore` (conexão própria, é o `JobSink`); ao reabrir `queued/running ⇒ interrupted` (nunca `completed`); um único processo é dono do executor (lock do SO); cancelamento entre processos pela flag no banco (≤ 250 ms). Workers só calculam e escrevem **cache**; documento/catálogo mudam na thread do projeto (`Project::pump`).
+**Identidade assíncrona (ADR-053):** impressão rápida `fp1:` (tamanho + regiões amostradas + versão; ≲ 1 MiB lido; **nunca identidade**) e SHA-256 completo em job cancelável com progresso. `import_asset_async` devolve um **`ImportTicket`** em ~2–8 ms (arquivo de 256 MiB: hash completo leva 1,4 s); o asset só existe após `pump` finalizar o ticket (mesma transação atômica do import síncrono). `ASSET_CHANGED_DURING_PROCESSING` (crescimento, regravação, troca do arquivo) ⇒ nada registrado. Tickets `interrupted` podem ser retomados.
+**Índice de quadros (ADR-054):** pacotes reais (`pts/dts/duração/keyframe`) em streaming ⇒ `FrameIndex`; formato binário `CIDX` v1 (cabeçalho 64 B + 24 B/quadro + SHA-256; **toda truncagem e todo byte alterado rejeitados**); lookups `frame_at_or_before/after`, `nearest_frame`, `keyframe_before`, `frame_by_index` por PTS reais (**nunca `N/fps`**: VFR e B-frames provados por pixels); cache por `(hash, stream, produtor+ffprobe)`. **Decode exato:** keyframe → `-seek_timestamp -ss -copyts` → `select=eq(pts,N)`; `RawFrame{width,height,stride,RGBA8,pts,índice,tempo,bytes}`; limites e aritmética *checked* antes do processo. `decode_frame_range`: N quadros com **um** processo (3,5 ms/quadro vs 85 ms).
+**Áudio e waveform (ADR-055):** PCM f32 intercalado, intervalos em **amostras inteiras** (44.100/48.000 exatos; início ≠ 0; clipes curtos; além do fim ⇒ só o que existe; stream não-padrão). Waveform `CWFM`: pirâmide `(min,max,rms)` mono, nível 0 = 64 amostras, ×4 por nível, checksum; decode que falha no meio ⇒ **nenhum** waveform.
+**Proxy (ADR-056):** `ProxyProfileV1`; padrão **MJPEG** (nativo, LGPL, intra-only) em `.mov` + AAC; `fps=keep` preserva os instantes (teste VFR); H.264 só por encoder de hardware/SO (`libx264/libx265` nunca; `MEDIA_ENCODER_UNAVAILABLE` se ausente); cancelar mata o ffmpeg e apaga o parcial; **o proxy nunca é fonte de decode** (teste).
+**Cache v2 (ADR-057):** `<cache>/<op>/<16 hex do conteúdo>/<chave>.<ext>`; `produce`: lock por chave → temp em `.tmp/` → validar → `fsync` → `rename`; parcial nunca publicado, corrompido vira *miss*, 12 produtores da mesma chave geram **uma** vez; `usage`, `remove_unused`, `invalidate_content`, `sweep_temp`, `clear` (projeto segue válido).
+**Force relink e lote (ADR-058):** `update_asset` (novo comando) valida todos os clips dependentes (`CONFLICT` estruturado; **sem trim silencioso**); documento + catálogo na mesma transação; derivados antigos invalidados; `--dry-run`. Lote por pasta: varredura segura (profundidade 16, 500 mil arquivos, symlinks/junctions não seguidos, sem laços, erros de permissão não fatais) + tamanho → impressão → **SHA-256**; `matched/unresolved/ambiguous/rejected/errors`; nunca por nome.
+**CLI:** `asset import --async|force-relink|relink-folder`, `media index|frame|waveform|proxy`, `job list|status|cancel`, `cache info|clean`.
+
+## Matriz de requisitos da M08
+
+| Requisito | Estado | Teste que prova |
+|---|---|---|
+| `capia-jobs` (estados, prioridades, filas limitadas, justiça, cancelar, panic, dedup) | ✅ | `capia-jobs/tests/executor.rs` (13) |
+| Cancelamento real (hash para; FFmpeg morto — PID some; temp removido; nada publicado) | ✅ | `hashing::cancelling_stops_hashing…`, `streaming_runner_*`, `cancelling_a_proxy_kills_ffmpeg…`, CLI `a_job_cancelled_from_another_process…` |
+| Recuperação (running → interrupted; retry) | ✅ | `capia-store/tests/jobs.rs`, `closing_the_project_interrupts…`, `crash_media.rs` |
+| Impressão rápida + colisão deliberada onde o SHA-256 separa | ✅ | `hashing::a_deliberate_collision…`, `batch_relink_rejects_a_same_size_same_fingerprint…` |
+| SHA-256 em job; import que volta antes do hash; mudança durante o hash | ✅ | `async_import_returns_long_before…` (7,7 ms × 1,38 s), `growing_or_rewriting…`, `a_file_that_changes_while_it_is_hashed…` |
+| Índice CFR/VFR/B-frames/GOP longo; formato binário com checksum e limites | ✅ | `index::tests` (12), `pipeline.rs` (cfr/vfr/offset mkv) |
+| Decode exato por pixels; RawFrame; limites | ✅ | `cfr_long_gop…`, `vfr_lookup_and_decode…`, `a_container_with_a_nonzero_start_offset…`, `a_frame_range_equals…` |
+| Áudio PCM exato (44,1/48 kHz, início ≠ 0, curto, além do fim) | ✅ | `audio_intervals_are_sample_exact…`, `short_clips…`, `a_non_default_audio_stream…` |
+| Waveform multirresolução versionado com checksum | ✅ | `waveform::tests` (5), `waveform_from_a_real_file…`, `a_decode_that_dies_midway…` |
+| Proxy (perfil, encoder, cancelamento, nunca autoritativo) | ✅ | `proxy::tests`, `proxy_keeps_every_frame…`, `the_proxy_is_never_used_as_the_decode_source` |
+| Cache atômico + lock + GC + corrupção | ✅ | `capia-assets/tests/cache.rs` (8) |
+| Force relink (conflitos, sem trim, dry-run) / lote por pasta | ✅ | `force_relink.rs` (5), `pipeline.rs` (batch ×3), CLI `force_relink_and_relink_folder_commands` |
+| CLI `job`/`media`/`cache`/`asset` novos | ✅ | `capia-cli/tests/media.rs` (4, binário real) |
+| Propriedade (importar→…→reabrir→offline→lote→cancelar→repetir) | ✅ | `properties_media.rs` |
+| Crash real (índice, waveform, proxy, import pendente) | ✅ | `crash_media.rs` (4 cenários) |
+| Mutação (13) | ✅ 13/13 | `tools/mutation-m08.py` |
+| Desempenho | ✅ | tabela abaixo |
+| WASM / fronteiras | ✅ | `cargo check wasm32-unknown-unknown` (time/model/commands), `check:arch`, paridade 150 sequências |
+| Schema 3 + migration real v2→v3 | ✅ | `capia-store/tests/schema.rs` (cadeia 1→2→3→4 sintética) |
+
+## Validação M08 (container Linux, Rust 1.97, ffmpeg/ffprobe 6.1.1-3ubuntu5)
+
+| Verificação | Resultado |
+|---|---|
+| `cargo fmt --check` · `clippy --workspace --all-targets -D warnings` · `cargo test --workspace` | ✅ · ✅ · ✅ **371 testes** (M07: 267) + 10 `#[ignore]` de medição |
+| Propriedade com IO (release, 5.000) | ✅ store (timeline+nested) 166 s · assets 104 s (inalterado desde a M07) |
+| Propriedade do pipeline de mídia (release) | ✅ **200 casos × 14 passos** com FFmpeg real e modelo independente (import assíncrono, índice, decode por pixels, waveform, proxy, cancelar/repetir, offline, lote, reabrir, `cache clean`) |
+| Crash real | ✅ kill dentro do índice, do waveform, da codificação do proxy e com import pendente |
+| Mutação manual (13) | ✅ **13/13** detectadas — 3 sobreviveram na 1ª rodada e **os testes foram reforçados** (ver achados); a remoção de **uma** camada de defesa em profundidade (lock em-processo **ou** do SO; filtro de impressão **ou** SHA-256) sobrevive por desenho — as duas juntas são detectadas |
+| M05–M07 preservados | ✅ aceitação 120/120, golden digest, paridade WASM, crash tests do store, propriedades |
+| `pnpm lint/format:check/typecheck/test/test:tools/build`, `check:arch`, `cargo deny` | ✅ |
+
+### Desempenho M08 (release, Linux, VM sem SHA-NI)
+
+| Medida | Resultado |
+|---|---|
+| Jobs: 1.000 triviais (submit / execução incluindo overhead) | 15 ms / 15 ms (**15 µs por job**) |
+| Jobs: cancelar 1.000 na fila · latência de um interativo atrás de 200 de fundo | 0,6 ms · 1,95 ms |
+| Impressão rápida de 256 MiB | **5,5 ms** |
+| SHA-256 256 MiB (sync / job com progresso) | 1,37 s (**186 MiB/s**) / 1,43 s (+4 % de custo do cancel+progresso) |
+| **Import assíncrono: retorno antes do hash completo** (256 MiB) | **mediana 7,7 ms** (máx. 10 ms) × 1,38 s de SHA-256 ⇒ **179× mais rápido** |
+| Import de arquivo pequeno real: síncrono / assíncrono (retorno · finalizado) | 63 ms / 1,7 ms · 62 ms |
+| Índice: fixture (50 quadros) · sintético 10 min (**18.000 quadros**, 300 keyframes) | 70 ms · **289 ms** (arquivo de 432 KB) |
+| Índice: carga do cache (18.000) · lookup `frame_at_or_before` | 5,7 ms · **65 ns** |
+| Decode: frio (meio do arquivo) · repetido · perto do fim | 74 ms · 75 ms · 88 ms |
+| Decode: 30 consecutivos, um processo por quadro × **um processo para 30** | 2,56 s (85 ms/quadro) × **106 ms (3,5 ms/quadro)** |
+| Áudio: 1 s no início · 1 s em t = 300 s (decode exato desde o início) | 75 ms · **1,55 s** (custo O(início): ver limitações) |
+| Waveform 10 min: gerar · ler+validar · `query` (2.000 buckets) | 3,1 s · 82 ms · **18 µs** |
+| Proxy MJPEG 640×360, 10 min | 31 s ⇒ **19,4× tempo real** (317 MB) |
+| Cache: *hit* validado · 8 threads × 500 *hits* via `produce` · *hit* via job | 2 µs · 25,7 µs/hit · 4,3 ms/job |
+
+### Achados da auditoria e dos testes M08 (corrigidos)
+
+- **Lock de cache preso após crash** (achado pelo crash test): a 1ª versão usava um arquivo `create_new` com expiração de 10 min; um kill no meio do índice deixava a chave presa e o retry travava. Agora lock consultivo do SO (`File::try_lock`), liberado com o processo; mantida a exclusão em-processo (ADR-057).
+- `submit_frame_index/waveform/proxy` aceitavam asset sem o stream e só falhavam dentro do job → agora **falham no submit** (`MEDIA_UNSUPPORTED_FORMAT`).
+- `Project::pump` perdia os itens rastreados se uma finalização falhasse no meio → agora o item volta à fila e é refeito no próximo `pump`.
+- Mutação: **#7** (decode falho no meio virando waveform) sobreviveu — não havia teste de ffmpeg que morre com PCM parcial → ffmpeg falso (`exit 3` após 400 KB) cobre waveform e PCM; **#10** (relink em lote fraco) sobreviveu porque o filtro de impressão mascarava o ramo do SHA-256 → teste novo com arquivo de 24 MiB que difere só fora das regiões amostradas (mesma impressão, SHA-256 diferente); **#13** (lock removido) sobrevivia por haver duas camadas — o script remove as duas.
+- Falhas só de teste: tempo relativo do índice (`start_pts`) no teste de duplicatas; `nullsrc` com 25 quadros; luma < 16 saturava (fixtures passaram a `20 + passo·N`); modelo da propriedade ignorava alias online e pasta inexistente.
+- **Disco cheio no ambiente** (alocação por sessão): `target/` de debug com debuginfo passou de 19 GB; a validação passou a rodar com `CARGO_PROFILE_*_DEBUG=0`.
+
+### Limitações restantes (M08)
+
+- **Decode de áudio é exato mas O(início):** parte do início do stream e descarta até `start` (1 s em t = 300 s de AAC custa 1,5 s; PCM/WAV é bem mais rápido). Próximo passo: índice de pacotes de áudio + seek com margem e conferência de alinhamento.
+- **Decode de vídeo = um processo por chamada** (74–88 ms; 3,5 ms/quadro no intervalo). Um pool/daemon de decode e cache de quadros ficam para o render/preview.
+- O índice vem de **pacotes**: codecs em que 1 pacote ≠ 1 quadro (raros) não são tratados; PTS duplicado devolve o primeiro quadro no decode por PTS.
+- Derivados exigem fonte coerente por **tamanho + impressão amostrada**; troca de conteúdo fora das regiões amostradas e com mesmo tamanho só é pega por `verify` (SHA-256).
+- **Proxy:** MJPEG é pesado em disco (317 MB para 10 min a 640×360) e o caminho H.264 por hardware só tem a lógica de escolha testada (a VM não tem NVENC/QSV/VideoToolbox); não há política de remoção automática de proxies.
+- Waveform é **mono** (mix); sem waveform por canal.
+- *Undo* de `update_asset` reverte só o documento (catálogo fora do undo, ADR-048 §6).
+- Jobs reiniciam do zero após `interrupted` (derivados parciais são inválidos por desenho); `known_paths` segue em texto; `<proj>.jobs-lock` e `<proj>.capia-cache/` ficam ao lado do projeto.
+- Resultados do CI (Windows) no relatório de entrega; os testes de PID usam `/proc` (Unix) e `tasklist` (Windows).
 
 ## O que existe (M07)
 
@@ -51,7 +145,7 @@ OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto
 | ffprobe abstraído (`MediaProbe`) | ✅ | `FfprobeBackend`, `fake_backend` (travado/flood/JSON lixo/backend ausente), `StaticProbe` nos testes de lógica |
 | Descoberta do backend / `MEDIA_BACKEND_NOT_FOUND` | ✅ | `toolchain::tests`, CLI `missing_backend_is_a_structured_error_not_a_panic` |
 | Timeout, filho morto, teto de stdout/stderr, sem shell | ✅ | `process::tests` (Unix **e** Windows), `the_child_is_really_gone_after_a_timeout`, `arguments_are_never_interpreted_by_a_shell`, `probe_args` |
-| Fixtures reais | ✅ | `tests/fixtures/media` (7 arquivos, 136 KiB, geradas por `tools/gen-media-fixtures.sh`, determinísticas) |
+| Fixtures reais | ✅ | `tests/fixtures/media` (10 arquivos desde a M08: + `cfr_gop.mp4`, `vfr.mp4`, `tone_44k.wav`; geradas por `tools/gen-media-fixtures.sh`, determinísticas) |
 | Hash em streaming | ✅ | `never_asks_for_more_than_one_block`, `streaming_across_block_boundaries…`, 48 MiB, mutação M7 |
 | Deduplicação | ✅ | `identity_is_content_not_path_or_name`, `dedup_by_content…`, índice único |
 | Import atômico | ✅ | `failed_imports_leave_nothing_behind`, `a_stale_writers_import_leaves_no_trace…`, crash `killing_an_import_at_every_stage…`, `a_failing_catalog_effect_rolls_back…` |
@@ -186,6 +280,7 @@ O `cargo test --workspace` do Windows levava ≈ **17,7 min** na M06 (propriedad
 | **M05 — Core Engine Foundation (Fase 2)** | ✅ tempo, modelo, Command Engine, suíte de aceitação 120/120, propriedade 10.000, idempotência/plano, paridade WASM, ADR-039..041 |
 | **M06 — Persistência, nested e CLI (Fase 2)** | ✅ `capia-store`, `capia-project`, `capia-cli`, comandos nested, crash tests reais, propriedade com salvar/reabrir, ADR-042..045 |
 | **M07 — Assets, mídia e composição (Fase 2)** | ✅ `capia-media`, `capia-assets`, catálogo no `.capia` (schema 2), import atômico, offline/verify/relink, cache + miniatura, CLI de assets, 5 comandos de composição, ADR-046..051 |
+| **M08 — Jobs e pipeline de mídia (Fase 2)** | ✅ `capia-jobs`, import não bloqueante, impressão rápida, índice de quadros, decode exato, áudio PCM, waveform, proxy, cache v2, force/lote relink, schema 3, crash/propriedade/mutação, CLI, ADR-052..058 |
 
 ## Validação M05 (saída real; container Linux, Rust 1.97.0, Node 22, pnpm 10.28)
 
@@ -228,7 +323,7 @@ Antes da **entrega do Editor** (saída da Fase 3) é preciso um caminho **confi�
 
 ## Próxima missão (proposta — NÃO iniciada)
 
-**M08 — Jobs e índice de mídia:** (1) `capia-jobs` mínimo (fila local, cancelamento, progresso) para tirar o hash completo do caminho síncrono (fingerprint amostrado rápido + hash completo em background, como em `ASSET_SYSTEM.md` §4); (2) `capia-media`: *frame index* e *decode* de frames exatos (ADR-035) sobre o trait `MediaProbe` já existente; (3) waveform e proxy como segunda e terceira operações derivadas no mesmo `CacheKey`; (4) *force-relink* e relink em lote por pasta. Depois: `capia-render` (compositor) → export. Não iniciar a Fase 3 antes de OD-1.
+**M09 — Serviço de decode e fundação do render (headless):** (1) **serviço de decode** sobre `FrameSource`: pool de processos/decoder persistente, cache de quadros (LRU) e *prefetch* por intervalo (`decode_frame_range`), metas de latência de scrub; (2) **áudio com seek** (índice de pacotes de áudio, seek com margem e conferência de alinhamento) para tirar o custo O(início); (3) `capia-render` mínimo: *render graph* a partir da timeline (clips de mídia/imagem/texto/sólido), compositor **CPU de referência** headless e *golden frames* (base para o wgpu da Fase 3); (4) **OUTPUT-H264**: spike do caminho de export (encoders de hardware + OpenH264) atrás da abstração, medindo em Windows. Não iniciar a Fase 3 antes de OD-1.
 
 ## Blockers
 
