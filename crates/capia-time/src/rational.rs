@@ -86,17 +86,19 @@ impl Rational {
     }
 
     pub fn checked_add(self, other: Self) -> Result<Self, TimeError> {
+        let a = i128::from(self.num) * i128::from(other.den);
+        let b = i128::from(other.num) * i128::from(self.den);
         Self::from_i128(
-            i128::from(self.num) * i128::from(other.den)
-                + i128::from(other.num) * i128::from(self.den),
+            a.checked_add(b).ok_or(TimeError::Overflow)?,
             i128::from(self.den) * i128::from(other.den),
         )
     }
 
     pub fn checked_sub(self, other: Self) -> Result<Self, TimeError> {
+        let a = i128::from(self.num) * i128::from(other.den);
+        let b = i128::from(other.num) * i128::from(self.den);
         Self::from_i128(
-            i128::from(self.num) * i128::from(other.den)
-                - i128::from(other.num) * i128::from(self.den),
+            a.checked_sub(b).ok_or(TimeError::Overflow)?,
             i128::from(self.den) * i128::from(other.den),
         )
     }
@@ -205,6 +207,25 @@ mod tests {
         );
         assert_eq!(Rational::new(2, 1).unwrap().recip().unwrap(), half);
         assert_eq!(Rational::ZERO.recip(), Err(TimeError::DivideByZero));
+    }
+
+    #[test]
+    fn extreme_inputs_never_panic() {
+        let extremes = [i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX - 1, i64::MAX];
+        for &a in &extremes {
+            for &b in &extremes {
+                let (Ok(x), Ok(y)) = (Rational::new(a, b), Rational::new(b, a)) else {
+                    continue;
+                };
+                let _ = (
+                    x.checked_add(y),
+                    x.checked_sub(y),
+                    x.checked_mul(y),
+                    x.checked_div(y),
+                );
+                let _ = (x.recip(), x.cmp(&y));
+            }
+        }
     }
 
     #[test]

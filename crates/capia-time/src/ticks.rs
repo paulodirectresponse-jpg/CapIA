@@ -76,7 +76,7 @@ impl Ticks {
         self.0.checked_mul(k).map(Self).ok_or(TimeError::Overflow)
     }
 
-    /// `self * num / den` com **half-up** (arredonda .5 em direção a +∞), via `i128`.
+    /// `self * num / den` com **half-up** (arredonda .5 em direção a +∞), via `i128` *checked*.
     pub fn mul_div_round(self, num: i64, den: i64) -> Result<Self, TimeError> {
         if den == 0 {
             return Err(TimeError::DivideByZero);
@@ -86,8 +86,13 @@ impl Ticks {
             n = -n;
             d = -d;
         }
-        // floor((2n + d) / (2d)) == round-half-up(n / d)
-        let q = (2 * n + d).div_euclid(2 * d);
+        // floor((2n + d) / (2d)) == round-half-up(n / d); |n| ≤ 2^126 e |d| ≤ 2^63: 2n + d cabe? não
+        // necessariamente — por isso a soma é checada.
+        let twice = n
+            .checked_mul(2)
+            .and_then(|v| v.checked_add(d))
+            .ok_or(TimeError::Overflow)?;
+        let q = twice.div_euclid(2 * d);
         i64::try_from(q).map(Self).map_err(|_| TimeError::Overflow)
     }
 
@@ -241,6 +246,23 @@ mod tests {
             Ticks(i64::MAX).mul_div_round(2, 2).unwrap(),
             Ticks(i64::MAX)
         );
+    }
+
+    #[test]
+    fn extreme_inputs_never_panic() {
+        let extremes = [i64::MIN, i64::MIN + 1, -1, 0, 1, 2, i64::MAX - 1, i64::MAX];
+        for &t in &extremes {
+            for &num in &extremes {
+                for &den in &extremes {
+                    // só importa não entrar em pânico (overflow vira `Err`)
+                    let _ = Ticks(t).mul_div_round(num, den);
+                    let _ = Ticks(t).mul_div_floor(num, den);
+                }
+                let _ = Ticks(t).checked_add(Ticks(num));
+                let _ = Ticks(t).checked_sub(Ticks(num));
+                let _ = Ticks(t).checked_mul(num);
+            }
+        }
     }
 
     #[test]

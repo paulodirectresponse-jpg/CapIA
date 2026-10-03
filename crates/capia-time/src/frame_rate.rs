@@ -114,7 +114,11 @@ impl FrameRate {
             m = -m;
         }
         let f = i128::from(self.frame_ticks.0);
-        let frames = (2 * n + m * f).div_euclid(2 * m * f).max(1);
+        let twice = n
+            .checked_mul(2)
+            .and_then(|v| v.checked_add(m * f))
+            .ok_or(TimeError::Overflow)?;
+        let frames = twice.div_euclid(2 * m * f).max(1);
         i64::try_from(frames * f)
             .map(Ticks)
             .map_err(|_| TimeError::Overflow)

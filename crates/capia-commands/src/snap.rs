@@ -60,11 +60,19 @@ pub fn threshold_ticks(px: Rational, pixels_per_second: Rational) -> Result<Tick
             "px must be >= 0 and pixels_per_second > 0",
         ));
     }
-    // ticks = px/pps × TPS = (px.num × pps.den × TPS) / (px.den × pps.num)
-    let num =
-        i128::from(px.num()) * i128::from(pixels_per_second.den()) * i128::from(TICKS_PER_SECOND);
+    // ticks = px/pps × TPS = (px.num × pps.den × TPS) / (px.den × pps.num) — aritmética checada:
+    // px e pps vêm da UI/API e podem ser extremos.
+    let overflow = || CommandError::from(capia_time::TimeError::Overflow);
+    let num = i128::from(px.num())
+        .checked_mul(i128::from(pixels_per_second.den()))
+        .and_then(|v| v.checked_mul(i128::from(TICKS_PER_SECOND)))
+        .ok_or_else(overflow)?;
     let den = i128::from(px.den()) * i128::from(pixels_per_second.num());
-    let q = (2 * num + den).div_euclid(2 * den);
+    let twice = num
+        .checked_mul(2)
+        .and_then(|v| v.checked_add(den))
+        .ok_or_else(overflow)?;
+    let q = twice.div_euclid(2 * den);
     i64::try_from(q)
         .map(Ticks)
         .map_err(|_| CommandError::from(capia_time::TimeError::Overflow))
@@ -208,6 +216,24 @@ mod tests {
             threshold_ticks(r(21, 2), r(50, 1)).unwrap(),
             Ticks(148_176_000)
         );
+    }
+
+    #[test]
+    fn threshold_never_panics_on_extreme_inputs() {
+        let extremes = [0, 1, 2, i64::MAX - 1, i64::MAX];
+        for &a in &extremes {
+            for &b in &extremes {
+                for &c in &extremes {
+                    for &d in &extremes {
+                        if let (Ok(px), Ok(pps)) =
+                            (Rational::new(a, b.max(1)), Rational::new(c, d.max(1)))
+                        {
+                            let _ = threshold_ticks(px, pps);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
