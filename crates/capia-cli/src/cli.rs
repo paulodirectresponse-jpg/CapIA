@@ -21,19 +21,34 @@ USAGE:
   capia history  <projeto.capia> [--json]              entradas de histórico (pilha undo/redo)
   capia dump     <projeto.capia> [--pretty]            documento em JSON canônico e determinístico
 
+ASSETS E MÍDIA:
+  capia asset import  <projeto.capia> <arquivo>        importa (hash em streaming + probe); idempotente por conteúdo
+  capia asset list    <projeto.capia> [--json]         assets (documento ∪ catálogo) com online/offline/modified
+  capia asset inspect <projeto.capia> <asset-id>       registro completo + eventos (import, alias, relink, verify)
+  capia asset verify  <projeto.capia> <asset-id>       recalcula o hash e detecta arquivo alterado/ausente
+  capia asset relink  <projeto.capia> <asset-id> <arquivo>   só aceita o MESMO conteúdo (senão ASSET_HASH_MISMATCH)
+  capia asset thumbnail <projeto.capia> <asset-id> [--at SEGUNDOS] [--size PX]   miniatura no cache
+  capia media probe   <arquivo> [--json]               metadados normalizados (ffprobe)
+        [--ffprobe CAMINHO] [--ffmpeg CAMINHO] [--timeout-ms N]
+
 OPÇÕES GLOBAIS:
   --sync full|normal|off    durabilidade do SQLite (padrão: full)
 
 CÓDIGOS DE SAÍDA: 0 ok · 1 falha (erro estruturado no stderr) · 2 uso incorreto";
 
 #[derive(Debug, Default)]
-struct Args {
-    positional: Vec<String>,
-    json: bool,
-    pretty: bool,
-    actor: Option<String>,
-    label: Option<String>,
-    sync: Option<String>,
+pub(crate) struct Args {
+    pub(crate) positional: Vec<String>,
+    pub(crate) json: bool,
+    pub(crate) pretty: bool,
+    pub(crate) actor: Option<String>,
+    pub(crate) label: Option<String>,
+    pub(crate) sync: Option<String>,
+    pub(crate) ffprobe: Option<String>,
+    pub(crate) ffmpeg: Option<String>,
+    pub(crate) timeout_ms: Option<String>,
+    pub(crate) at: Option<String>,
+    pub(crate) size: Option<String>,
 }
 
 fn parse_args(raw: &[String]) -> Result<Args, String> {
@@ -47,6 +62,11 @@ fn parse_args(raw: &[String]) -> Result<Args, String> {
             "--actor" => a.actor = Some(value("--actor")?),
             "--label" => a.label = Some(value("--label")?),
             "--sync" => a.sync = Some(value("--sync")?),
+            "--ffprobe" => a.ffprobe = Some(value("--ffprobe")?),
+            "--ffmpeg" => a.ffmpeg = Some(value("--ffmpeg")?),
+            "--timeout-ms" => a.timeout_ms = Some(value("--timeout-ms")?),
+            "--at" => a.at = Some(value("--at")?),
+            "--size" => a.size = Some(value("--size")?),
             flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
             _ => a.positional.push(arg.clone()),
         }
@@ -54,7 +74,7 @@ fn parse_args(raw: &[String]) -> Result<Args, String> {
     Ok(a)
 }
 
-fn options(a: &Args) -> Result<StoreOptions, String> {
+pub(crate) fn options(a: &Args) -> Result<StoreOptions, String> {
     let synchronous = match a.sync.as_deref() {
         None | Some("full") => Synchronous::Full,
         Some("normal") => Synchronous::Normal,
@@ -67,7 +87,7 @@ fn options(a: &Args) -> Result<StoreOptions, String> {
     })
 }
 
-fn actor(a: &Args) -> Result<Actor, String> {
+pub(crate) fn actor(a: &Args) -> Result<Actor, String> {
     Ok(match a.actor.as_deref() {
         None | Some("user") => Actor::new(ActorKind::User, "cli"),
         Some("system") => Actor::system(),
@@ -81,23 +101,23 @@ fn actor(a: &Args) -> Result<Actor, String> {
     })
 }
 
-fn fmt_duration(ticks: i64) -> String {
+pub(crate) fn fmt_duration(ticks: i64) -> String {
     let secs = ticks / TICKS_PER_SECOND;
     let ms = (ticks % TICKS_PER_SECOND) * 1000 / TICKS_PER_SECOND;
     format!("{secs}.{ms:03} s")
 }
 
-struct Io<'a> {
-    out: &'a mut dyn Write,
-    err: &'a mut dyn Write,
+pub(crate) struct Io<'a> {
+    pub(crate) out: &'a mut dyn Write,
+    pub(crate) err: &'a mut dyn Write,
 }
 
 impl Io<'_> {
-    fn print(&mut self, text: &str) {
+    pub(crate) fn print(&mut self, text: &str) {
         let _ = writeln!(self.out, "{text}");
     }
 
-    fn print_json<T: Serialize>(&mut self, value: &T, pretty: bool) {
+    pub(crate) fn print_json<T: Serialize>(&mut self, value: &T, pretty: bool) {
         // `Value` tem chaves ordenadas ⇒ saída determinística
         let v = serde_json::to_value(value).unwrap_or(Value::Null);
         let text = if pretty {
@@ -108,7 +128,7 @@ impl Io<'_> {
         self.print(&text.unwrap_or_default());
     }
 
-    fn fail<T: Serialize>(&mut self, e: &T, summary: &str, json: bool) -> i32 {
+    pub(crate) fn fail<T: Serialize>(&mut self, e: &T, summary: &str, json: bool) -> i32 {
         if json {
             let v = json!({ "error": serde_json::to_value(e).unwrap_or(Value::Null) });
             let _ = writeln!(self.err, "{v}");
@@ -156,11 +176,12 @@ fn print_info(io: &mut Io<'_>, info: &ProjectInfo) {
         info.stats.redo_depth
     ));
     io.print(&format!(
-        "document:  {} sequences · {} tracks · {} clips · {} assets",
+        "document:  {} sequences · {} tracks · {} clips · {} assets ({} with media files)",
         info.sequences.len(),
         info.total_tracks,
         info.total_clips,
-        info.assets
+        info.assets,
+        info.media_assets
     ));
     for s in &info.sequences {
         io.print(&format!(
@@ -199,6 +220,9 @@ pub(crate) fn run(raw: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i
         Ok(o) => o,
         Err(m) => return usage(&mut io, &m),
     };
+    if matches!(cmd.as_str(), "asset" | "media") {
+        return crate::assets_cmd::run(cmd, &args, &opts, &mut io);
+    }
     let Some(path) = args.positional.first().map(PathBuf::from) else {
         return usage(&mut io, "missing project path");
     };

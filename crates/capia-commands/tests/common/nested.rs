@@ -96,9 +96,96 @@ fn near(rng: &mut Rng, e: &Engine, clip: &ClipId) -> Ticks {
     }
 }
 
+/// Comandos de composição (ADR-050) sobre o estado atual: duplicar, tornar único, achatar,
+/// agrupar a partir de seleção e gerar variantes. Muitos falham de propósito (ids ruins, tracks
+/// magnéticas…): a propriedade é que falhas são atômicas e os acertos preservam as invariantes.
+pub fn random_compose_command(rng: &mut Rng, e: &Engine, n: u32) -> Command {
+    use capia_commands::{VariantSpec, VariantSwap};
+    let nested: Vec<(SequenceId, ClipId)> = all_clips(e)
+        .into_iter()
+        .filter(|c| c.2)
+        .map(|c| (c.0, c.1))
+        .collect();
+    let ghost: ClipId = "ghost".into();
+    match rng.below(5) {
+        0 => Command::DuplicateSequence {
+            source: existing_seq(rng, e),
+            new_sequence: Some(format!("d{n}").as_str().into()),
+            name: None,
+            deep: rng.chance(40),
+        },
+        1 => Command::MakeUnique {
+            clip: rng.pick(&nested).map_or(ghost, |c| c.1.clone()),
+            new_sequence: Some(format!("u{n}").as_str().into()),
+            name: None,
+            deep: rng.chance(40),
+        },
+        2 => Command::FlattenNested {
+            clip: rng.pick(&nested).map_or(ghost, |c| c.1.clone()),
+            prefix: if rng.chance(30) {
+                Some(format!("f{n}"))
+            } else {
+                None
+            },
+        },
+        3 => {
+            let seq = existing_seq(rng, e);
+            let mut ids: Vec<ClipId> = e
+                .document()
+                .sequence(&seq)
+                .map(|s| s.clips().map(|c| c.id.clone()).collect())
+                .unwrap_or_default();
+            let take = 1 + usize::try_from(rng.below(3)).unwrap_or(0);
+            let mut chosen = Vec::new();
+            while chosen.len() < take && !ids.is_empty() {
+                let i = usize::try_from(rng.below(ids.len() as u64)).unwrap_or(0);
+                chosen.push(ids.remove(i));
+            }
+            if chosen.is_empty() {
+                chosen.push(ghost);
+            }
+            Command::CreateNestedFromSelection {
+                clips: chosen,
+                new_sequence: Some(format!("g{n}").as_str().into()),
+                name: None,
+                clip_id: Some(format!("gn{n}").as_str().into()),
+                track: None,
+                follow_length: rng.chance(30),
+            }
+        }
+        _ => {
+            let template = existing_seq(rng, e);
+            let tpl_nested: Vec<ClipId> = e
+                .document()
+                .sequence(&template)
+                .map(|s| s.nested_refs().map(|(c, _)| c.clone()).collect())
+                .unwrap_or_default();
+            let swaps = match rng.pick(&tpl_nested) {
+                Some(c) if rng.chance(70) => vec![VariantSwap::SetNested {
+                    clip: c.clone(),
+                    sequence: existing_seq(rng, e),
+                }],
+                _ => Vec::new(),
+            };
+            Command::GenerateVariants {
+                template,
+                variants: vec![VariantSpec {
+                    sequence: Some(format!("v{n}").as_str().into()),
+                    name: None,
+                    deep: rng.chance(30),
+                    swaps,
+                }],
+            }
+        }
+    }
+}
+
 pub fn random_nested_command(rng: &mut Rng, e: &Engine, counter: &mut u32) -> Command {
     *counter += 1;
     let n = *counter;
+    if rng.chance(22) {
+        return random_compose_command(rng, e, n);
+    }
     let clips = all_clips(e);
     let nested: Vec<_> = clips.iter().filter(|c| c.2).cloned().collect();
     let pick_clip = |rng: &mut Rng| {

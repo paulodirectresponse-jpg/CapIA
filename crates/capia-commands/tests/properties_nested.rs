@@ -18,7 +18,7 @@ fn same_state(a: &Document, b: &Document) -> bool {
     &a == b
 }
 
-fn run_case(seed: u64, steps: usize) -> (Vec<Transaction>, usize) {
+fn run_case(seed: u64, steps: usize) -> (Vec<Transaction>, usize, usize) {
     let mut rng = Rng::new(seed ^ 0xA5A5);
     let mut e: Engine = nested_base_engine();
     let initial = e.document().clone();
@@ -26,6 +26,7 @@ fn run_case(seed: u64, steps: usize) -> (Vec<Transaction>, usize) {
     let (mut counter, mut op) = (0, 1_000);
     let mut accepted = Vec::new();
     let mut nested_accepted = 0;
+    let mut compose_accepted = 0;
     for _ in 0..steps {
         let command = random_nested_command(&mut rng, &e, &mut counter);
         let is_nested = matches!(
@@ -33,11 +34,20 @@ fn run_case(seed: u64, steps: usize) -> (Vec<Transaction>, usize) {
             capia_commands::Command::InsertNested { .. }
                 | capia_commands::Command::SetNestedTarget { .. }
         );
+        let is_compose = matches!(
+            command,
+            capia_commands::Command::DuplicateSequence { .. }
+                | capia_commands::Command::MakeUnique { .. }
+                | capia_commands::Command::FlattenNested { .. }
+                | capia_commands::Command::CreateNestedFromSelection { .. }
+                | capia_commands::Command::GenerateVariants { .. }
+        );
         let t = tx("n", &mut op, vec![command.clone()]);
         let (before, rev) = (e.document().clone(), e.revision());
         match e.execute(&Actor::user("p"), t.clone(), 0) {
             Ok(_) => {
                 nested_accepted += usize::from(is_nested);
+                compose_accepted += usize::from(is_compose);
                 let v = validate_document(e.document());
                 assert!(
                     v.is_empty(),
@@ -82,7 +92,7 @@ fn run_case(seed: u64, steps: usize) -> (Vec<Transaction>, usize) {
         same_state(e.document(), &initial),
         "seed {seed}: full undo did not return to the start"
     );
-    (accepted, nested_accepted)
+    (accepted, nested_accepted, compose_accepted)
 }
 
 fn cases() -> u64 {
@@ -95,11 +105,12 @@ fn cases() -> u64 {
 #[test]
 fn nested_command_sequences_preserve_the_dag_the_invariants_and_undo() {
     let n = cases();
-    let (mut accepted, mut nested) = (0, 0);
+    let (mut accepted, mut nested, mut compose) = (0, 0, 0);
     for seed in 0..n {
-        let (a, nn) = run_case(seed, 14);
+        let (a, nn, cc) = run_case(seed, 14);
         accepted += a.len();
         nested += nn;
+        compose += cc;
     }
     if n >= 1_000 {
         assert!(
@@ -111,13 +122,21 @@ fn nested_command_sequences_preserve_the_dag_the_invariants_and_undo() {
             "only {accepted} accepted commands in {n} cases"
         );
     }
-    eprintln!("nested property: {n} cases, {accepted} accepted commands, {nested} nested edits");
+    if n >= 1_000 {
+        assert!(
+            compose as u64 > n / 8,
+            "the generator should land composition commands ({compose} in {n} cases)"
+        );
+    }
+    eprintln!(
+        "nested property: {n} cases, {accepted} accepted commands, {nested} nested edits, {compose} composition commands"
+    );
 }
 
 #[test]
 fn nested_replay_is_deterministic() {
     for seed in 0..200 {
-        let (accepted, _) = run_case(seed, 14);
+        let (accepted, _, _) = run_case(seed, 14);
         let (mut a, mut b) = (nested_base_engine(), nested_base_engine());
         for t in accepted {
             assert_eq!(

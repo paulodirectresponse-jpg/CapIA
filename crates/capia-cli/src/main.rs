@@ -2,6 +2,7 @@
 //! só traduz argumentos para chamadas à fachada `capia-project` (que usa o Command Engine e o
 //! store). Serve para testar e automatizar o engine fora da UI.
 
+mod assets_cmd;
 mod cli;
 
 fn main() {

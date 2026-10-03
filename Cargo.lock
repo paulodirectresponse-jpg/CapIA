@@ -255,7 +255,9 @@ dependencies = [
 name = "capia-cli"
 version = "0.0.0"
 dependencies = [
+ "capia-assets",
  "capia-commands",
+ "capia-media",
  "capia-model",
  "capia-project",
  "capia-store",
