@@ -281,3 +281,39 @@ fn cache_keys_are_deterministic_content_addressed_and_the_cache_is_disposable() 
     assert!(c.get(&a, "png").is_none());
     c.clear().unwrap(); // idempotente
 }
+
+#[test]
+fn a_good_alias_beats_an_overwritten_primary_path() {
+    let t = Tmp::new("alias");
+    let primary = t.file("a/v.mp4", b"original content");
+    let mut rec = import(&primary).unwrap().record;
+    let alias = t.file("b/copy.mp4", b"original content");
+    rec.known_paths.push(alias.display().to_string());
+    // o caminho principal é sobrescrito por OUTRO conteúdo de tamanho diferente
+    std::fs::write(&primary, b"something else entirely, longer").unwrap();
+    let (st, found) = quick_status(&rec, None);
+    assert_eq!(
+        (st, found.as_deref()),
+        (Availability::Online, Some(alias.as_path()))
+    );
+    let r = verify_content(&rec, None).unwrap();
+    assert_eq!(
+        (r.status, r.path.as_deref()),
+        (Availability::Online, Some(alias.as_path()))
+    );
+    // e com MESMO tamanho no principal: só o hash distingue; o alias bom continua vencendo
+    std::fs::write(&primary, b"ORIGINAL CONTENT").unwrap();
+    let r = verify_content(&rec, None).unwrap();
+    assert_eq!(
+        (r.status, r.path.as_deref()),
+        (Availability::Online, Some(alias.as_path()))
+    );
+    // nenhum candidato com o conteúdo certo ⇒ modified, reportando o principal
+    std::fs::write(&alias, b"ALSO CHANGED....").unwrap();
+    let r = verify_content(&rec, None).unwrap();
+    assert_eq!(
+        (r.status, r.path.as_deref()),
+        (Availability::Modified, Some(primary.as_path()))
+    );
+    assert_ne!(r.actual.unwrap().hash, rec.content_hash);
+}

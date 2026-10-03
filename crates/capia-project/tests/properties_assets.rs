@@ -76,35 +76,38 @@ impl Model {
         expected_asset_id(&capia_assets::ContentHash::parse(&hash_of(c)).unwrap())
     }
 
-    /// Status que o projeto deve informar (checagem barata: tamanho do 1º candidato existente).
-    fn quick(&self, c: usize) -> Availability {
+    /// Candidatos existentes, em ordem (principal + aliases), com o conteúdo que têm.
+    fn existing(&self, c: usize) -> Vec<usize> {
         let e = &self.cat[&c];
-        let cands = std::iter::once(&e.loc).chain(e.known.iter());
-        for p in cands {
-            if let Some(&found) = self.files.get(p) {
-                return if content(found).len() == content(c).len() {
-                    Availability::Online
-                } else {
-                    Availability::Modified
-                };
-            }
-        }
-        Availability::Offline
+        std::iter::once(&e.loc)
+            .chain(e.known.iter())
+            .filter_map(|p| self.files.get(p).copied())
+            .collect()
     }
 
-    /// Status do verify completo (hash do 1º candidato existente).
-    fn full(&self, c: usize) -> Availability {
-        let e = &self.cat[&c];
-        for p in std::iter::once(&e.loc).chain(e.known.iter()) {
-            if let Some(&found) = self.files.get(p) {
-                return if found == c {
-                    Availability::Online
-                } else {
-                    Availability::Modified
-                };
-            }
+    /// Status que o projeto deve informar (checagem barata): algum candidato com o tamanho
+    /// conhecido ⇒ online; senão modificado; nenhum ⇒ offline.
+    fn quick(&self, c: usize) -> Availability {
+        let ex = self.existing(c);
+        if ex.iter().any(|&f| content(f).len() == content(c).len()) {
+            Availability::Online
+        } else if ex.is_empty() {
+            Availability::Offline
+        } else {
+            Availability::Modified
         }
-        Availability::Offline
+    }
+
+    /// Status do verify completo: algum candidato com o conteúdo exato ⇒ online.
+    fn full(&self, c: usize) -> Availability {
+        let ex = self.existing(c);
+        if ex.contains(&c) {
+            Availability::Online
+        } else if ex.is_empty() {
+            Availability::Offline
+        } else {
+            Availability::Modified
+        }
     }
 }
 

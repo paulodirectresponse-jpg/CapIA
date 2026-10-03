@@ -7,26 +7,33 @@ use crate::record::{AssetRecord, Availability};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
-/// Primeiro candidato que é arquivo regular.
-fn first_existing(rec: &AssetRecord, project_dir: Option<&Path>) -> Option<(PathBuf, u64)> {
+/// Candidatos que existem como arquivo regular, na ordem de prioridade (no máx. 16).
+fn existing_candidates(rec: &AssetRecord, project_dir: Option<&Path>) -> Vec<(PathBuf, u64)> {
     resolve_candidates(&rec.location, &rec.known_paths, project_dir)
         .into_iter()
-        .find_map(|p| {
+        .filter_map(|p| {
             let m = std::fs::metadata(&p).ok()?;
             m.is_file().then_some((p, m.len()))
         })
+        .take(16)
+        .collect()
 }
 
 /// Checagem **barata** (só `metadata`, O(1) por asset — é o que a abertura do projeto usa): não
-/// calcula hash. Tamanho diferente já é `Modified`; mesmo tamanho é `Online` *não verificado*.
+/// calcula hash. Prefere o candidato com o tamanho conhecido (um alias bom vale mais que um
+/// caminho principal sobrescrito); se nenhum tem o tamanho, `Modified`; mesmo tamanho é `Online`
+/// *não verificado*.
 pub fn quick_status(
     rec: &AssetRecord,
     project_dir: Option<&Path>,
 ) -> (Availability, Option<PathBuf>) {
-    match first_existing(rec, project_dir) {
+    let cands = existing_candidates(rec, project_dir);
+    if let Some((p, _)) = cands.iter().find(|(_, len)| *len == rec.size_bytes) {
+        return (Availability::Online, Some(p.clone()));
+    }
+    match cands.into_iter().next() {
         None => (Availability::Offline, None),
-        Some((p, len)) if len != rec.size_bytes => (Availability::Modified, Some(p)),
-        Some((p, _)) => (Availability::Online, Some(p)),
+        Some((p, _)) => (Availability::Modified, Some(p)),
     }
 }
 
@@ -38,27 +45,42 @@ pub struct VerifyReport {
     pub actual: Option<FileDigest>,
 }
 
-/// Verificação **completa**: recalcula o hash do arquivo encontrado.
+/// Verificação **completa**: recalcula o hash. Só candidatos com o tamanho conhecido precisam de
+/// hash (tamanho diferente já prova conteúdo diferente); o primeiro que bate vence — mesmo que seja
+/// um alias. Nenhum bate ⇒ `Modified`, reportando o hash do primeiro candidato existente.
 pub fn verify_content(
     rec: &AssetRecord,
     project_dir: Option<&Path>,
 ) -> Result<VerifyReport, AssetError> {
-    let Some((path, _)) = first_existing(rec, project_dir) else {
+    let cands = existing_candidates(rec, project_dir);
+    let Some((first, _)) = cands.first().cloned() else {
         return Ok(VerifyReport {
             status: Availability::Offline,
             path: None,
             actual: None,
         });
     };
-    let digest = hash_file(&path)?;
-    let status = if digest.hash == rec.content_hash {
-        Availability::Online
-    } else {
-        Availability::Modified
+    let mut first_digest = None;
+    for (p, _) in cands.iter().filter(|(_, len)| *len == rec.size_bytes) {
+        let digest = hash_file(p)?;
+        if digest.hash == rec.content_hash {
+            return Ok(VerifyReport {
+                status: Availability::Online,
+                path: Some(p.clone()),
+                actual: Some(digest),
+            });
+        }
+        if *p == first {
+            first_digest = Some(digest);
+        }
+    }
+    let digest = match first_digest {
+        Some(d) => d,
+        None => hash_file(&first)?,
     };
     Ok(VerifyReport {
-        status,
-        path: Some(path),
+        status: Availability::Modified,
+        path: Some(first),
         actual: Some(digest),
     })
 }
