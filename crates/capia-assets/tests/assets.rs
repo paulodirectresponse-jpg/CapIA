@@ -217,28 +217,22 @@ fn relink_requires_the_same_content_and_explains_the_mismatch() {
         .unwrap()
         .record;
     // outro caminho, mesmo conteúdo ⇒ aceito
-    let ok = check_relink(&rec, &t.file("b/copy.mp4", b"the real content"), false).unwrap();
-    assert!(ok.same_content);
+    let ok = check_relink(&rec, &t.file("b/copy.mp4", b"the real content")).unwrap();
     assert_eq!(ok.digest.hash, rec.content_hash);
     // conteúdo diferente ⇒ rejeição estruturada com os dois hashes
-    let e = check_relink(&rec, &t.file("c/other.mp4", b"something else"), false).unwrap_err();
+    let e = check_relink(&rec, &t.file("c/other.mp4", b"something else")).unwrap_err();
     assert_eq!(e.code, AssetErrorCode::AssetHashMismatch);
     let d = e.details.unwrap();
     assert_eq!(d["expected_hash"], Value::from(rec.content_hash.as_str()));
     assert_ne!(d["found_hash"], d["expected_hash"]);
     assert_eq!(d["asset_id"], Value::from(rec.asset_id.as_str()));
-    // force devolve o digest, sinalizando que NÃO é o mesmo conteúdo
-    let forced = check_relink(&rec, &t.file("c/other.mp4", b"something else"), true).unwrap();
-    assert!(!forced.same_content);
     // candidato inexistente / diretório
     assert_eq!(
-        check_relink(&rec, &t.0.join("nope.mp4"), false)
-            .unwrap_err()
-            .code,
+        check_relink(&rec, &t.0.join("nope.mp4")).unwrap_err().code,
         AssetErrorCode::AssetFileNotFound
     );
     assert_eq!(
-        check_relink(&rec, &t.0, false).unwrap_err().code,
+        check_relink(&rec, &t.0).unwrap_err().code,
         AssetErrorCode::AssetNotRegularFile
     );
 }

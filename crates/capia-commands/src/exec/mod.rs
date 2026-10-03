@@ -16,6 +16,7 @@ pub(crate) use nested::reconcile_follow;
 pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<CommandOutput> {
     match command {
         Command::RegisterAsset { asset } => structure::register_asset(ctx, asset),
+        Command::DeleteAsset { asset } => structure::delete_asset(ctx, asset),
         Command::CreateSequence {
             id,
             name,

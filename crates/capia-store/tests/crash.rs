@@ -81,8 +81,50 @@ fn crash_child() {
                 println!("COMMITTED {i}");
             }
         }
+        "import" => {
+            // mesmo mecanismo do `Project::import_asset`: efeito do catálogo na transação do commit
+            let media = std::env::var("CAPIA_CRASH_MEDIA").unwrap();
+            let (store, state) = ProjectStore::open(Path::new(&path), &child_opts()).unwrap();
+            let pending = store.pending_catalog();
+            let mut e = store
+                .into_engine(state, key(), EngineConfig::default())
+                .unwrap();
+            let r = import_tx(Path::new(&media));
+            pending.lock().unwrap().push(r.0);
+            let out = e.execute(&user(), r.1, 5);
+            println!("CHILD_RETURNED {}", out.is_ok());
+        }
         other => panic!("unknown scenario {other}"),
     }
+}
+
+/// Registro de catálogo + transação `register_asset` de um arquivo de mídia sintético.
+fn import_tx(media: &Path) -> (capia_store::CatalogOp, capia_commands::Transaction) {
+    let rec = capia_assets::prepare_import(media, None, &capia_assets::testing::StaticProbe, 1)
+        .unwrap()
+        .record;
+    let asset = capia_model::Asset {
+        id: rec.asset_id.clone(),
+        name: rec.display_name.clone(),
+        duration: rec.media.duration,
+        has_video: true,
+        has_audio: true,
+        offline: false,
+    };
+    let t = tx(
+        "import",
+        vec![env(
+            "import-op",
+            capia_commands::Command::RegisterAsset { asset },
+        )],
+    );
+    let op = capia_store::CatalogOp {
+        record: rec,
+        event: capia_store::CatalogEventKind::Import,
+        detail: serde_json::json!({}),
+        at_ms: 1,
+    };
+    (op, t)
 }
 
 fn spawn_child(
@@ -100,6 +142,9 @@ fn spawn_child(
     if let Some((name, mode)) = failpoint {
         cmd.env("CAPIA_FAILPOINT", name)
             .env("CAPIA_FAILPOINT_MODE", mode);
+    }
+    if let Some(m) = std::env::var_os("CAPIA_CRASH_MEDIA") {
+        cmd.env("CAPIA_CRASH_MEDIA", m);
     }
     if let Some(n) = snapshot_every {
         cmd.env("CAPIA_SNAPSHOT_EVERY", n.to_string());
@@ -351,4 +396,66 @@ fn every_failpoint_is_inert_without_the_environment() {
     let r = e.execute(&user(), target_tx(), 5).unwrap();
     assert!(!r.replayed);
     assert_file_is_sound(&path);
+}
+
+/// Import = documento + catálogo na MESMA transação: depois de um processo morto em qualquer ponto,
+/// o asset existe nas duas camadas (e no log de operações) ou em nenhuma.
+#[test]
+fn killing_an_import_at_every_stage_is_all_or_nothing() {
+    let stages = [
+        ("before_begin", false),
+        ("in_tx_after_entry", false),
+        ("in_tx_after_writes", false),
+        ("before_commit", false),
+        ("after_commit", true),
+    ];
+    for (stage, committed) in stages {
+        for mode in ["abort", "park"] {
+            let dir = TempDir::new("crash-import");
+            let path = dir.file("p.capia");
+            base_project(&path);
+            let media = dir.file("clip.mp4");
+            std::fs::write(&media, b"synthetic media bytes").unwrap();
+            // CAPIA_CRASH_MEDIA é lido pelo filho (herdado do ambiente do pai neste ponto)
+            let mut cmd_env = Command::new(std::env::current_exe().unwrap());
+            cmd_env
+                .args(["--exact", "crash_child", "--nocapture", "--test-threads=1"])
+                .env("CAPIA_CRASH_CHILD", "import")
+                .env("CAPIA_CRASH_PATH", &path)
+                .env("CAPIA_CRASH_MEDIA", &media)
+                .env("CAPIA_FAILPOINT", stage)
+                .env("CAPIA_FAILPOINT_MODE", mode)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null());
+            let mut child = cmd_env.spawn().unwrap();
+            let status = if mode == "park" {
+                let rx = lines_of(&mut child);
+                wait_for(&rx, "FAILPOINT_REACHED");
+                child.kill().unwrap();
+                child.wait().unwrap()
+            } else {
+                child.wait().unwrap()
+            };
+            assert!(!status.success(), "{stage}/{mode}: must die abruptly");
+
+            assert_file_is_sound(&path);
+            let rec =
+                capia_assets::prepare_import(&media, None, &capia_assets::testing::StaticProbe, 1)
+                    .unwrap()
+                    .record;
+            let (store, state) = ProjectStore::open(&path, &fast()).unwrap();
+            let in_doc = state.doc.asset(&rec.asset_id).is_some();
+            let in_log = store.has_operation_id("import-op").unwrap();
+            let catalog =
+                capia_store::Catalog::open(&path, std::time::Duration::from_secs(5)).unwrap();
+            let in_catalog = catalog.get(&rec.asset_id).unwrap().is_some();
+            let events = catalog.events(&rec.asset_id).unwrap().len();
+            assert_eq!(
+                (in_doc, in_log, in_catalog, events),
+                (committed, committed, committed, usize::from(committed)),
+                "{stage}/{mode}: document, operation log and catalog must agree"
+            );
+            drop(store);
+        }
+    }
 }

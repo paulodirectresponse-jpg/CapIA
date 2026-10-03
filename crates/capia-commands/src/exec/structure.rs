@@ -31,6 +31,46 @@ pub(crate) fn register_asset(ctx: &mut Ctx, asset: &Asset) -> Result<CommandOutp
     Ok(ctx.take_output(Some(asset.id.0.clone())))
 }
 
+pub(crate) fn delete_asset(ctx: &mut Ctx, id: &capia_model::AssetId) -> Result<CommandOutput> {
+    let Some(old) = ctx.doc.asset(id).cloned() else {
+        return Err(CommandError::new(
+            ErrorCode::NotFound,
+            format!("asset {id} does not exist"),
+        )
+        .with_entities([EntityRef::new(EntityKind::Asset, id.as_str())]));
+    };
+    let users: Vec<(SequenceId, capia_model::ClipId)> = ctx
+        .doc
+        .sequences()
+        .flat_map(|(sid, s)| {
+            s.clips()
+                .filter(|c| c.content.asset() == Some(id))
+                .map(move |c| (sid.clone(), c.id.clone()))
+        })
+        .collect();
+    if !users.is_empty() {
+        return Err(CommandError::new(
+            ErrorCode::InUse,
+            format!("asset {id} is used by {} clip(s)", users.len()),
+        )
+        .with_entities(
+            users
+                .iter()
+                .map(|(_, c)| EntityRef::new(EntityKind::Clip, c.as_str())),
+        )
+        .with_hint(serde_json::json!({
+            "used_by": users.iter().map(|(s, c)| serde_json::json!({ "sequence": s.as_str(), "clip": c.as_str() })).collect::<Vec<_>>(),
+            "suggestion": "delete those clips first, or keep the asset",
+        })));
+    }
+    ctx.emit(PrimitiveOp::Asset {
+        id: id.clone(),
+        old: Some(old),
+        new: None,
+    })?;
+    Ok(ctx.take_output(None))
+}
+
 pub(crate) fn create_sequence(
     ctx: &mut Ctx,
     id: Option<&SequenceId>,

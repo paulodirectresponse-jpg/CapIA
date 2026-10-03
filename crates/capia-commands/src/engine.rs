@@ -951,7 +951,9 @@ fn sub_scope(scope: &mut RippleScope, refs: &BTreeMap<String, String>) -> Result
 fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()> {
     use capia_model::ClipContent;
     match cmd {
-        Command::RegisterAsset { .. } | Command::CreateSequence { .. } => {}
+        Command::RegisterAsset { .. }
+        | Command::DeleteAsset { .. }
+        | Command::CreateSequence { .. } => {}
         Command::AddTrack { sequence, .. } | Command::AddMarker { sequence, .. } => {
             sub(&mut sequence.0, refs)?
         }

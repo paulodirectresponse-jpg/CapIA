@@ -67,18 +67,12 @@ pub fn verify_content(
 pub struct RelinkCheck {
     pub digest: FileDigest,
     pub path: PathBuf,
-    /// O conteúdo do candidato é o mesmo do catálogo.
-    pub same_content: bool,
 }
 
-/// Confere um candidato de relink. Conteúdo diferente **sem** `force` ⇒ `ASSET_HASH_MISMATCH`
-/// estruturado (nunca equivalência silenciosa); com `force` devolve o digest para o chamador
-/// decidir/registrar.
-pub fn check_relink(
-    rec: &AssetRecord,
-    candidate: &Path,
-    force: bool,
-) -> Result<RelinkCheck, AssetError> {
+/// Confere um candidato de relink: só o **mesmo conteúdo** é aceito. Conteúdo diferente ⇒
+/// `ASSET_HASH_MISMATCH` estruturado com os dois hashes (nunca equivalência silenciosa). O
+/// *force-relink* explícito fica para uma missão futura (ADR-048 §5).
+pub fn check_relink(rec: &AssetRecord, candidate: &Path) -> Result<RelinkCheck, AssetError> {
     let path = crate::import::absolute_checked(candidate)?;
     let meta = std::fs::metadata(&path).map_err(|e| {
         AssetError::new(
@@ -97,8 +91,7 @@ pub fn check_relink(
         ));
     }
     let digest = hash_file(&path)?;
-    let same_content = digest.hash == rec.content_hash;
-    if !same_content && !force {
+    if digest.hash != rec.content_hash {
         return Err(AssetError::new(
             AssetErrorCode::AssetHashMismatch,
             format!(
@@ -116,9 +109,5 @@ pub fn check_relink(
             "path": path.display().to_string(),
         })));
     }
-    Ok(RelinkCheck {
-        digest,
-        path,
-        same_content,
-    })
+    Ok(RelinkCheck { digest, path })
 }

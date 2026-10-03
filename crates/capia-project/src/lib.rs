@@ -1,13 +1,20 @@
-//! Núcleo do projeto do CapIA: fachada que os adaptadores (Tauri hoje; CLI/REST/MCP depois)
-//! consomem. **Scaffold:** só descreve o engine. Persistência (.capia/SQLite), sessão de projeto e
-//! Engine API chegam na Fase 2 (hoje documentadas como `capia-store` + `capia-engine`; ADR-038).
+//! Fachada do projeto do CapIA: o que os adaptadores (CLI hoje; Tauri/REST/MCP depois) consomem.
+//! Junta o `Engine` (Command Engine + journal em `capia-store`), o catálogo de mídia e os assets
+//! (`capia-assets`, probe via o trait de `capia-media`).
 //!
-//! Regra (ADR-002): este crate **não** conhece Tauri, UI, IA, providers, render nem FFmpeg.
+//! Regra (ADR-002): este crate **não** conhece Tauri, UI, IA nem providers; só fala com o FFmpeg
+//! através do trait `MediaProbe`/`MediaToolchain` de `capia-media`.
 
 use serde::Serialize;
 
+mod assets;
+mod error;
 mod project;
 
+pub use assets::{
+    AssetView, ImportOutcome, ImportResult, RelinkResult, VerifyResult, expected_asset_id,
+};
+pub use error::ProjectError;
 pub use project::{ParseError, Project, parse_transaction};
 
 /// Versão da Engine API exposta aos adaptadores.

@@ -8,7 +8,8 @@ use capia_commands::{
 };
 use capia_model::Document;
 use capia_store::{
-    ProjectInfo, ProjectStore, StoreError, StoreOptions, ValidationReport, random_plan_key,
+    Catalog, CatalogOp, PendingCatalog, ProjectInfo, ProjectStore, StoreError, StoreOptions,
+    ValidationReport, random_plan_key,
 };
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -26,27 +27,61 @@ fn now_ms() -> u64 {
 pub struct Project {
     engine: Engine,
     path: PathBuf,
+    /// Catálogo de mídia (conexão própria; ADR-048).
+    catalog: Catalog,
+    /// Fila de efeitos do catálogo que o journal aplica na transação do próximo commit.
+    pending: PendingCatalog,
 }
 
 impl Project {
     /// Cria um projeto vazio (falha se o arquivo já existe).
     pub fn create(path: &Path, opts: &StoreOptions) -> Result<Self, StoreError> {
-        let engine =
-            ProjectStore::create_engine(path, opts, random_plan_key()?, EngineConfig::default())?;
-        Ok(Self {
-            engine,
-            path: path.to_path_buf(),
-        })
+        let (store, state) = ProjectStore::create(path, opts)?;
+        Self::assemble(path, opts, store, state)
     }
 
     /// Abre (e migra, se preciso) um projeto existente.
     pub fn open(path: &Path, opts: &StoreOptions) -> Result<Self, StoreError> {
-        let engine =
-            ProjectStore::open_engine(path, opts, random_plan_key()?, EngineConfig::default())?;
+        let (store, state) = ProjectStore::open(path, opts)?;
+        Self::assemble(path, opts, store, state)
+    }
+
+    fn assemble(
+        path: &Path,
+        opts: &StoreOptions,
+        store: ProjectStore,
+        state: capia_commands::EngineState,
+    ) -> Result<Self, StoreError> {
+        let pending = store.pending_catalog();
+        let engine = store.into_engine(state, random_plan_key()?, EngineConfig::default())?;
+        let catalog = Catalog::open(path, opts.busy_timeout)?;
         Ok(Self {
             engine,
             path: path.to_path_buf(),
+            catalog,
+            pending,
         })
+    }
+
+    pub(crate) fn catalog(&self) -> &Catalog {
+        &self.catalog
+    }
+
+    pub(crate) fn catalog_mut(&mut self) -> &mut Catalog {
+        &mut self.catalog
+    }
+
+    pub(crate) fn queue_catalog(&self, op: CatalogOp) -> Result<(), StoreError> {
+        self.pending
+            .lock()
+            .map(|mut q| q.push(op))
+            .map_err(|_| StoreError::corrupted("catalog queue is poisoned"))
+    }
+
+    pub(crate) fn clear_catalog_queue(&self) {
+        if let Ok(mut q) = self.pending.lock() {
+            q.clear();
+        }
     }
 
     pub fn path(&self) -> &Path {

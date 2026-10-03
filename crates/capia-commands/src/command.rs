@@ -2,7 +2,7 @@
 //! UI, IA (tools), CLI e API usam exatamente estes tipos.
 
 use capia_model::{
-    Asset, ClipContent, ClipId, Interp, MarkerId, PropertySet, SequenceId, TrackId, TrackKind,
+    Asset, AssetId, ClipContent, ClipId, Interp, MarkerId, PropertySet, SequenceId, TrackId, TrackKind,
     TrackRole,
 };
 use capia_time::{FrameRate, Rational, Ticks};
@@ -76,6 +76,11 @@ pub enum Command {
     // --- projeto / sequence / track / marcador / asset -------------------------------------
     RegisterAsset {
         asset: Asset,
+    },
+    /// Remove o asset **lógico** do documento. `IN_USE` se algum clip o referencia (ADR-048 §7). O
+    /// registro do catálogo de mídia permanece (biblioteca): reimportar o mesmo conteúdo o reaproveita.
+    DeleteAsset {
+        asset: AssetId,
     },
     CreateSequence {
         #[serde(default)]
@@ -269,6 +274,7 @@ impl Command {
     pub fn type_name(&self) -> &'static str {
         match self {
             Self::RegisterAsset { .. } => "register_asset",
+            Self::DeleteAsset { .. } => "delete_asset",
             Self::CreateSequence { .. } => "create_sequence",
             Self::AddTrack { .. } => "add_track",
             Self::SetTrackFlags { .. } => "set_track_flags",

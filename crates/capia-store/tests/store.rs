@@ -699,3 +699,69 @@ fn identifiers_with_hostile_content_are_stored_and_returned_verbatim() {
     let mut e3 = open(&path, &fast());
     assert!(e3.execute(&user(), t, 3).unwrap().replayed);
 }
+
+/// Um efeito de catálogo que falha (ex.: hash duplicado com outro asset_id) derruba a transação
+/// INTEIRA: o documento não avança, o operation_id não é gravado e a memória do engine fica intacta.
+#[test]
+fn a_failing_catalog_effect_rolls_back_the_whole_commit() {
+    use capia_assets::testing::StaticProbe;
+    let dir = TempDir::new("catfail");
+    let path = dir.file("p.capia");
+    let media = dir.file("a.mp4");
+    std::fs::write(&media, b"bytes").unwrap();
+    let rec = capia_assets::prepare_import(&media, None, &StaticProbe, 1)
+        .unwrap()
+        .record;
+    let (store, state) = ProjectStore::create(&path, &fast()).unwrap();
+    let pending = store.pending_catalog();
+    let mut e = store
+        .into_engine(state, key(), capia_commands::EngineConfig::default())
+        .unwrap();
+    // 1º import: ok
+    let asset = |id: &str| capia_model::Asset {
+        id: id.into(),
+        name: id.into(),
+        duration: None,
+        has_video: true,
+        has_audio: false,
+        offline: false,
+    };
+    let reg = |op: &str, id: &str| {
+        tx(
+            "reg",
+            vec![env(
+                op,
+                capia_commands::Command::RegisterAsset { asset: asset(id) },
+            )],
+        )
+    };
+    let op = |r: &capia_assets::AssetRecord| capia_store::CatalogOp {
+        record: r.clone(),
+        event: capia_store::CatalogEventKind::Import,
+        detail: serde_json::json!({}),
+        at_ms: 1,
+    };
+    pending.lock().unwrap().push(op(&rec));
+    e.execute(&user(), reg("r1", rec.asset_id.as_str()), 1)
+        .unwrap();
+    let revision = e.document().revision;
+    // 2º: OUTRO asset_id com o MESMO hash viola o índice único do catálogo
+    let mut dup = rec.clone();
+    dup.asset_id = "ast_other".into();
+    pending.lock().unwrap().push(op(&dup));
+    let err = e.execute(&user(), reg("r2", "ast_other"), 2).unwrap_err();
+    assert_eq!(err.code, capia_model::ErrorCode::PersistenceFailed);
+    assert_eq!(e.document().revision, revision, "memory untouched");
+    assert!(e.document().asset(&"ast_other".into()).is_none());
+    pending.lock().unwrap().clear();
+    drop(e);
+    let (store, state) = ProjectStore::open(&path, &fast()).unwrap();
+    assert!(
+        state.doc.asset(&"ast_other".into()).is_none(),
+        "nothing half-committed"
+    );
+    assert!(!store.has_operation_id("r2").unwrap());
+    assert!(store.has_operation_id("r1").unwrap());
+    let c = capia_store::Catalog::open(&path, std::time::Duration::from_secs(5)).unwrap();
+    assert_eq!(c.count().unwrap(), 1);
+}
