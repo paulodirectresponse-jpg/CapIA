@@ -315,9 +315,11 @@ fn offline_media_does_not_prevent_opening_and_keeps_the_clips() {
     let rec = v.catalog.as_ref().unwrap();
     assert_eq!(rec.status, Availability::Offline);
     assert_eq!(rec.content_hash, hash, "known hash survives");
+    // comparação por CAMINHO (componentes), não por texto: o produto guarda `std::path::absolute`
+    // (no Windows `a/b` vira `a\b`)
     assert_eq!(
-        rec.location.path,
-        file.display().to_string(),
+        PathBuf::from(&rec.location.path),
+        file,
         "known path survives"
     );
     assert_eq!(v.resolved_path, None);
@@ -357,7 +359,7 @@ fn relink_by_content_and_structured_rejection_of_other_content() {
     // mesmo conteúdo em outro caminho ⇒ relink funciona e sobrevive ao reopen
     let good = t.file("elsewhere/renamed.mp4", b"the original content");
     let r = p.relink_asset(&id, &good).unwrap();
-    assert_eq!(r.to, good.display().to_string());
+    assert_eq!(PathBuf::from(&r.to), good);
     assert_eq!(
         p.asset(&id).unwrap().catalog.unwrap().status,
         Availability::Online
@@ -366,10 +368,7 @@ fn relink_by_content_and_structured_rejection_of_other_content() {
     let p = reopen(&t);
     let v = p.asset(&id).unwrap();
     assert_eq!(v.catalog.as_ref().unwrap().status, Availability::Online);
-    assert_eq!(
-        v.resolved_path.as_deref(),
-        Some(good.display().to_string().as_str())
-    );
+    assert_eq!(v.resolved_path.as_deref().map(PathBuf::from), Some(good));
     let kinds: Vec<String> = p
         .asset_events(&id)
         .unwrap()
