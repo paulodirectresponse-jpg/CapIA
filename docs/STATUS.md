@@ -55,11 +55,12 @@ OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto
 | Verificação | Resultado |
 |---|---|
 | `cargo fmt --all -- --check` · `cargo clippy --workspace --all-targets -- -D warnings` | ✅ · ✅ sem avisos |
-| `cargo test --workspace` | ✅ **79 testes** (time 23 · model 20 · commands 33 · project 2 · desktop 1) + 2 de desempenho `#[ignore]` |
+| `cargo test --workspace` | ✅ **84 testes** (time 25 · model 20 · commands 36 · project 2 · desktop 1) + 2 de desempenho `#[ignore]` |
 | Aceitação (`tests/acceptance.rs`) | ✅ **120 cenários** (placement 19 · snapping 19 · ripple 25 · retime 19 · group move 15 · keyframes 23) |
 | Mutação na suíte (3 defeitos injetados no engine: limiar de snap exclusivo, obstáculo inclusivo no group move, arredondamento por truncamento) | ✅ 3/3 detectados (1, 1 e 3 cenários falham) |
 | Propriedade (`tests/properties.rs`) | ✅ **10.000 sequências × 8 comandos** (≈ 50 mil comandos aceitos: insert 19,4 k · trim 4,8 k · delete 4,6 k · keyframe 3,7 k · split 2,7 k · speed 2,4 k · move 0,5 k …); determinismo de replay em 300 sequências × 12 comandos |
 | Engine (`tests/engine.rs`) | ✅ 21 testes: replay, `OPERATION_ID_REUSED/CONFLICT`, undo não libera ids, `PREVIEW_REQUIRED`, token adulterado/expirado/outro ator/outra chave/store limitado, drift (rebase seguro × `PLAN_STATE_CHANGED`), `CONFLICT` por `base_revision`, refs, `max_ops`, histórico, `RIPPLE_CONFLICT` estruturado, track travada |
+| Robustez (`tests/robustness.rs`) | ✅ ~900 comandos com valores extremos (limites de i64/f64, NaN, ±∞, parâmetros de Bézier) e JSON malformado: só erro estruturado ou commit válido e desfazível; **achado e corrigido na revisão:** overflow de `i128` (pânico em debug / wrap em release) em `mul_div_round`, soma/subtração de `Rational`, escala de frames e `threshold_ticks` — agora aritmética *checked* |
 | SHA-256/HMAC próprios | ✅ vetores FIPS 180-4 (incl. 1 M de `a`) e RFC 4231 (casos 1, 2, 6) |
 | Desempenho (`--release`, modelo em memória) | ✅ transação de **500 ops em 10.000 clips ≈ 16 ms** (meta < 200 ms) · carregar + indexar + validar 10.000 clips ≈ **17 ms** (meta < 2 s) |
 | Paridade nativo × WASM (`pnpm check:parity`) | ✅ 150 sequências aleatórias: digests do documento **idênticos** entre nativo e `wasm32-wasip1` (WASI do Node) — cobre floats de Bézier e JSON |
