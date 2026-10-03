@@ -42,10 +42,12 @@ Spikes da Fase 1 (relatórios em `docs/spikes/`): S1 preview surface · S2 decod
 
 **Gate de entrada:** nenhum bloqueio por OD-1 — a Fase 2 **pode iniciar com OD-1 aberto** (ADR-037). **Fora do escopo da Fase 2:** preview embutido na janela e UI de editor (só o trait `PreviewPresenter` e um *frame sink* headless). O export H.264 da Fase 2 usa encoders atrás de abstração (ADR-032); a decisão final do caminho de produção é `OUTPUT-H264`.
 
+**Progresso da Fase 2 (M07):** `capia-media` (probe/ffprobe normalizado, processos limitados), `capia-assets` (identidade por conteúdo, import, verify, relink, cache) e o catálogo de mídia no `.capia` (schema 2) existem; `capia-cli` ganhou `asset …`/`media probe`; os cinco comandos de composição de nested (ADR-050) estão prontos. Falta: frame index/decode, jobs, render, preview headless, export.
+
 Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, `preview`/`apply_plan` com plan token, `operation_id`/idempotência, refs simbólicas, conflitos), `capia-store` (formato `.capia`, autosave, snapshots, backups, migrations, recovery), `capia-assets` (import, fingerprint, dedup, relink, offline, versões), `capia-media` (probe, frame index, decode, thumbnails, waveforms, proxies), `capia-jobs`, `capia-render` (render graph, compositor wgpu **próprio** — ADR-034, RGBA16F linear —, texto, transições básicas, mixer, export H.264 via encoders atrás de abstração — ADR-032), `capia-preview` (scheduler + presenter escolhido, demo mínima), `capia-engine`, `capia-cli`.
 
 **Critérios de conclusão:**
-- [ ] Script via `capia-cli` cria projeto com 3 sequences (2 hooks + `BODY_MASTER` nested), transações, undo/redo, e exporta MP4 corretos (duração/fps/sync verificados por probe). *(M06: criar/aplicar/undo/redo/dump via CLI ✅ e2e, incl. nested; falta o export MP4.)*
+- [ ] Script via `capia-cli` cria projeto com 3 sequences (2 hooks + `BODY_MASTER` nested), transações, undo/redo, e exporta MP4 corretos (duração/fps/sync verificados por probe). *(M06: criar/aplicar/undo/redo/dump via CLI ✅ e2e, incl. nested; M07: importar mídia real, `make_unique`/`duplicate`/`generate_variants` ✅; falta o export MP4.)*
 - [x] Testes de propriedade do Command Engine (≥ 10.000 sequências aleatórias) sem violação de invariantes; `apply∘undo = id` *(M05: `crates/capia-commands/tests/properties.rs`, 10.000 sequências × 8 comandos por execução)*.
 - [x] **Suíte de aceitação `tests/acceptance/timeline` (120 cenários: 108 + 12 da M05, ADR-036/039) 100% verde em `capia-commands`**, com exatidão em Ticks e atomicidade nos erros *(M05; mutação detecta regressões)*.
 - [x] **Idempotência e plan token (ADR-029/030):** testes de replay, de kill no meio do commit e de rejeição de token adulterado/expirado/consumido/de outro ator. *(M05: replay, conflitos de id, token adulterado/expirado/outro ator/consumido/drift ✅; **kill no meio do commit** ✅ M06: `capia-store/tests/crash.rs`, processo real morto em 5 estágios.)*
@@ -55,7 +57,7 @@ Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, 
 - [ ] Corpus VFR/29,97/23,976/59,94/44,1 kHz: drift A/V ≤ 1 frame em 10 min.
 - [ ] Kill -9 durante transações e jobs: projeto reabre íntegro em 100% dos testes de crash. *(M06: transações ✅ 10 combinações + 14 rodadas aleatórias; jobs pendentes.)*
 - [x] Benchmarks: transação de 500 ops < 200 ms em projeto de 10.000 clips; abrir projeto de 10.000 clips < 2 s. *(M05, release, só o modelo em memória: tx de 500 ops ≈ 16 ms; carregar+indexar+validar 10.000 clips ≈ 17 ms; M06, release, com SQLite e `synchronous=FULL`: abrir 10.000 clips ≈ 81 ms; commit comum ≈ 7 ms.)*
-- [x] Migration de fixture v1→v2 sintética testada. *(M06: `capia-store/tests/schema.rs`.)*
+- [x] Migration de fixture v1→v2 sintética testada. *(M06: `capia-store/tests/schema.rs`; M07: migration **real** v1→v2 (catálogo de mídia) sobre projeto schema 1 de verdade, com backup e cadeia v1→v2→v3 sintética.)*
 
 ---
 
