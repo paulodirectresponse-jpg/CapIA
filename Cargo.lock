@@ -286,6 +286,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-jobs"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "capia-media"
 version = "0.0.0"
 dependencies = [

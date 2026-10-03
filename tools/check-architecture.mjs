@@ -17,6 +17,13 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Executor de jobs genérico (ADR-052): threads e relógio, nada de projeto/mídia/SQLite. Fora do WASM.
+  "capia-jobs": {
+    workspace: [],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
+  },
   // Mídia externa como entrada hostil (ADR-047): probe/ffprobe atrás de um trait. IO de processos;
   // não compila para WASM. Só conhece o tempo (Ticks/Rational).
   "capia-media": {
