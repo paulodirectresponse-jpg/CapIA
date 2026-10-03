@@ -228,7 +228,7 @@ fn run_case(seed: u64, tc: &MediaToolchain) {
         let ctx = format!("seed {seed} step {step}");
         match rng.below(10) {
             // import assíncrono de um arquivo (novo ou cópia)
-            0 | 1 | 2 => {
+            0..=2 => {
                 let c = rng.below(4) as usize;
                 let path = env.new_file(c, "lib");
                 let t = env.p().import_asset_async(&path).unwrap();
@@ -239,7 +239,7 @@ fn run_case(seed: u64, tc: &MediaToolchain) {
                 }
             }
             // derivados de um asset existente (compatível com seus streams)
-            3 | 4 => {
+            3..=4 => {
                 env.settle();
                 if env.assets.is_empty() {
                     continue;
