@@ -10,6 +10,9 @@ pub enum AssetErrorCode {
     AssetPathInvalid,
     AssetIo,
     AssetChangedDuringImport,
+    /// O arquivo mudou enquanto um job (hash/índice/…) o processava: resultado descartado.
+    AssetChangedDuringProcessing,
+    AssetCancelled,
     AssetHashMismatch,
     AssetOffline,
     /// Falha do backend de mídia, com o código original (`MEDIA_*`).
@@ -25,6 +28,8 @@ impl AssetErrorCode {
             Self::AssetPathInvalid => "ASSET_PATH_INVALID",
             Self::AssetIo => "ASSET_IO_ERROR",
             Self::AssetChangedDuringImport => "ASSET_CHANGED_DURING_IMPORT",
+            Self::AssetChangedDuringProcessing => "ASSET_CHANGED_DURING_PROCESSING",
+            Self::AssetCancelled => "ASSET_CANCELLED",
             Self::AssetHashMismatch => "ASSET_HASH_MISMATCH",
             Self::AssetOffline => "ASSET_OFFLINE",
             Self::Media(m) => m.as_str(),
@@ -72,6 +77,9 @@ impl core::error::Error for AssetError {}
 
 impl From<MediaError> for AssetError {
     fn from(e: MediaError) -> Self {
+        if e.code == MediaErrorCode::MediaCancelled {
+            return Self::new(AssetErrorCode::AssetCancelled, e.message);
+        }
         Self::new(AssetErrorCode::Media(e.code), e.message)
     }
 }

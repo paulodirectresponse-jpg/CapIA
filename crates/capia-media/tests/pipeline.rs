@@ -463,7 +463,9 @@ fn proxy_keeps_every_frame_and_the_vfr_timestamps() {
     .unwrap();
     assert_eq!(rep.encoder.name, "mjpeg");
     let v = rep.info.video().unwrap();
-    assert!(v.width <= 32 && v.height <= 32 && v.width % 2 == 0 && v.height % 2 == 0);
+    assert!(
+        v.width <= 32 && v.height <= 32 && v.width.is_multiple_of(2) && v.height.is_multiple_of(2)
+    );
     // mesma contagem de quadros e mesmos *instantes* (em ticks) que o original
     let orig = load(&tc, "vfr.mp4");
     let pinfo = FfprobeBackend::new(tc.clone()).probe(&out).unwrap();

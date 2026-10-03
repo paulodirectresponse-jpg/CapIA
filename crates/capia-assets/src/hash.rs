@@ -95,15 +95,60 @@ fn open_nonblocking(path: &Path) -> std::io::Result<std::fs::File> {
     std::fs::File::open(path)
 }
 
-/// Hash de um arquivo regular. Falha se o arquivo mudar de tamanho **durante** a leitura.
-pub fn hash_file(path: &Path) -> Result<FileDigest, AssetError> {
+/// Carimbo barato do arquivo (tamanho + mtime em ns) para detectar mudança durante o processamento.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FileStamp {
+    pub size: u64,
+    pub modified_ns: Option<i128>,
+}
+
+impl FileStamp {
+    fn of(m: &std::fs::Metadata) -> Self {
+        let modified_ns =
+            m.modified()
+                .ok()
+                .map(|t| match t.duration_since(std::time::UNIX_EPOCH) {
+                    Ok(d) => d.as_nanos() as i128,
+                    Err(e) => -(e.duration().as_nanos() as i128),
+                });
+        Self {
+            size: m.len(),
+            modified_ns,
+        }
+    }
+}
+
+/// Carimbo do arquivo no caminho (segue symlinks).
+pub fn file_stamp(path: &Path) -> Result<FileStamp, AssetError> {
+    std::fs::metadata(path)
+        .map(|m| FileStamp::of(&m))
+        .map_err(|e| {
+            AssetError::new(
+                AssetErrorCode::AssetIo,
+                format!("cannot stat `{}`: {e}", path.display()),
+            )
+        })
+}
+
+fn hash_file_inner(
+    path: &Path,
+    change_code: AssetErrorCode,
+    cancel: &dyn Fn() -> bool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<FileDigest, AssetError> {
     let io = |e: std::io::Error| {
         AssetError::new(
             AssetErrorCode::AssetIo,
             format!("cannot read `{}`: {e}", path.display()),
         )
     };
-    let f = open_nonblocking(path).map_err(io)?;
+    let changed = || {
+        AssetError::new(
+            change_code,
+            format!("`{}` changed while it was being read", path.display()),
+        )
+    };
+    let mut f = open_nonblocking(path).map_err(io)?;
     let before = f.metadata().map_err(io)?;
     if !before.is_file() {
         return Err(AssetError::new(
@@ -111,14 +156,64 @@ pub fn hash_file(path: &Path) -> Result<FileDigest, AssetError> {
             format!("`{}` is not a regular file", path.display()),
         ));
     }
-    let digest = hash_reader(f).map_err(io)?;
-    if digest.size != before.len() {
-        return Err(AssetError::new(
-            AssetErrorCode::AssetChangedDuringImport,
-            format!("`{}` changed while it was being read", path.display()),
-        ));
+    let stamp = FileStamp::of(&before);
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; BLOCK];
+    let mut size: u64 = 0;
+    loop {
+        if cancel() {
+            return Err(AssetError::new(
+                AssetErrorCode::AssetCancelled,
+                "hashing was cancelled",
+            ));
+        }
+        let n = match f.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(io(e)),
+        };
+        h.update(&buf[..n]);
+        size = size.saturating_add(n as u64);
+        progress(size, stamp.size);
     }
-    Ok(digest)
+    // o arquivo (handle) e o caminho têm de continuar iguais ao início: nem crescimento, nem
+    // regravação in-place, nem troca atômica do arquivo por outro
+    let after_handle = f.metadata().map_err(io).map(|m| FileStamp::of(&m))?;
+    let after_path = file_stamp(path)?;
+    if size != stamp.size || after_handle != stamp || after_path != stamp {
+        return Err(changed());
+    }
+    Ok(FileDigest {
+        hash: ContentHash(format!("{}{}", ContentHash::PREFIX, hex(&h.finalize()))),
+        size,
+    })
+}
+
+/// Hash de um arquivo regular. Falha se o arquivo mudar **durante** a leitura (import síncrono).
+pub fn hash_file(path: &Path) -> Result<FileDigest, AssetError> {
+    hash_file_inner(
+        path,
+        AssetErrorCode::AssetChangedDuringImport,
+        &|| false,
+        &mut |_, _| {},
+    )
+}
+
+/// Hash para **jobs em background**: cancelável (checa a cada bloco de 1 MiB), reporta
+/// `progress(lidos, total)` e detecta mudança do arquivo durante o processamento
+/// (`ASSET_CHANGED_DURING_PROCESSING`). Nunca devolve hash de leitura parcial.
+pub fn hash_file_job(
+    path: &Path,
+    cancel: &dyn Fn() -> bool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<FileDigest, AssetError> {
+    hash_file_inner(
+        path,
+        AssetErrorCode::AssetChangedDuringProcessing,
+        cancel,
+        progress,
+    )
 }
 
 #[cfg(test)]

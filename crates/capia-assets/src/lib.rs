@@ -5,15 +5,21 @@
 
 mod cache;
 mod error;
+mod fingerprint;
 mod hash;
 mod import;
 mod location;
 mod record;
 mod verify;
 
-pub use cache::{CacheDir, CacheKey, ensure_thumbnail};
+pub use cache::{CacheDir, CacheKey, CacheUsage, GcReport, KeyLock, Produced, ensure_thumbnail};
 pub use error::{AssetError, AssetErrorCode};
-pub use hash::{ContentHash, FileDigest, hash_file, hash_reader};
+pub use fingerprint::{
+    FINGERPRINT_VERSION, Fingerprint, INNER_SAMPLES, SAMPLE_LEN, fingerprint_file, sample_offsets,
+};
+pub use hash::{
+    ContentHash, FileDigest, FileStamp, file_stamp, hash_file, hash_file_job, hash_reader,
+};
 pub use import::{PreparedAsset, asset_id_for, display_name_of, prepare_import};
 pub use location::{AssetLocation, relative_path, resolve_candidates};
 pub use record::{AssetKind, AssetRecord, Availability};
