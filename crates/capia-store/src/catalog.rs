@@ -271,6 +271,18 @@ impl Catalog {
         Ok(())
     }
 
+    /// Várias operações numa ÚNICA transação (volume): tudo ou nada.
+    pub fn apply_batch(&mut self, ops: &[CatalogOp]) -> StoreResult<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        for op in ops {
+            apply_op(&tx, op)?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Atualiza só a disponibilidade conhecida (sem evento: é cache de leitura, não fato).
     pub fn set_status(
         &mut self,
