@@ -1130,5 +1130,448 @@
     ]
    }
   }
+ },
+ {
+  "id": "RPL-021",
+  "area": "ripple",
+  "title": "Explicit scope shifts only the listed tracks",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-3"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 70,
+       "dur": 10
+      }
+     ]
+    },
+    {
+     "id": "O2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "y",
+       "start": 75,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": {
+     "tracks": [
+      "O1"
+     ]
+    }
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ],
+    "O1": [
+     [
+      "x",
+      40,
+      10
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-022",
+  "area": "ripple",
+  "title": "Sequence scope skips tracks with sync_lock off",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-3"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "sync_lock": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 70,
+       "dur": 10
+      }
+     ]
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "m",
+       "start": 65,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": "sequence"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ],
+    "A1": [
+     [
+      "m",
+      35,
+      20
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-023",
+  "area": "ripple",
+  "title": "Group scope shifts only tracks of the clip's group",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-3"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "group": "G",
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "group": "G",
+     "clips": [
+      {
+       "id": "x",
+       "start": 70,
+       "dur": 10
+      }
+     ]
+    },
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "group": "H",
+     "clips": [
+      {
+       "id": "m",
+       "start": 65,
+       "dur": 20
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": "group"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ],
+    "O1": [
+     [
+      "x",
+      40,
+      10
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-024",
+  "area": "ripple",
+  "title": "A clip on a track outside the scope never blocks the ripple",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-3"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "sync_lock": false,
+     "clips": [
+      {
+       "id": "y",
+       "start": 20,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": "sequence"
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "id": "RPL-025",
+  "area": "ripple",
+  "title": "A locked track named in the scope is left untouched (no error)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-3"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 30
+      },
+      {
+       "id": "b",
+       "start": 30,
+       "dur": 30
+      },
+      {
+       "id": "c",
+       "start": 60,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": true,
+     "clips": [
+      {
+       "id": "x",
+       "start": 70,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "delete_clip",
+   "args": {
+    "clip": "b",
+    "ripple": true,
+    "scope": {
+     "tracks": [
+      "O1"
+     ]
+    }
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      30
+     ],
+     [
+      "c",
+      30,
+      30
+     ]
+    ]
+   }
+  }
  }
 ]

@@ -1,23 +1,42 @@
-//! Command Engine do CapIA (docs/COMMAND_SYSTEM.md). **Scaffold:** nenhum comando ainda.
+//! Command Engine do CapIA (docs/COMMAND_SYSTEM.md).
 //!
-//! Comandos, transações, `operation_id` (ADR-029), `preview`/`apply_plan` (ADR-030), undo/redo e
-//! histórico chegam na Fase 2, validados pela suíte `tests/acceptance` (ADR-036). Este crate
-//! depende de `capia-model`, não faz IO e compila para WASM (ADR-016).
+//! **Única porta de escrita** do documento. Comandos estruturados e versionados ([`Command`]) são
+//! expandidos em ops primitivas invertíveis, validados (invariantes de `capia-model`) e commitados
+//! em transações atômicas por [`Engine`], com:
+//!
+//! * `operation_id` idempotente (ADR-029) — replays nunca duplicam edições;
+//! * `preview → apply_plan` com token HMAC (ADR-030) — `Agent`/`Api` só escrevem por aí;
+//! * undo/redo por `inverse_ops` gravadas, histórico e auditoria;
+//! * erros estruturados e acionáveis ([`CommandError`]).
+//!
+//! Funções puras de UX/engine: [`resolve_placement`], [`resolve_snap`], [`threshold_ticks`],
+//! [`resolve_group_move`], [`eval_property`]. Puro: sem IO, relógio ou aleatoriedade; compila para
+//! WASM (ADR-016).
 
-/// Versão do contrato de comandos (upcasters de comandos antigos, COMMAND_SYSTEM.md §10).
-pub const COMMAND_SCHEMA_VERSION: u32 = 1;
+mod command;
+mod ctx;
+mod engine;
+mod error;
+mod exec;
+pub mod group_move;
+pub mod hash;
+pub mod placement;
+mod query;
+pub mod snap;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn command_schema_starts_at_one() {
-        assert_eq!(COMMAND_SCHEMA_VERSION, 1);
-    }
-
-    #[test]
-    fn commands_build_on_the_document_schema() {
-        assert_eq!(capia_model::DOCUMENT_SCHEMA_VERSION, 1);
-    }
-}
+pub use command::{
+    COMMAND_SCHEMA_VERSION, ClipMove, Command, CommandEnvelope, Edge, NewClip, RippleScope,
+    Transaction,
+};
+pub use ctx::CommandOutput;
+pub use engine::{
+    Actor, ActorKind, AppliedOperation, AuditEvent, AuditKind, CommandSummary, CommitResult,
+    Engine, EngineConfig, HistoryEntry, PreviewResult,
+};
+pub use error::{CommandError, Result};
+pub use group_move::{GroupMove, GroupMoveRequest, GroupSnap, resolve_group_move};
+pub use placement::{InsertSide, Placement, PlacementStrategy, resolve_placement};
+pub use query::eval_property;
+pub use snap::{
+    SnapRequest, SnapResult, SnapTarget, SnapTargetKind, resolve_snap, threshold_ticks,
+};

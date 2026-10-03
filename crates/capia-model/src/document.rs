@@ -105,6 +105,16 @@ impl Document {
             .find_map(|(sid, s)| s.clip(id).map(|c| (sid, s.as_ref(), c)))
     }
 
+    /// Localiza uma track em qualquer sequence (ids são únicos no projeto).
+    pub fn find_track(
+        &self,
+        id: &crate::ids::TrackId,
+    ) -> Option<(&SequenceId, &Sequence, &crate::sequence::Track)> {
+        self.sequences
+            .iter()
+            .find_map(|(sid, s)| s.track(id).map(|t| (sid, s.as_ref(), t)))
+    }
+
     pub(crate) fn sequence_mut(&mut self, id: &SequenceId) -> Option<&mut Sequence> {
         self.sequences.get_mut(id).map(Arc::make_mut)
     }

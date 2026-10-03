@@ -1416,5 +1416,186 @@
   "then": {
    "error": "KEYFRAME_TIME_CONFLICT"
   }
+ },
+ {
+  "id": "KF-022",
+  "area": "keyframes",
+  "title": "Splitting inside a Bezier segment preserves the animation exactly",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "opacity": [
+         [
+          0,
+          0.0,
+          {
+           "bezier": [
+            0,
+            0,
+            1,
+            1
+           ]
+          }
+         ],
+         [
+          60,
+          1.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": [
+   {
+    "cmd": "split_clip",
+    "args": {
+     "clip": "a",
+     "at": 20,
+     "new_id": "a2"
+    }
+   },
+   {
+    "cmd": "eval_keyframes",
+    "args": {
+     "clip": "a2",
+     "prop": "opacity",
+     "at": [
+      20,
+      30,
+      59
+     ]
+    }
+   }
+  ],
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      20
+     ],
+     [
+      "a2",
+      20,
+      40
+     ]
+    ]
+   },
+   "values": [
+    0.3333333333333333,
+    0.5,
+    0.9833333333333333
+   ]
+  }
+ },
+ {
+  "id": "KF-023",
+  "area": "keyframes",
+  "title": "Trim in then extend back restores the original animation",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-6"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "O1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 60,
+       "src_in": 0,
+       "src_dur": 200,
+       "kf": {
+        "scale": [
+         [
+          0,
+          0.0
+         ],
+         [
+          60,
+          6.0
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "when": [
+   {
+    "cmd": "trim_clip",
+    "args": {
+     "clip": "a",
+     "edge": "in",
+     "to": 20
+    }
+   },
+   {
+    "cmd": "trim_clip",
+    "args": {
+     "clip": "a",
+     "edge": "in",
+     "to": 0
+    }
+   },
+   {
+    "cmd": "eval_keyframes",
+    "args": {
+     "clip": "a",
+     "prop": "scale",
+     "at": [
+      50
+     ]
+    }
+   }
+  ],
+  "then": {
+   "tracks": {
+    "O1": [
+     [
+      "a",
+      0,
+      60
+     ]
+    ]
+   },
+   "values": [
+    5.0
+   ],
+   "clips": {
+    "a": {
+     "kf_count": 2,
+     "src_in": 0
+    }
+   }
+  }
  }
 ]

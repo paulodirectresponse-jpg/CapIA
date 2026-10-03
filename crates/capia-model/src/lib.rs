@@ -28,5 +28,5 @@ pub use property::{
 pub use sequence::{Marker, Sequence, SequenceHeader, Track, TrackKind, TrackRole};
 pub use validate::{
     MAX_CLIPS_PER_SEQUENCE, MAX_NESTING_DEPTH, MAX_TRACKS_PER_SEQUENCE, Violation,
-    content_fits_track, validate_document, validate_nested_graph, validate_sequence,
+    content_fits_track, validate_clip, validate_document, validate_nested_graph, validate_sequence,
 };

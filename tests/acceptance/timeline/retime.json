@@ -291,7 +291,7 @@
  {
   "id": "RTM-006",
   "area": "retime",
-  "title": "Speed above the maximum is rejected",
+  "title": "Speed above the maximum (100x) is rejected",
   "fps": "30",
   "provenance": {
    "basis": "opencut-behavior+capia-spec",
@@ -305,7 +305,8 @@
     ],
     "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
    },
-   "diverges_from_opencut": "OpenCut: rate range [0.01,5], durations rounded to integer ticks; CapIA: frame-aligned durations (round half up), min 1 frame"
+   "diverges_from_opencut": "faixa ampliada de [1/100, 5] para [1/100, 100]",
+   "decision": "D-S7-1 (PO, M05): faixa 0,01x a 100x"
   },
   "given": {
    "tracks": [
@@ -328,7 +329,7 @@
    "cmd": "set_clip_speed",
    "args": {
     "clip": "a",
-    "speed": 6
+    "speed": 101
    }
   },
   "then": {
@@ -385,7 +386,7 @@
  {
   "id": "RTM-008",
   "area": "retime",
-  "title": "Maximum speed (5x) is accepted",
+  "title": "Speed 5x (former OpenCut maximum) is accepted",
   "fps": "30",
   "provenance": {
    "basis": "opencut-behavior+capia-spec",
@@ -975,6 +976,107 @@
      "src_in": 0,
      "reversed": true
     }
+   }
+  }
+ },
+ {
+  "id": "RTM-018",
+  "area": "retime",
+  "title": "Maximum speed (100x) is accepted",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-1"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "V1",
+     "kind": "visual",
+     "magnetic": true,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 100
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 100
+   }
+  },
+  "then": {
+   "tracks": {
+    "V1": [
+     [
+      "a",
+      0,
+      1
+     ]
+    ]
+   },
+   "clips": {
+    "a": {
+     "speed": 100
+    }
+   }
+  }
+ },
+ {
+  "id": "RTM-019",
+  "area": "retime",
+  "title": "Audio durations are not rounded to frames after a speed change (D-S7-8)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-8"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "A1",
+     "kind": "audio",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "a",
+       "start": 0,
+       "dur": 10
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "set_clip_speed",
+   "args": {
+    "clip": "a",
+    "speed": 4
+   }
+  },
+  "then": {
+   "tracks": {
+    "A1": [
+     [
+      "a",
+      0,
+      "5/2"
+     ]
+    ]
+   },
+   "ticks": {
+    "a": [
+     0,
+     58800000
+    ]
    }
   }
  }

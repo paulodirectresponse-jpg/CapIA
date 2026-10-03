@@ -102,6 +102,24 @@ impl FrameRate {
         Ticks(t.0.div_euclid(self.frame_ticks.0) * self.frame_ticks.0)
     }
 
+    /// `d × num / den` em ticks, alinhado a frame com **half-up** e mínimo de **1 frame** (D-S7-8),
+    /// sem arredondamento intermediário (aritmética exata em `i128`).
+    pub fn scale_duration_half_up(&self, d: Ticks, num: i64, den: i64) -> Result<Ticks, TimeError> {
+        if den == 0 {
+            return Err(TimeError::DivideByZero);
+        }
+        let (mut n, mut m) = (i128::from(d.0) * i128::from(num), i128::from(den));
+        if m < 0 {
+            n = -n;
+            m = -m;
+        }
+        let f = i128::from(self.frame_ticks.0);
+        let frames = (2 * n + m * f).div_euclid(2 * m * f).max(1);
+        i64::try_from(frames * f)
+            .map(Ticks)
+            .map_err(|_| TimeError::Overflow)
+    }
+
     /// Duração de vídeo alinhada com **half-up** e mínimo de **1 frame** (D-S7-8).
     pub fn align_duration_half_up(&self, d: Ticks) -> Result<Ticks, TimeError> {
         Ok(self.align_half_up(d)?.max(self.frame_ticks))
@@ -185,6 +203,34 @@ mod tests {
         assert_eq!(fr.ticks_to_frames_floor(Ticks(5 * f + 7)), 5);
         assert_eq!(fr.ticks_to_frames_floor(Ticks(-1)), -1);
         assert_eq!(fr.align_floor(Ticks(5 * f + 7)), Ticks(5 * f));
+    }
+
+    #[test]
+    fn scaled_durations_round_half_up_in_frames() {
+        let fr = FrameRate::FPS_30;
+        let f = fr.frame_duration();
+        let frames = |n: i64| Ticks(n * f.0);
+        // 100 frames x 1/3 = 33.33 -> 33 ; 10 x 1/4 = 2.5 -> 3 ; 1 x 1/5 -> min 1
+        assert_eq!(
+            fr.scale_duration_half_up(frames(100), 1, 3).unwrap(),
+            frames(33)
+        );
+        assert_eq!(
+            fr.scale_duration_half_up(frames(10), 1, 4).unwrap(),
+            frames(3)
+        );
+        assert_eq!(
+            fr.scale_duration_half_up(frames(1), 1, 5).unwrap(),
+            frames(1)
+        );
+        assert_eq!(
+            fr.scale_duration_half_up(frames(10), 100, 1).unwrap(),
+            frames(1000)
+        );
+        assert_eq!(
+            fr.scale_duration_half_up(frames(10), 1, 0),
+            Err(TimeError::DivideByZero)
+        );
     }
 
     #[test]

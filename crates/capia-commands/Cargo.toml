@@ -11,3 +11,5 @@ workspace = true
 [dependencies]
 capia-time.workspace = true
 capia-model.workspace = true
+serde.workspace = true
+serde_json.workspace = true

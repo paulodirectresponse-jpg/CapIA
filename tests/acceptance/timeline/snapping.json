@@ -774,7 +774,7 @@
  {
   "id": "SNP-014",
   "area": "snapping",
-  "title": "Pixel threshold converts to whole frames (floor): 10px @ 50px/s, 30fps = 6",
+  "title": "Pixel threshold converts to ticks without frame rounding: 10px @ 50px/s = 0.2 s",
   "fps": "30",
   "provenance": {
    "basis": "opencut-behavior+capia-spec",
@@ -786,74 +786,234 @@
     ],
     "use": "behavior observed, reimplemented from scratch; no code or test literals copied"
    },
-   "diverges_from_opencut": "OpenCut returns fractional ticks; CapIA floors to whole frames so a threshold never exceeds the pixel budget"
+   "diverges_from_opencut": "threshold não é arredondado para frames inteiros",
+   "decision": "D-S7-4 (PO, M05): threshold em ticks conforme o zoom; sem floor para frames inteiros"
   },
   "given": {
    "tracks": []
   },
   "when": {
-   "cmd": "threshold_frames",
+   "cmd": "threshold_ticks",
    "args": {
     "px": 10,
-    "pps": 50,
-    "fps": 30
+    "pps": 50
    }
   },
   "then": {
    "result": {
-    "frames": 6
+    "ticks": 141120000
    }
   }
  },
  {
   "id": "SNP-015",
   "area": "snapping",
-  "title": "Pixel threshold floors fractional frames: 10px @ 40px/s = 7.5 -> 7",
+  "title": "Pixel threshold keeps the half frame: 10px @ 40px/s = 0.25 s = 7.5 frames (no floor)",
   "fps": "30",
   "provenance": {
    "basis": "capia-spec",
-   "capia_ref": "TIMELINE_UX.md §5"
+   "capia_ref": "TIMELINE_UX.md §5",
+   "decision": "D-S7-4 (PO, M05): threshold em ticks conforme o zoom; sem floor para frames inteiros",
+   "diverges_from_opencut": "threshold não é arredondado para frames inteiros"
   },
   "given": {
    "tracks": []
   },
   "when": {
-   "cmd": "threshold_frames",
+   "cmd": "threshold_ticks",
    "args": {
     "px": 10,
-    "pps": 40,
-    "fps": 30
+    "pps": 40
    }
   },
   "then": {
    "result": {
-    "frames": 7
+    "ticks": 176400000
    }
   }
  },
  {
   "id": "SNP-016",
   "area": "snapping",
-  "title": "Zoomed out the threshold grows: 10px @ 20px/s = 15",
+  "title": "Zoomed out the threshold grows: 10px @ 20px/s = 0.5 s",
   "fps": "30",
   "provenance": {
    "basis": "capia-spec",
-   "capia_ref": "TIMELINE_UX.md §5"
+   "capia_ref": "TIMELINE_UX.md §5",
+   "decision": "D-S7-4 (PO, M05): threshold em ticks conforme o zoom; sem floor para frames inteiros",
+   "diverges_from_opencut": "threshold não é arredondado para frames inteiros"
   },
   "given": {
    "tracks": []
   },
   "when": {
-   "cmd": "threshold_frames",
+   "cmd": "threshold_ticks",
    "args": {
     "px": 10,
-    "pps": 20,
-    "fps": 30
+    "pps": 20
    }
   },
   "then": {
    "result": {
-    "frames": 15
+    "ticks": 352800000
+   }
+  }
+ },
+ {
+  "id": "SNP-017",
+  "area": "snapping",
+  "title": "Fractional threshold (7.5 frames) is inclusive at 7 frames",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-4"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "T1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "c",
+       "start": 300,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "T2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 70,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_snap",
+   "args": {
+    "clip": "c",
+    "proposed_start": 107,
+    "threshold_frames": "15/2"
+   }
+  },
+  "then": {
+   "result": {
+    "start": 100,
+    "snapped_to": {
+     "type": "clip_end",
+     "t": 100
+    }
+   }
+  }
+ },
+ {
+  "id": "SNP-018",
+  "area": "snapping",
+  "title": "Fractional threshold (7.5 frames) excludes 8 frames",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-4"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "T1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "c",
+       "start": 300,
+       "dur": 30
+      }
+     ]
+    },
+    {
+     "id": "T2",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "x",
+       "start": 70,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_snap",
+   "args": {
+    "clip": "c",
+    "proposed_start": 108,
+    "threshold_frames": "15/2"
+   }
+  },
+  "then": {
+   "result": {
+    "start": 108,
+    "snapped_to": null
+   }
+  }
+ },
+ {
+  "id": "SNP-019",
+  "area": "snapping",
+  "title": "A sub-frame snap target lands on the frame grid (half-up)",
+  "fps": "30",
+  "provenance": {
+   "basis": "capia-spec",
+   "capia_ref": "S7 D-S7-4 + D-S7-8"
+  },
+  "given": {
+   "tracks": [
+    {
+     "id": "T1",
+     "kind": "visual",
+     "magnetic": false,
+     "locked": false,
+     "clips": [
+      {
+       "id": "c",
+       "start": 300,
+       "dur": 30
+      }
+     ]
+    }
+   ]
+  },
+  "when": {
+   "cmd": "resolve_snap",
+   "args": {
+    "clip": "c",
+    "proposed_start": 99,
+    "threshold_frames": 5,
+    "markers": [
+     "201/2"
+    ]
+   }
+  },
+  "then": {
+   "result": {
+    "start": 101,
+    "snapped_to": {
+     "type": "marker",
+     "t": "201/2"
+    }
    }
   }
  }

@@ -81,7 +81,6 @@ pub fn validate_sequence(doc: &Document, seq_id: &SequenceId, seq: &Sequence) ->
             vec![seq_ref],
         ));
     }
-    let fr = seq.frame_rate();
 
     for m in seq.markers() {
         if !m.time.within_timeline() {
@@ -125,137 +124,146 @@ pub fn validate_sequence(doc: &Document, seq_id: &SequenceId, seq: &Sequence) ->
     }
 
     for clip in seq.clips() {
-        let me = vec![clip_ref(clip)];
-        let Some(track) = seq.track(&clip.track) else {
-            out.push(Violation::new(
+        out.extend(validate_clip(doc, seq, clip));
+    }
+    out
+}
+
+/// Invariantes de **um** clip (3, 4, 5, 8 e 10): duração, limites, alinhamento (visual), família da
+/// track, velocidade, fonte, referências e propriedades. Usada pelos comandos para validar o clip
+/// resultante antes de commitar e por [`validate_sequence`].
+pub fn validate_clip(doc: &Document, seq: &Sequence, clip: &Clip) -> Vec<Violation> {
+    let mut out = Vec::new();
+    let fr = seq.frame_rate();
+    let me = vec![clip_ref(clip)];
+    let Some(track) = seq.track(&clip.track) else {
+        out.push(Violation::new(
+            ErrorCode::DanglingReference,
+            format!("clip {} references missing track {}", clip.id, clip.track),
+            me,
+        ));
+        return out;
+    };
+    if clip.duration <= Ticks::ZERO {
+        out.push(Violation::new(
+            ErrorCode::OutOfRange,
+            format!("clip {} has non-positive duration", clip.id),
+            me.clone(),
+        ));
+    }
+    if clip.start < Ticks::ZERO || clip.start.0.saturating_add(clip.duration.0) > MAX_TIMELINE_TICKS
+    {
+        out.push(Violation::new(
+            ErrorCode::OutOfRange,
+            format!("clip {} is outside [0, 24h]", clip.id),
+            me.clone(),
+        ));
+    }
+    if track.kind == TrackKind::Visual
+        && !(fr.is_aligned(clip.start) && fr.is_aligned(clip.duration))
+    {
+        out.push(Violation::new(
+            ErrorCode::NotFrameAligned,
+            format!(
+                "clip {} on visual track {} is not frame-aligned",
+                clip.id, track.id
+            ),
+            me.clone(),
+        ));
+    }
+    if !content_fits_track(&clip.content, track.kind) {
+        out.push(Violation::new(
+            ErrorCode::WrongTrackKind,
+            format!(
+                "clip {} content does not fit {:?} track {}",
+                clip.id, track.kind, track.id
+            ),
+            me.clone(),
+        ));
+    }
+    if !clip.speed.is_positive() || !speed_in_range(clip.speed) {
+        out.push(Violation::new(
+            ErrorCode::OutOfRange,
+            format!("clip {} speed {} outside [1/100, 100]", clip.id, clip.speed),
+            me.clone(),
+        ));
+    }
+    if (clip.speed != Rational::ONE || clip.reversed) && !clip.content.supports_retime() {
+        out.push(Violation::new(
+            ErrorCode::InvalidArgument,
+            format!("clip {} content does not support speed/reverse", clip.id),
+            me.clone(),
+        ));
+    }
+    if clip.source_in < Ticks::ZERO {
+        out.push(Violation::new(
+            ErrorCode::InsufficientHandles,
+            format!("clip {} source_in is negative", clip.id),
+            me.clone(),
+        ));
+    }
+    if let Some(asset_id) = clip.content.asset() {
+        match doc.asset(asset_id) {
+            None => out.push(Violation::new(
                 ErrorCode::DanglingReference,
-                format!("clip {} references missing track {}", clip.id, clip.track),
-                me,
-            ));
-            continue;
-        };
-        if clip.duration <= Ticks::ZERO {
-            out.push(Violation::new(
-                ErrorCode::OutOfRange,
-                format!("clip {} has non-positive duration", clip.id),
+                format!("clip {} references missing asset {}", clip.id, asset_id),
                 me.clone(),
-            ));
-        }
-        if clip.start < Ticks::ZERO
-            || clip.start.0.saturating_add(clip.duration.0) > MAX_TIMELINE_TICKS
-        {
-            out.push(Violation::new(
-                ErrorCode::OutOfRange,
-                format!("clip {} is outside [0, 24h]", clip.id),
-                me.clone(),
-            ));
-        }
-        if track.kind == TrackKind::Visual
-            && !(fr.is_aligned(clip.start) && fr.is_aligned(clip.duration))
-        {
-            out.push(Violation::new(
-                ErrorCode::NotFrameAligned,
-                format!(
-                    "clip {} on visual track {} is not frame-aligned",
-                    clip.id, track.id
-                ),
-                me.clone(),
-            ));
-        }
-        if !content_fits_track(&clip.content, track.kind) {
-            out.push(Violation::new(
-                ErrorCode::WrongTrackKind,
-                format!(
-                    "clip {} content does not fit {:?} track {}",
-                    clip.id, track.kind, track.id
-                ),
-                me.clone(),
-            ));
-        }
-        if !clip.speed.is_positive() || !speed_in_range(clip.speed) {
-            out.push(Violation::new(
-                ErrorCode::OutOfRange,
-                format!("clip {} speed {} outside [1/100, 100]", clip.id, clip.speed),
-                me.clone(),
-            ));
-        }
-        if (clip.speed != Rational::ONE || clip.reversed) && !clip.content.supports_retime() {
-            out.push(Violation::new(
-                ErrorCode::InvalidArgument,
-                format!("clip {} content does not support speed/reverse", clip.id),
-                me.clone(),
-            ));
-        }
-        if clip.source_in < Ticks::ZERO {
-            out.push(Violation::new(
-                ErrorCode::InsufficientHandles,
-                format!("clip {} source_in is negative", clip.id),
-                me.clone(),
-            ));
-        }
-        if let Some(asset_id) = clip.content.asset() {
-            match doc.asset(asset_id) {
-                None => out.push(Violation::new(
-                    ErrorCode::DanglingReference,
-                    format!("clip {} references missing asset {}", clip.id, asset_id),
-                    me.clone(),
-                )),
-                Some(asset) => {
-                    if let (Some(len), ClipContent::Media { .. }) = (asset.duration, &clip.content)
-                        && !clip.fits_source(len)
-                    {
-                        out.push(Violation::new(
-                            ErrorCode::InsufficientHandles,
-                            format!(
-                                "clip {} consumes more source than asset {} has",
-                                clip.id, asset_id
-                            ),
-                            me.clone(),
-                        ));
-                    }
+            )),
+            Some(asset) => {
+                if let (Some(len), ClipContent::Media { .. }) = (asset.duration, &clip.content)
+                    && !clip.fits_source(len)
+                {
+                    out.push(Violation::new(
+                        ErrorCode::InsufficientHandles,
+                        format!(
+                            "clip {} consumes more source than asset {} has",
+                            clip.id, asset_id
+                        ),
+                        me.clone(),
+                    ));
                 }
             }
         }
-        if let ClipContent::Nested { sequence } = &clip.content
-            && doc.sequence(sequence).is_none()
-        {
+    }
+    if let ClipContent::Nested { sequence } = &clip.content
+        && doc.sequence(sequence).is_none()
+    {
+        out.push(Violation::new(
+            ErrorCode::DanglingReference,
+            format!("clip {} references missing sequence {}", clip.id, sequence),
+            me.clone(),
+        ));
+    }
+    for (name, value) in &clip.properties {
+        let Some(spec) = property_spec(name) else {
             out.push(Violation::new(
-                ErrorCode::DanglingReference,
-                format!("clip {} references missing sequence {}", clip.id, sequence),
+                ErrorCode::InvalidArgument,
+                format!("clip {} has unknown property {name}", clip.id),
                 me.clone(),
             ));
+            return out;
+        };
+        if let Err(why) = value.check_structure() {
+            out.push(Violation::new(
+                ErrorCode::InvalidArgument,
+                format!("clip {} property {name}: {why}", clip.id),
+                me.clone(),
+            ));
+            return out;
         }
-        for (name, value) in &clip.properties {
-            let Some(spec) = property_spec(name) else {
-                out.push(Violation::new(
-                    ErrorCode::InvalidArgument,
-                    format!("clip {} has unknown property {name}", clip.id),
-                    me.clone(),
-                ));
-                continue;
-            };
-            if let Err(why) = value.check_structure() {
-                out.push(Violation::new(
-                    ErrorCode::InvalidArgument,
-                    format!("clip {} property {name}: {why}", clip.id),
-                    me.clone(),
-                ));
-                continue;
-            }
-            let values: Vec<f64> = match value {
-                crate::property::Animatable::Static(v) => vec![*v],
-                crate::property::Animatable::Animated(k) => k.iter().map(|k| k.value).collect(),
-            };
-            if values.iter().any(|v| !spec.contains(*v)) {
-                out.push(Violation::new(
-                    ErrorCode::OutOfRange,
-                    format!(
-                        "clip {} property {name} outside [{}, {}]",
-                        clip.id, spec.min, spec.max
-                    ),
-                    me.clone(),
-                ));
-            }
+        let values: Vec<f64> = match value {
+            crate::property::Animatable::Static(v) => vec![*v],
+            crate::property::Animatable::Animated(k) => k.iter().map(|k| k.value).collect(),
+        };
+        if values.iter().any(|v| !spec.contains(*v)) {
+            out.push(Violation::new(
+                ErrorCode::OutOfRange,
+                format!(
+                    "clip {} property {name} outside [{}, {}]",
+                    clip.id, spec.min, spec.max
+                ),
+                me.clone(),
+            ));
         }
     }
     out
