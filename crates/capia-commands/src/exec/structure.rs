@@ -33,11 +33,10 @@ pub(crate) fn register_asset(ctx: &mut Ctx, asset: &Asset) -> Result<CommandOutp
 
 pub(crate) fn delete_asset(ctx: &mut Ctx, id: &capia_model::AssetId) -> Result<CommandOutput> {
     let Some(old) = ctx.doc.asset(id).cloned() else {
-        return Err(CommandError::new(
-            ErrorCode::NotFound,
-            format!("asset {id} does not exist"),
-        )
-        .with_entities([EntityRef::new(EntityKind::Asset, id.as_str())]));
+        return Err(
+            CommandError::new(ErrorCode::NotFound, format!("asset {id} does not exist"))
+                .with_entities([EntityRef::new(EntityKind::Asset, id.as_str())]),
+        );
     };
     let users: Vec<(SequenceId, capia_model::ClipId)> = ctx
         .doc

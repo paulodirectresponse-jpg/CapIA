@@ -2,6 +2,7 @@
 
 mod check;
 mod clips;
+mod compose;
 mod keyframes;
 mod nested;
 mod ripple;
@@ -17,6 +18,42 @@ pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<Comman
     match command {
         Command::RegisterAsset { asset } => structure::register_asset(ctx, asset),
         Command::DeleteAsset { asset } => structure::delete_asset(ctx, asset),
+        Command::DuplicateSequence {
+            source,
+            new_sequence,
+            name,
+            deep,
+        } => {
+            compose::duplicate_sequence(ctx, source, new_sequence.as_ref(), name.as_deref(), *deep)
+        }
+        Command::MakeUnique {
+            clip,
+            new_sequence,
+            name,
+            deep,
+        } => compose::make_unique(ctx, clip, new_sequence.as_ref(), name.as_deref(), *deep),
+        Command::FlattenNested { clip, prefix } => {
+            compose::flatten_nested(ctx, clip, prefix.as_deref())
+        }
+        Command::CreateNestedFromSelection {
+            clips,
+            new_sequence,
+            name,
+            clip_id,
+            track,
+            follow_length,
+        } => compose::create_nested_from_selection(
+            ctx,
+            clips,
+            new_sequence.as_ref(),
+            name.as_deref(),
+            clip_id.as_ref(),
+            track.as_ref(),
+            *follow_length,
+        ),
+        Command::GenerateVariants { template, variants } => {
+            compose::generate_variants(ctx, template, variants)
+        }
         Command::CreateSequence {
             id,
             name,

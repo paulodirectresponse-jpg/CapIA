@@ -82,7 +82,10 @@ pub(crate) fn insert_nested(
     clips::insert_clip(ctx, track_id, start, &nc, split_at_insert, split_new_id)
 }
 
-fn nested_clip(ctx: &Ctx, clip_id: &ClipId) -> Result<(SequenceId, Clip, Track, SequenceId, bool)> {
+pub(crate) fn nested_clip(
+    ctx: &Ctx,
+    clip_id: &ClipId,
+) -> Result<(SequenceId, Clip, Track, SequenceId, bool)> {
     let (seq, clip, track) = ctx.locate_clip(clip_id)?;
     track_locked(&track)?;
     match &clip.content {

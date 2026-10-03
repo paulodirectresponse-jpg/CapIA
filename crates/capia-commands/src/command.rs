@@ -2,8 +2,8 @@
 //! UI, IA (tools), CLI e API usam exatamente estes tipos.
 
 use capia_model::{
-    Asset, AssetId, ClipContent, ClipId, Interp, MarkerId, PropertySet, SequenceId, TrackId, TrackKind,
-    TrackRole,
+    Asset, AssetId, ClipContent, ClipId, Interp, MarkerId, PropertySet, SequenceId, TrackId,
+    TrackKind, TrackRole,
 };
 use capia_time::{FrameRate, Rational, Ticks};
 use serde::{Deserialize, Serialize};
@@ -58,6 +58,27 @@ pub struct NewClip {
     pub reversed: bool,
     #[serde(default)]
     pub properties: PropertySet,
+}
+
+/// Uma variante de `generate_variants`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VariantSpec {
+    #[serde(default)]
+    pub sequence: Option<SequenceId>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub deep: bool,
+    /// Os `clip` das trocas são ids do **template**.
+    #[serde(default)]
+    pub swaps: Vec<VariantSwap>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum VariantSwap {
+    SetNested { clip: ClipId, sequence: SequenceId },
+    ReplaceMedia { clip: ClipId, asset: AssetId },
 }
 
 /// Um movimento de clip (estrito: sem clamp; ver `resolve_group_move` para o cálculo de UX).
@@ -199,6 +220,59 @@ pub enum Command {
         clip: ClipId,
         follow_length: bool,
     },
+    /// Copia uma sequence (tracks, clips, marcadores) com ids **determinísticos** (`<nova>.<id>`).
+    /// Os nested internos continuam compartilhando as filhas, salvo `deep` (copia a subárvore).
+    DuplicateSequence {
+        source: SequenceId,
+        #[serde(default)]
+        new_sequence: Option<SequenceId>,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        deep: bool,
+    },
+    /// Dá ao clip nested uma cópia **independente** da sequence filha (e, com `deep`, de toda a
+    /// subárvore) e o aponta para ela. Nenhum id é reaproveitado.
+    MakeUnique {
+        clip: ClipId,
+        #[serde(default)]
+        new_sequence: Option<SequenceId>,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        deep: bool,
+    },
+    /// Substitui o clip nested pelos clips da filha (recortados à janela visível), em novas tracks
+    /// livres. Falha em vez de perder informação (retime, propriedades próprias, track magnética).
+    FlattenNested {
+        clip: ClipId,
+        /// Prefixo dos ids criados (padrão: o id do clip).
+        #[serde(default)]
+        prefix: Option<String>,
+    },
+    /// Move os clips selecionados (mesmos `ClipId`) para uma nova sequence e os substitui por um
+    /// clip nested que ocupa o mesmo trecho, preservando o tempo relativo.
+    CreateNestedFromSelection {
+        clips: Vec<ClipId>,
+        #[serde(default)]
+        new_sequence: Option<SequenceId>,
+        #[serde(default)]
+        name: Option<String>,
+        /// Id do clip nested criado.
+        #[serde(default)]
+        clip_id: Option<ClipId>,
+        /// Track que recebe o nested (padrão: a de cima entre as dos clips selecionados).
+        #[serde(default)]
+        track: Option<TrackId>,
+        #[serde(default)]
+        follow_length: bool,
+    },
+    /// Variantes de um template: cada variante é uma cópia do template com trocas estruturais de
+    /// nested alvo ou de mídia. **Não** usa IA.
+    GenerateVariants {
+        template: SequenceId,
+        variants: Vec<VariantSpec>,
+    },
     MoveClips {
         moves: Vec<ClipMove>,
     },
@@ -275,6 +349,11 @@ impl Command {
         match self {
             Self::RegisterAsset { .. } => "register_asset",
             Self::DeleteAsset { .. } => "delete_asset",
+            Self::DuplicateSequence { .. } => "duplicate_sequence",
+            Self::MakeUnique { .. } => "make_unique",
+            Self::FlattenNested { .. } => "flatten_nested",
+            Self::CreateNestedFromSelection { .. } => "create_nested_from_selection",
+            Self::GenerateVariants { .. } => "generate_variants",
             Self::CreateSequence { .. } => "create_sequence",
             Self::AddTrack { .. } => "add_track",
             Self::SetTrackFlags { .. } => "set_track_flags",

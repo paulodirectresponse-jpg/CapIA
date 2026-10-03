@@ -974,6 +974,65 @@ fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()
             sub(&mut sequence.0, refs)?;
         }
         Command::SetFollowLength { clip, .. } => sub(&mut clip.0, refs)?,
+        Command::DuplicateSequence {
+            source,
+            new_sequence,
+            ..
+        } => {
+            sub(&mut source.0, refs)?;
+            if let Some(n) = new_sequence {
+                sub(&mut n.0, refs)?;
+            }
+        }
+        Command::MakeUnique {
+            clip, new_sequence, ..
+        } => {
+            sub(&mut clip.0, refs)?;
+            if let Some(n) = new_sequence {
+                sub(&mut n.0, refs)?;
+            }
+        }
+        Command::FlattenNested { clip, .. } => sub(&mut clip.0, refs)?,
+        Command::CreateNestedFromSelection {
+            clips,
+            new_sequence,
+            clip_id,
+            track,
+            ..
+        } => {
+            for c in clips {
+                sub(&mut c.0, refs)?;
+            }
+            if let Some(n) = new_sequence {
+                sub(&mut n.0, refs)?;
+            }
+            if let Some(c) = clip_id {
+                sub(&mut c.0, refs)?;
+            }
+            if let Some(t) = track {
+                sub(&mut t.0, refs)?;
+            }
+        }
+        Command::GenerateVariants { template, variants } => {
+            sub(&mut template.0, refs)?;
+            for v in variants {
+                if let Some(s) = &mut v.sequence {
+                    sub(&mut s.0, refs)?;
+                }
+                for swap in &mut v.swaps {
+                    match swap {
+                        crate::command::VariantSwap::SetNested { clip, sequence } => {
+                            sub(&mut clip.0, refs)?;
+                            sub(&mut sequence.0, refs)?;
+                        }
+                        crate::command::VariantSwap::ReplaceMedia { clip, asset } => {
+                            sub(&mut clip.0, refs)?;
+                            sub(&mut asset.0, refs)?;
+                        }
+                    }
+                }
+            }
+        }
         Command::MoveMarker {
             sequence, marker, ..
         }

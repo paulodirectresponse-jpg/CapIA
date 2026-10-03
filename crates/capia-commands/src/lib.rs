@@ -27,7 +27,7 @@ pub mod snap;
 
 pub use command::{
     COMMAND_SCHEMA_VERSION, ClipMove, Command, CommandEnvelope, Edge, NewClip, RippleScope,
-    Transaction,
+    Transaction, VariantSpec, VariantSwap,
 };
 pub use ctx::CommandOutput;
 pub use engine::{
