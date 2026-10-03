@@ -1,0 +1,26 @@
+{
+  "container": {
+    "formats": [
+      "png_pipe"
+    ],
+    "stream_count": 1
+  },
+  "default_video": 0,
+  "kind": "image",
+  "streams": [
+    {
+      "attached_picture": false,
+      "codec": "png",
+      "display_aspect": "4/3",
+      "has_alpha": true,
+      "height": 24,
+      "index": 0,
+      "pixel_aspect": "1",
+      "pixel_format": "rgba",
+      "rotation": 0,
+      "time_base": "1/25",
+      "type": "video",
+      "width": 32
+    }
+  ]
+}

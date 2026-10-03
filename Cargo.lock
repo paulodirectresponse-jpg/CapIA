@@ -240,6 +240,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-assets"
+version = "0.0.0"
+
+[[package]]
 name = "capia-cli"
 version = "0.0.0"
 dependencies = [
@@ -269,6 +273,15 @@ dependencies = [
  "capia-project",
  "tauri",
  "tauri-build",
+]
+
+[[package]]
+name = "capia-media"
+version = "0.0.0"
+dependencies = [
+ "capia-time",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,0 +1,46 @@
+{
+  "container": {
+    "duration": 705600000,
+    "formats": [
+      "3g2",
+      "3gp",
+      "m4a",
+      "mj2",
+      "mov",
+      "mp4"
+    ],
+    "stream_count": 2
+  },
+  "default_audio": 1,
+  "default_video": 0,
+  "duration": 705600000,
+  "kind": "video",
+  "streams": [
+    {
+      "attached_picture": false,
+      "codec": "h264",
+      "display_aspect": "4/3",
+      "duration": 705600000,
+      "frame_rate": "25",
+      "frames": 25,
+      "has_alpha": false,
+      "height": 48,
+      "index": 0,
+      "nominal_frame_rate": "25",
+      "pixel_aspect": "1",
+      "pixel_format": "yuv420p",
+      "rotation": 0,
+      "time_base": "1/12800",
+      "type": "video",
+      "width": 64
+    },
+    {
+      "channels": 2,
+      "codec": "aac",
+      "duration": 705600000,
+      "index": 1,
+      "sample_rate": 48000,
+      "type": "audio"
+    }
+  ]
+}

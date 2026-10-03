@@ -1,0 +1,22 @@
+{
+  "container": {
+    "duration": 705600000,
+    "formats": [
+      "wav"
+    ],
+    "stream_count": 1
+  },
+  "default_audio": 0,
+  "duration": 705600000,
+  "kind": "audio",
+  "streams": [
+    {
+      "channels": 1,
+      "codec": "pcm_s16le",
+      "duration": 705600000,
+      "index": 0,
+      "sample_rate": 48000,
+      "type": "audio"
+    }
+  ]
+}

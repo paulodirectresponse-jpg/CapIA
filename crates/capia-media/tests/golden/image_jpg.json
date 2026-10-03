@@ -1,0 +1,26 @@
+{
+  "container": {
+    "formats": [
+      "jpeg_pipe"
+    ],
+    "stream_count": 1
+  },
+  "default_video": 0,
+  "kind": "image",
+  "streams": [
+    {
+      "attached_picture": false,
+      "codec": "mjpeg",
+      "display_aspect": "4/3",
+      "has_alpha": false,
+      "height": 30,
+      "index": 0,
+      "pixel_aspect": "1",
+      "pixel_format": "yuvj420p",
+      "rotation": 0,
+      "time_base": "1/25",
+      "type": "video",
+      "width": 40
+    }
+  ]
+}
