@@ -51,6 +51,7 @@ pub(crate) fn fast() -> StoreOptions {
         synchronous: Synchronous::Normal,
         busy_timeout: Duration::from_millis(3_000),
         snapshot_every: 256,
+        ..StoreOptions::default()
     }
 }
 

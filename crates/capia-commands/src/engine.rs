@@ -278,6 +278,11 @@ impl Engine {
             audit,
             next_entry,
         } = state;
+        if i64::try_from(doc.revision).is_err() || i64::try_from(next_entry).is_err() {
+            return Err(bad(
+                "revision or entry counter beyond the supported range".into()
+            ));
+        }
         if cursor > history.len() {
             return Err(bad(format!(
                 "cursor {cursor} beyond history length {}",
@@ -565,7 +570,7 @@ impl Engine {
         doc.apply_ops(ops)?;
         self.validate_touched(&doc, ops)?;
         let revision_before = self.doc.revision;
-        doc.revision = revision_before + 1;
+        doc.revision = next_revision(revision_before)?;
         let event = AuditEvent {
             kind,
             entry_id: entry.id,
@@ -793,7 +798,7 @@ impl Engine {
                 .with_entities(clash.into_iter().cloned()));
             }
         }
-        doc.revision = current + 1;
+        doc.revision = next_revision(current)?;
         Ok(Executed {
             doc,
             ops,
@@ -885,7 +890,9 @@ impl Engine {
             },
             &doc,
         )?;
-        self.next_entry += 1;
+        self.next_entry = self.next_entry.checked_add(1).ok_or_else(|| {
+            CommandError::new(ErrorCode::LimitExceeded, "history entry id space exhausted")
+        })?;
         for (op_id, record) in applied {
             self.applied.insert(op_id, record);
         }
@@ -898,6 +905,17 @@ impl Engine {
         self.audit.push(event);
         self.commit_results.insert(id, result.clone());
         Ok(result)
+    }
+}
+
+/// Revisão seguinte, sem overflow silencioso: o teto é `i64::MAX` (o que o store consegue gravar).
+fn next_revision(current: u64) -> Result<u64> {
+    match current.checked_add(1) {
+        Some(n) if i64::try_from(n).is_ok() => Ok(n),
+        _ => Err(CommandError::new(
+            ErrorCode::LimitExceeded,
+            "document revision space exhausted",
+        )),
     }
 }
 

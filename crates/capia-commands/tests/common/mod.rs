@@ -9,6 +9,8 @@ use capia_commands::{
 use capia_model::{Asset, ClipContent, Document, Interp, Sequence, SequenceId, TrackId, TrackKind};
 use capia_time::{FrameRate, Rational, Ticks};
 
+pub mod nested;
+
 pub const FPS: FrameRate = FrameRate::FPS_30;
 pub const FRAME: i64 = 23_520_000;
 

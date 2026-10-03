@@ -11,6 +11,9 @@ use rusqlite::{Connection, OptionalExtension as _};
 use serde::de::DeserializeOwned;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Teto de um blob JSON lido do arquivo (defesa contra arquivo hostil que esgotaria a memória).
+pub(crate) const DEFAULT_MAX_BLOB_BYTES: i64 = 512 * 1024 * 1024;
+
 /// Espelho em memória do que o banco contém (para checar o *head* e montar snapshots).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Mirror {
@@ -58,11 +61,31 @@ pub(crate) fn document_text(doc: &Document) -> String {
     canonical_json(doc)
 }
 
-fn load_entry(conn: &Connection, id: u64) -> StoreResult<HistoryEntry> {
+fn load_entry(conn: &Connection, id: u64, max_blob: i64) -> StoreResult<HistoryEntry> {
+    let size: Option<i64> = conn
+        .query_row(
+            "SELECT length(entry_json) FROM history_entries WHERE id = ?1",
+            [id_i64(id)?],
+            |r| r.get(0),
+        )
+        .optional()?;
+    match size {
+        None => {
+            return Err(StoreError::corrupted(format!(
+                "history entry {id} is missing"
+            )));
+        }
+        Some(n) if n > max_blob => {
+            return Err(StoreError::corrupted(format!(
+                "history entry {id} is larger than the configured safety limit"
+            )));
+        }
+        Some(_) => {}
+    }
     let row: Option<(String, String)> = conn
         .query_row(
-            "SELECT entry_json, entry_sha256 FROM history_entries WHERE id = ?1",
-            [id_i64(id)?],
+            "SELECT entry_json, entry_sha256 FROM history_entries WHERE id = ?1 AND length(entry_json) <= ?2",
+            rusqlite::params![id_i64(id)?, max_blob],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?;
@@ -135,19 +158,20 @@ fn read_events(conn: &Connection, after_seq: Option<i64>) -> StoreResult<Vec<Eve
 /// Lê todo o estado dentro de **uma** transação de leitura: em WAL isso dá um snapshot consistente
 /// mesmo com outro escritor gravando em paralelo (sem isso, snapshot e eventos podiam ser de
 /// instantes diferentes).
-pub(crate) fn load(conn: &Connection) -> StoreResult<Loaded> {
+pub(crate) fn load(conn: &Connection, max_blob: i64) -> StoreResult<Loaded> {
     let tx = conn.unchecked_transaction()?;
-    let loaded = load_inner(&tx)?;
+    let loaded = load_inner(&tx, max_blob)?;
     tx.commit()?;
     Ok(loaded)
 }
 
-fn load_inner(conn: &Connection) -> StoreResult<Loaded> {
+fn load_inner(conn: &Connection, max_blob: i64) -> StoreResult<Loaded> {
     // ---- snapshot ----------------------------------------------------------------------------
     let snap = conn
         .query_row(
-            "SELECT seq, revision, cursor, history_ids_json, document_json, digest FROM snapshots ORDER BY seq DESC LIMIT 1",
-            [],
+            "SELECT seq, revision, cursor, history_ids_json, document_json, digest FROM snapshots \
+             WHERE length(document_json) <= ?1 AND length(history_ids_json) <= ?1 ORDER BY seq DESC LIMIT 1",
+            [max_blob],
             |r| {
                 Ok((
                     r.get::<_, i64>(0)?,
@@ -161,7 +185,9 @@ fn load_inner(conn: &Connection) -> StoreResult<Loaded> {
         )
         .optional()?;
     let Some((snap_seq, snap_rev, snap_cursor, ids_json, doc_json, digest)) = snap else {
-        return Err(StoreError::corrupted("the project has no snapshot"));
+        return Err(StoreError::corrupted(
+            "the project has no readable snapshot (missing, or larger than the configured safety limit)",
+        ));
     };
     let mut doc: Document = json("document snapshot", &doc_json)?;
     if digest_of(&doc) != digest {
@@ -186,20 +212,20 @@ fn load_inner(conn: &Connection) -> StoreResult<Loaded> {
     let mut cache: BTreeMap<u64, HistoryEntry> = BTreeMap::new();
     let mut prev_seq = snap_seq;
     for ev in &tail {
-        if ev.seq != prev_seq + 1 {
+        if prev_seq.checked_add(1) != Some(ev.seq) {
             return Err(StoreError::corrupted(format!(
                 "gap in events after seq {prev_seq}"
             )));
         }
         prev_seq = ev.seq;
-        if ev.revision != doc.revision + 1 {
+        if doc.revision.checked_add(1) != Some(ev.revision) {
             return Err(StoreError::corrupted(format!(
                 "event {} jumps from revision {} to {}",
                 ev.seq, doc.revision, ev.revision
             )));
         }
         if let std::collections::btree_map::Entry::Vacant(slot) = cache.entry(ev.entry_id) {
-            slot.insert(load_entry(conn, ev.entry_id)?);
+            slot.insert(load_entry(conn, ev.entry_id, max_blob)?);
         }
         let entry = &cache[&ev.entry_id];
         let replay = |ops: &[capia_model::PrimitiveOp], doc: &mut Document| {
@@ -300,7 +326,7 @@ fn load_inner(conn: &Connection) -> StoreResult<Loaded> {
     for id in &history_ids {
         history.push(match cache.get(id) {
             Some(e) => e.clone(),
-            None => load_entry(conn, *id)?,
+            None => load_entry(conn, *id, max_blob)?,
         });
     }
 

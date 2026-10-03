@@ -33,6 +33,8 @@ pub struct StoreOptions {
     pub busy_timeout: Duration,
     /// Um snapshot novo a cada N eventos (na mesma transação do N-ésimo commit).
     pub snapshot_every: u64,
+    /// Teto de um blob JSON lido do arquivo (defesa contra arquivo hostil; padrão 512 MiB).
+    pub max_blob_bytes: i64,
 }
 
 impl Default for StoreOptions {
@@ -41,6 +43,7 @@ impl Default for StoreOptions {
             synchronous: Synchronous::Full,
             busy_timeout: Duration::from_millis(5_000),
             snapshot_every: 256,
+            max_blob_bytes: load::DEFAULT_MAX_BLOB_BYTES,
         }
     }
 }
@@ -348,7 +351,7 @@ impl ProjectStore {
         }
         quick_check(&conn)?;
         let project_id = read_meta(&conn, "project_id")?;
-        let Loaded { state, mirror, .. } = load::load(&conn)?;
+        let Loaded { state, mirror, .. } = load::load(&conn, opts.max_blob_bytes)?;
         let store = Self {
             conn,
             path: path.to_path_buf(),
@@ -410,11 +413,11 @@ impl ProjectStore {
 
     /// Recarrega o estado atual do **banco** (inclui o que outro escritor tenha gravado).
     pub fn load_state(&self) -> StoreResult<EngineState> {
-        Ok(load::load(&self.conn)?.state)
+        Ok(load::load(&self.conn, self.opts.max_blob_bytes)?.state)
     }
 
     pub fn stats(&self) -> StoreResult<StoreStats> {
-        Ok(load::load(&self.conn)?.stats)
+        Ok(load::load(&self.conn, self.opts.max_blob_bytes)?.stats)
     }
 
     pub fn has_operation_id(&self, operation_id: &str) -> StoreResult<bool> {
@@ -547,7 +550,7 @@ impl ProjectStore {
         if !issues.is_empty() {
             return fail(issues);
         }
-        match load::load(&conn).and_then(|l| {
+        match load::load(&conn, load::DEFAULT_MAX_BLOB_BYTES).and_then(|l| {
             // o engine tem a última palavra sobre consistência interna do estado
             Engine::restore(l.state.clone(), [0; 32], EngineConfig::default()).map_err(|e| {
                 StoreError::corrupted(format!("inconsistent engine state: {}", e.message))
@@ -583,7 +586,7 @@ impl ProjectStore {
         let (db_seq, db_revision) = read_head(&tx)?;
         if db_seq != self.mirror.head_seq
             || db_revision != self.mirror.head_revision
-            || event.revision != db_revision + 1
+            || db_revision.checked_add(1) != Some(event.revision)
         {
             return Err(StoreError::new(
                 StoreErrorCode::StoreConflict,
@@ -596,7 +599,9 @@ impl ProjectStore {
                 "event_revision": event.revision,
             })));
         }
-        let seq = db_seq + 1;
+        let seq = db_seq
+            .checked_add(1)
+            .ok_or_else(|| StoreError::corrupted("event sequence space exhausted"))?;
         let mut next = self.mirror.clone();
         if let JournalRecord::Commit {
             entry,
@@ -712,7 +717,7 @@ fn read_meta(conn: &Connection, key: &str) -> StoreResult<String> {
 }
 
 fn info_from(conn: &Connection, path: &Path, schema_version: u32) -> StoreResult<ProjectInfo> {
-    let loaded = load::load(conn)?;
+    let loaded = load::load(conn, load::DEFAULT_MAX_BLOB_BYTES)?;
     let doc = &loaded.state.doc;
     let sequences: Vec<SequenceInfo> = doc
         .sequences()

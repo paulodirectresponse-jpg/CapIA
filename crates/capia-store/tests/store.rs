@@ -576,3 +576,126 @@ fn engine_errors_are_unchanged_by_persistence() {
     let _: Option<Engine> = None;
     let _ = Command::DeleteTrack { track: "V1".into() };
 }
+
+// ---- limites e entrada extrema (nunca panic) --------------------------------------------------------
+
+#[test]
+fn revision_counters_at_the_edge_fail_with_structured_errors_not_panics() {
+    use capia_model::Document;
+    let dir = TempDir::new("limits");
+    // um documento já na revisão máxima que o store sabe gravar
+    let mut doc = Document::new();
+    doc.revision = i64::MAX as u64;
+    let path = dir.file("edge.capia");
+    let (store, state) = ProjectStore::create_with_document(&path, &doc, &fast()).unwrap();
+    let mut e = store
+        .into_engine(state, key(), capia_commands::EngineConfig::default())
+        .unwrap();
+    let err = e.execute(&user(), setup_tx("a"), 1).unwrap_err();
+    assert_eq!(err.code, ErrorCode::LimitExceeded, "{err}");
+    drop(e);
+    // e um arquivo cujo documento declara revisão u64::MAX é recusado como corrompido
+    let path2 = dir.file("huge.capia");
+    ProjectStore::create(&path2, &fast())
+        .unwrap()
+        .0
+        .close()
+        .unwrap();
+    {
+        let c = Connection::open(&path2).unwrap();
+        let (text,): (String,) = c
+            .query_row("SELECT document_json FROM snapshots", [], |r| {
+                Ok((r.get(0)?,))
+            })
+            .unwrap();
+        let mut d: Document = serde_json::from_str(&text).unwrap();
+        d.revision = u64::MAX;
+        let new = capia_commands::hash::canonical_json(&d);
+        c.execute("PRAGMA ignore_check_constraints=ON", []).ok();
+        c.execute(
+            "UPDATE snapshots SET document_json = ?1, digest = ?2",
+            rusqlite::params![new, capia_commands::document_digest(&d)],
+        )
+        .unwrap();
+    }
+    let e = ProjectStore::open(&path2, &fast()).unwrap_err();
+    assert!(matches!(e.code, StoreErrorCode::ProjectCorrupted), "{e}");
+}
+
+#[test]
+fn oversized_blobs_are_refused_instead_of_exhausting_memory() {
+    let dir = TempDir::new("blob");
+    let path = dir.file("p.capia");
+    let mut e = create(&path, &fast());
+    e.execute(&user(), setup_tx("a"), 1).unwrap();
+    e.execute(&user(), tx("c", vec![insert("c1", "V1", 0, "a", 10)]), 2)
+        .unwrap();
+    drop(e);
+    let tiny = StoreOptions {
+        max_blob_bytes: 64,
+        ..fast()
+    };
+    let err = ProjectStore::open(&path, &tiny).unwrap_err();
+    assert_eq!(err.code, StoreErrorCode::ProjectCorrupted);
+    assert!(err.message.contains("safety limit"), "{err}");
+    // com o teto normal abre
+    assert!(ProjectStore::open(&path, &fast()).is_ok());
+    // entradas de histórico acima do teto também (o snapshot cabe, a entrada não)
+    let snapshot_len: i64 = Connection::open(&path)
+        .unwrap()
+        .query_row("SELECT length(document_json) FROM snapshots", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    let entry_max: i64 = Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT MAX(length(entry_json)) FROM history_entries",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    if entry_max > snapshot_len + 8 {
+        let mid = StoreOptions {
+            max_blob_bytes: snapshot_len + 8,
+            ..fast()
+        };
+        assert_eq!(
+            ProjectStore::open(&path, &mid).unwrap_err().code,
+            StoreErrorCode::ProjectCorrupted
+        );
+    }
+}
+
+#[test]
+fn identifiers_with_hostile_content_are_stored_and_returned_verbatim() {
+    // ids/labels arbitrários (aspas, SQL, unicode, controle) passam por parâmetros, nunca por concatenação
+    let dir = TempDir::new("hostile");
+    let path = dir.file("p.capia");
+    let mut e = create(&path, &fast());
+    e.execute(&user(), setup_tx("a"), 1).unwrap();
+    let nasty = "x'); DROP TABLE history_entries; --\u{0}\u{202e}ç\n\"quoted\"";
+    let t = capia_commands::Transaction {
+        transaction_id: Some(nasty.into()),
+        label: nasty.into(),
+        base_revision: None,
+        commands: vec![insert(nasty, "V1", 0, nasty, 10)],
+        max_ops: None,
+    };
+    let r = e.execute(&user(), t.clone(), 2);
+    // o id de operação pode ser recusado por validação (≤128 chars sempre é; o NUL é aceito pelo SQLite como texto)
+    let r = r.unwrap();
+    drop(e);
+    let e2 = open(&path, &fast());
+    assert_eq!(e2.history().last().unwrap().label, nasty);
+    assert!(e2.applied_operation(nasty).is_some());
+    assert_eq!(count(&path, "history_entries"), 2, "no table was dropped");
+    let (store, _) = ProjectStore::open(&path, &fast()).unwrap();
+    assert_eq!(
+        store.load_operation_result(nasty).unwrap().unwrap().result,
+        r
+    );
+    // reenvio idempotente com o id hostil
+    let mut e3 = open(&path, &fast());
+    assert!(e3.execute(&user(), t, 3).unwrap().replayed);
+}

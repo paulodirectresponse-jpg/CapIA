@@ -44,15 +44,21 @@ jobs:
   core-linux:
     name: Núcleo Rust (Linux, headless)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - name: Clippy do núcleo
-        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-project --all-targets -- -D warnings
-      - name: Testes do núcleo
-        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-project
+        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-store -p capia-project -p capia-cli --all-targets -- -D warnings
+      - name: Testes do núcleo, store (migrations, corrupção, crash, concorrência) e CLI
+        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-store -p capia-project -p capia-cli
+      - name: Propriedade ampliada com salvar/reabrir (release)
+        run: cargo test --release -p capia-store --test properties -- --nocapture
+        env:
+          CAPIA_PROP_CASES: "5000"
+      - name: Desempenho da persistência, 10.000 clips (release; sanity check)
+        run: cargo test --release -p capia-store --test perf -- --ignored --nocapture
       - name: Metas de desempenho do núcleo (release)
         run: cargo test --release -p capia-commands --test perf -- --ignored --nocapture
       - name: Núcleo sem IO compila para WASM (ADR-016)
