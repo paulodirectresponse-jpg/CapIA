@@ -261,6 +261,8 @@ name = "capia-model"
 version = "0.0.0"
 dependencies = [
  "capia-time",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -277,6 +279,10 @@ dependencies = [
 [[package]]
 name = "capia-time"
 version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "cargo-platform"

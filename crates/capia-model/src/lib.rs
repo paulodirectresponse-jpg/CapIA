@@ -1,24 +1,32 @@
-//! Modelo do documento do CapIA (docs/DATA_MODEL.md). **Scaffold:** nenhuma entidade ainda.
+//! Modelo do documento do CapIA (docs/DATA_MODEL.md, docs/TIMELINE_ENGINE.md).
 //!
-//! Entidades (Project, Sequence, Track, Clip, …), IDs e invariantes chegam na Fase 2. Este crate
-//! depende só de `capia-time`, não faz IO e compila para WASM (ADR-016).
+//! * Entidades: [`Document`], [`Sequence`], [`Track`], [`Clip`], [`Marker`], [`Asset`].
+//! * Escrita **somente** por [`PrimitiveOp`] (com inversa), aplicada por [`Document::apply_op`].
+//! * Estado imutável com compartilhamento estrutural (`Arc<Sequence>`): `clone()` é barato.
+//! * Invariantes em [`validate`]; keyframes e avaliação de propriedades em [`property`].
+//!
+//! Depende só de `capia-time` (+ `serde`), não faz IO e compila para WASM (ADR-016).
+
+pub mod clip;
+pub mod document;
+pub mod error;
+pub mod ids;
+pub mod ops;
+pub mod property;
+pub mod sequence;
+pub mod validate;
 
 pub use capia_time::Ticks;
-
-/// Versão do schema do documento persistido. Migrations só para frente (DATA_MODEL.md §6).
-pub const DOCUMENT_SCHEMA_VERSION: u32 = 1;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn schema_version_starts_at_one() {
-        assert_eq!(DOCUMENT_SCHEMA_VERSION, 1);
-    }
-
-    #[test]
-    fn model_reexports_the_time_unit() {
-        assert_eq!(Ticks::default(), capia_time::Ticks(0));
-    }
-}
+pub use clip::{Clip, ClipContent, speed_in_range};
+pub use document::{Asset, DOCUMENT_SCHEMA_VERSION, Document, OpError};
+pub use error::ErrorCode;
+pub use ids::{AssetId, ClipId, EntityKind, EntityRef, MarkerId, SequenceId, TrackId};
+pub use ops::{PrimitiveOp, TrackSlot};
+pub use property::{
+    Animatable, Interp, Keyframe, PropertySet, PropertySpec, property_spec, property_specs,
+};
+pub use sequence::{Marker, Sequence, SequenceHeader, Track, TrackKind, TrackRole};
+pub use validate::{
+    MAX_CLIPS_PER_SEQUENCE, MAX_NESTING_DEPTH, MAX_TRACKS_PER_SEQUENCE, Violation,
+    content_fits_track, validate_document, validate_nested_graph, validate_sequence,
+};

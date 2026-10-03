@@ -9,9 +9,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** Matriz Rust: dependências permitidas por crate (normal / build / dev). Tudo fora disso é violação. */
 export const RUST_RULES = {
-  "capia-time": { workspace: [], normal: [], build: [], dev: [] },
-  "capia-model": { workspace: ["capia-time"], normal: [], build: [], dev: [] },
-  "capia-commands": { workspace: ["capia-time", "capia-model"], normal: [], build: [], dev: [] },
+  "capia-time": { workspace: [], normal: ["serde"], build: [], dev: ["serde_json"] },
+  "capia-model": { workspace: ["capia-time"], normal: ["serde"], build: [], dev: ["serde_json"] },
+  "capia-commands": {
+    workspace: ["capia-time", "capia-model"],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
+  },
   "capia-project": {
     workspace: ["capia-time", "capia-model", "capia-commands"],
     normal: ["serde"],

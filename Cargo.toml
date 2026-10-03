@@ -24,7 +24,7 @@ capia-time = { path = "crates/capia-time", version = "0.0.0" }
 capia-model = { path = "crates/capia-model", version = "0.0.0" }
 capia-commands = { path = "crates/capia-commands", version = "0.0.0" }
 capia-project = { path = "crates/capia-project", version = "0.0.0" }
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 
 [workspace.lints.rust]
