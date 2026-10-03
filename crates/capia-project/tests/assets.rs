@@ -554,3 +554,30 @@ fn the_same_import_in_two_projects_yields_the_same_asset_id() {
     assert_eq!(a.record.content_hash, b.record.content_hash);
     assert_eq!(a.record.media, b.record.media);
 }
+
+/// Import atômico: se o commit do documento falha (escritor obsoleto), a linha do catálogo
+/// que viajava na mesma transação também NÃO existe.
+#[test]
+fn a_stale_writers_import_leaves_no_trace_in_the_catalog() {
+    let t = Tmp::new("stale");
+    let mut first = create(&t);
+    let mut second = reopen(&t); // mesma base; `first` vai avançar na frente
+    import(&mut first, &t.file("one.mp4", b"first writer")).unwrap();
+    let before = first.document().revision;
+    let err = import(&mut second, &t.file("two.mp4", b"second writer")).unwrap_err();
+    assert!(
+        matches!(&err, ProjectError::Command(e) if e.code == ErrorCode::PersistenceFailed),
+        "{err}"
+    );
+    drop(first);
+    drop(second);
+    let p = reopen(&t);
+    assert_eq!(p.document().revision, before);
+    let views = p.assets().unwrap();
+    assert_eq!(
+        views.len(),
+        1,
+        "the stale import left neither a document asset nor a catalog row"
+    );
+    assert_eq!(views[0].catalog.as_ref().unwrap().display_name, "one.mp4");
+}
