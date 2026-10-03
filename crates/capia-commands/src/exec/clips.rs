@@ -5,7 +5,9 @@ use super::ripple::ripple_shift;
 use crate::command::{ClipMove, Edge, NewClip, RippleScope};
 use crate::ctx::{CommandOutput, Ctx};
 use crate::error::{CommandError, Result};
-use capia_model::{Clip, ClipId, EntityKind, EntityRef, ErrorCode, TrackId, TrackKind};
+use capia_model::{
+    Clip, ClipContent, ClipId, EntityKind, EntityRef, ErrorCode, TrackId, TrackKind,
+};
 use capia_time::{Rational, Ticks};
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -65,6 +67,12 @@ pub(crate) fn insert_clip(
         reversed: nc.reversed,
         properties: nc.properties.clone(),
     };
+    if let ClipContent::Nested {
+        sequence: target, ..
+    } = &nc.content
+    {
+        super::nested::guard_edge(ctx, &seq_id, target)?;
+    }
     check_clip(&ctx.doc, ctx.sequence(&seq_id)?, &clip)?;
 
     if track.magnetic {

@@ -7,8 +7,10 @@ use crate::ctx::{CommandOutput, Ctx, touched_sequences, touches_nested_graph};
 use crate::error::{CommandError, Result};
 use crate::exec::execute_command;
 use crate::hash::{canonical_json, constant_time_eq, hex, hmac_sha256, sha256_hex};
+use crate::journal::{Journal, JournalRecord};
 use capia_model::{
-    Document, EntityRef, ErrorCode, PrimitiveOp, validate_nested_graph, validate_sequence,
+    Document, EntityRef, ErrorCode, PrimitiveOp, validate_document, validate_nested_graph,
+    validate_sequence,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -204,6 +206,21 @@ pub struct Engine {
     next_entry: u64,
     key: [u8; 32],
     config: EngineConfig,
+    journal: Option<Box<dyn Journal>>,
+}
+
+/// Estado durável do engine (tudo menos planos/chave, que nunca sobrevivem a reinício — ADR-030).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EngineState {
+    pub doc: Document,
+    /// Ramo ativo + ramo de redo, na ordem da pilha.
+    pub history: Vec<HistoryEntry>,
+    pub cursor: usize,
+    pub applied: BTreeMap<String, AppliedOperation>,
+    pub commit_results: BTreeMap<u64, CommitResult>,
+    pub change_log: Vec<(u64, BTreeSet<EntityRef>)>,
+    pub audit: Vec<AuditEvent>,
+    pub next_entry: u64,
 }
 
 impl core::fmt::Debug for Engine {
@@ -239,6 +256,81 @@ impl Engine {
             next_entry: 1,
             key: plan_key,
             config,
+            journal: None,
+        }
+    }
+
+    /// Injeta o backend durável. A partir daqui toda mudança é persistida **antes** de publicada.
+    pub fn set_journal(&mut self, journal: Box<dyn Journal>) {
+        self.journal = Some(journal);
+    }
+
+    /// Reconstrói um engine a partir de estado persistido, validando a consistência interna.
+    pub fn restore(state: EngineState, plan_key: [u8; 32], config: EngineConfig) -> Result<Self> {
+        let bad = |msg: String| CommandError::new(ErrorCode::InvariantViolation, msg);
+        let EngineState {
+            doc,
+            history,
+            cursor,
+            applied,
+            commit_results,
+            change_log,
+            audit,
+            next_entry,
+        } = state;
+        if cursor > history.len() {
+            return Err(bad(format!(
+                "cursor {cursor} beyond history length {}",
+                history.len()
+            )));
+        }
+        if let Some(max) = history.iter().map(|h| h.id).max()
+            && next_entry <= max
+        {
+            return Err(bad("next_entry is not greater than every history id".into()));
+        }
+        if let Some(v) = validate_document(&doc).first() {
+            return Err(CommandError::from_violation(v));
+        }
+        if let Some(last) = audit.last()
+            && last.revision != doc.revision
+        {
+            return Err(bad(format!(
+                "audit head revision {} != document revision {}",
+                last.revision, doc.revision
+            )));
+        }
+        if let Some(op) = applied
+            .iter()
+            .find(|(_, a)| !commit_results.contains_key(&a.history_entry_id))
+        {
+            return Err(bad(format!(
+                "operation {} points to a missing result",
+                op.0
+            )));
+        }
+        let mut engine = Self::with_config(doc, plan_key, config);
+        engine.history = history;
+        engine.cursor = cursor;
+        engine.applied = applied;
+        engine.commit_results = commit_results;
+        engine.change_log = change_log;
+        engine.audit = audit;
+        engine.next_entry = next_entry;
+        Ok(engine)
+    }
+
+    /// Cópia do estado durável (para snapshots, testes e ferramentas).
+    pub fn export_state(&self) -> EngineState {
+        EngineState {
+            doc: self.doc.clone(),
+            history: self.history.clone(),
+            cursor: self.cursor,
+            applied: self.applied.clone(),
+            commit_results: self.commit_results.clone(),
+            change_log: self.change_log.clone(),
+            audit: self.audit.clone(),
+            next_entry: self.next_entry,
         }
     }
 
@@ -293,7 +385,7 @@ impl Engine {
             return Ok(self.replay_result(entry));
         }
         let executed = self.prepare(&tx, true)?;
-        Ok(self.commit(actor, &tx, executed, now_ms, None))
+        self.commit(actor, &tx, executed, now_ms, None)
     }
 
     // ---- preview → apply_plan -----------------------------------------------------------------
@@ -425,7 +517,7 @@ impl Engine {
                 "the document changed since the preview: the resulting diff is different, preview again",
             ));
         }
-        let result = self.commit(actor, &tx, executed, now_ms, Some(plan_id.clone()));
+        let result = self.commit(actor, &tx, executed, now_ms, Some(plan_id.clone()))?;
         if let Some(p) = self.plans.get_mut(&plan_id) {
             p.consumed_entry = Some(result.entry_id);
         }
@@ -474,16 +566,25 @@ impl Engine {
         self.validate_touched(&doc, ops)?;
         let revision_before = self.doc.revision;
         doc.revision = revision_before + 1;
+        let event = AuditEvent {
+            kind,
+            entry_id: entry.id,
+            revision: doc.revision,
+            timestamp_ms: now_ms,
+            actor: actor.clone(),
+        };
+        // persistir antes de publicar: se o journal falhar, o engine continua exatamente como estava
+        self.append_journal(
+            &match kind {
+                AuditKind::Undo => JournalRecord::Undo { event: &event },
+                _ => JournalRecord::Redo { event: &event },
+            },
+            &doc,
+        )?;
         self.doc = doc;
         self.change_log
             .push((self.doc.revision, entry.affected.clone()));
-        self.audit.push(AuditEvent {
-            kind,
-            entry_id: entry.id,
-            revision: self.doc.revision,
-            timestamp_ms: now_ms,
-            actor: actor.clone(),
-        });
+        self.audit.push(event);
         Ok(CommitResult {
             entry_id: entry.id,
             revision_before,
@@ -492,6 +593,19 @@ impl Engine {
             refs: BTreeMap::new(),
             results: Vec::new(),
             affected: entry.affected.iter().cloned().collect(),
+        })
+    }
+
+    fn append_journal(&mut self, record: &JournalRecord<'_>, doc_after: &Document) -> Result<()> {
+        let Some(journal) = self.journal.as_mut() else {
+            return Ok(());
+        };
+        journal.append(record, doc_after).map_err(|e| {
+            CommandError::new(
+                ErrorCode::PersistenceFailed,
+                format!("could not persist the change: {}", e.message),
+            )
+            .with_hint(json!({ "store_code": e.kind, "cause": e.cause }))
         })
     }
 
@@ -632,7 +746,10 @@ impl Engine {
             ctx.begin_command(&env.operation_id);
             let mut command = env.command.clone();
             resolve_refs(&mut command, &refs).map_err(|e| e.at(index))?;
-            let out = execute_command(&mut ctx, &command).map_err(|e| e.at(index))?;
+            let mut out = execute_command(&mut ctx, &command).map_err(|e| e.at(index))?;
+            // follow_length: reconcilia nested que acompanham a duração da filha (ADR-045)
+            crate::exec::reconcile_follow(&mut ctx).map_err(|e| e.at(index))?;
+            out.warnings.append(&mut ctx.warnings);
             if let Some(name) = &env.reference {
                 if !name.starts_with('$') || name.len() < 2 {
                     return Err(CommandError::invalid("ref must look like $name").at(index));
@@ -693,7 +810,7 @@ impl Engine {
         executed: Executed,
         now_ms: u64,
         plan_id: Option<String>,
-    ) -> CommitResult {
+    ) -> Result<CommitResult> {
         let Executed {
             doc,
             ops,
@@ -702,7 +819,6 @@ impl Engine {
             affected,
         } = executed;
         let id = self.next_entry;
-        self.next_entry += 1;
         let revision_before = self.doc.revision;
         let revision = doc.revision;
         let inverse_ops: Vec<PrimitiveOp> = ops.iter().rev().map(PrimitiveOp::inverse).collect();
@@ -728,30 +844,28 @@ impl Engine {
             affected: affected.clone(),
             timestamp_ms: now_ms,
         };
-        for env in &tx.commands {
-            self.applied.insert(
-                env.operation_id.clone(),
-                AppliedOperation {
-                    payload_hash: Self::payload_hash(env),
-                    history_entry_id: id,
-                    applied_at_ms: now_ms,
-                    actor: actor.clone(),
-                },
-            );
-        }
-        // nova edição descarta o ramo de redo (as ops dele continuam na auditoria)
-        self.history.truncate(self.cursor);
-        self.history.push(entry);
-        self.cursor = self.history.len();
-        self.doc = doc;
-        self.change_log.push((revision, affected.clone()));
-        self.audit.push(AuditEvent {
+        let applied: Vec<(String, AppliedOperation)> = tx
+            .commands
+            .iter()
+            .map(|env| {
+                (
+                    env.operation_id.clone(),
+                    AppliedOperation {
+                        payload_hash: Self::payload_hash(env),
+                        history_entry_id: id,
+                        applied_at_ms: now_ms,
+                        actor: actor.clone(),
+                    },
+                )
+            })
+            .collect();
+        let event = AuditEvent {
             kind: AuditKind::Commit,
             entry_id: id,
             revision,
             timestamp_ms: now_ms,
             actor: actor.clone(),
-        });
+        };
         let result = CommitResult {
             entry_id: id,
             revision_before,
@@ -759,10 +873,31 @@ impl Engine {
             replayed: false,
             refs,
             results,
-            affected: affected.into_iter().collect(),
+            affected: affected.iter().cloned().collect(),
         };
+        // persistir antes de publicar (ADR-043): falha ⇒ nada mudou em memória
+        self.append_journal(
+            &JournalRecord::Commit {
+                entry: &entry,
+                result: &result,
+                applied: &applied,
+                event: &event,
+            },
+            &doc,
+        )?;
+        self.next_entry += 1;
+        for (op_id, record) in applied {
+            self.applied.insert(op_id, record);
+        }
+        // nova edição descarta o ramo de redo (as ops dele continuam na auditoria)
+        self.history.truncate(self.cursor);
+        self.history.push(entry);
+        self.cursor = self.history.len();
+        self.doc = doc;
+        self.change_log.push((revision, affected));
+        self.audit.push(event);
         self.commit_results.insert(id, result.clone());
-        result
+        Ok(result)
     }
 }
 
@@ -805,6 +940,20 @@ fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()
         Command::SetTrackFlags { track, .. } | Command::DeleteTrack { track } => {
             sub(&mut track.0, refs)?
         }
+        Command::DeleteSequence { sequence } | Command::RenameSequence { sequence, .. } => {
+            sub(&mut sequence.0, refs)?
+        }
+        Command::InsertNested {
+            track, sequence, ..
+        } => {
+            sub(&mut track.0, refs)?;
+            sub(&mut sequence.0, refs)?;
+        }
+        Command::SetNestedTarget { clip, sequence } => {
+            sub(&mut clip.0, refs)?;
+            sub(&mut sequence.0, refs)?;
+        }
+        Command::SetFollowLength { clip, .. } => sub(&mut clip.0, refs)?,
         Command::MoveMarker {
             sequence, marker, ..
         }
@@ -818,7 +967,7 @@ fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()
                 ClipContent::Media { asset, .. } | ClipContent::Image { asset } => {
                     sub(&mut asset.0, refs)?
                 }
-                ClipContent::Nested { sequence } => sub(&mut sequence.0, refs)?,
+                ClipContent::Nested { sequence, .. } => sub(&mut sequence.0, refs)?,
                 ClipContent::Text { .. } | ClipContent::Solid { .. } => {}
             }
         }

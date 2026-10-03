@@ -311,3 +311,101 @@ pub(crate) fn delete_marker(
     })?;
     Ok(ctx.take_output(None))
 }
+
+pub(crate) fn rename_sequence(
+    ctx: &mut Ctx,
+    sequence: &SequenceId,
+    name: &str,
+) -> Result<CommandOutput> {
+    let old = ctx.sequence(sequence)?.header.clone();
+    let trimmed = name.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 256 {
+        return Err(CommandError::invalid(
+            "sequence name must have 1..=256 characters",
+        ));
+    }
+    let new = SequenceHeader {
+        name: trimmed.to_owned(),
+        ..old.clone()
+    };
+    if new != old {
+        ctx.emit(PrimitiveOp::Sequence {
+            id: sequence.clone(),
+            old: Some(old),
+            new: Some(new),
+        })?;
+    }
+    Ok(ctx.take_output(None))
+}
+
+/// Apaga a sequence e todo o seu conteúdo. Recusa se outra sequence a usa como nested
+/// (`IN_USE`, com a lista de clips) ou se alguma track está travada.
+pub(crate) fn delete_sequence(ctx: &mut Ctx, sequence: &SequenceId) -> Result<CommandOutput> {
+    let seq = ctx.sequence(sequence)?;
+    let header = seq.header.clone();
+    if let Some(t) = seq.tracks().iter().find(|t| t.locked) {
+        return Err(CommandError::new(
+            ErrorCode::TrackLocked,
+            format!(
+                "track {} is locked: unlock it before deleting sequence {sequence}",
+                t.id
+            ),
+        )
+        .with_entities([EntityRef::new(EntityKind::Track, t.id.as_str())]));
+    }
+    let users: Vec<(SequenceId, capia_model::ClipId)> = ctx
+        .doc
+        .sequences()
+        .filter(|(sid, _)| *sid != sequence)
+        .flat_map(|(sid, s)| {
+            s.nested_refs()
+                .filter(|(_, n)| &n.target == sequence)
+                .map(move |(cid, _)| (sid.clone(), cid.clone()))
+        })
+        .collect();
+    if !users.is_empty() {
+        return Err(CommandError::new(
+            ErrorCode::InUse,
+            format!("sequence {sequence} is used as nested by {} clip(s)", users.len()),
+        )
+        .with_entities(users.iter().map(|(_, c)| EntityRef::new(EntityKind::Clip, c.as_str())))
+        .with_hint(serde_json::json!({
+            "used_by": users.iter().map(|(s, c)| serde_json::json!({ "sequence": s.as_str(), "clip": c.as_str() })).collect::<Vec<_>>(),
+            "suggestion": "remove or retarget those nested clips first",
+        })));
+    }
+    let (mut clips, tracks, markers) = {
+        let s = ctx.sequence(sequence)?;
+        (
+            s.clips().cloned().collect::<Vec<_>>(),
+            s.tracks().to_vec(),
+            s.markers().cloned().collect::<Vec<_>>(),
+        )
+    };
+    clips.sort_by(|a, b| (&a.track, a.start, &a.id).cmp(&(&b.track, b.start, &b.id)));
+    for clip in clips {
+        ctx.remove_clip_op(sequence, clip)?;
+    }
+    for m in markers {
+        ctx.emit(PrimitiveOp::Marker {
+            sequence: sequence.clone(),
+            id: m.id.clone(),
+            old: Some(m),
+            new: None,
+        })?;
+    }
+    for (index, track) in tracks.into_iter().enumerate().rev() {
+        ctx.emit(PrimitiveOp::Track {
+            sequence: sequence.clone(),
+            id: track.id.clone(),
+            old: Some(TrackSlot { index, track }),
+            new: None,
+        })?;
+    }
+    ctx.emit(PrimitiveOp::Sequence {
+        id: sequence.clone(),
+        old: Some(header),
+        new: None,
+    })?;
+    Ok(ctx.take_output(None))
+}

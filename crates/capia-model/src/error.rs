@@ -47,6 +47,10 @@ pub enum ErrorCode {
     NothingToRedo,
     // Consistência interna (bug): op primitiva não bate com o estado.
     OpMismatch,
+    // Camada de persistência recusou/falhou (ADR-043): nada mudou em memória.
+    PersistenceFailed,
+    // Entidade ainda referenciada (ex.: sequence usada como nested).
+    InUse,
 }
 
 impl ErrorCode {
@@ -86,6 +90,8 @@ impl ErrorCode {
             Self::NothingToUndo => "NOTHING_TO_UNDO",
             Self::NothingToRedo => "NOTHING_TO_REDO",
             Self::OpMismatch => "OP_MISMATCH",
+            Self::PersistenceFailed => "PERSISTENCE_FAILED",
+            Self::InUse => "IN_USE",
         }
     }
 }
@@ -111,6 +117,8 @@ mod tests {
             ErrorCode::OperationIdReused,
             ErrorCode::PlanStateChanged,
             ErrorCode::OpMismatch,
+            ErrorCode::PersistenceFailed,
+            ErrorCode::InUse,
         ] {
             assert_eq!(
                 serde_json::to_string(&code).unwrap(),

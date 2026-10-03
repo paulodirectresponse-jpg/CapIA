@@ -225,7 +225,7 @@ pub fn validate_clip(doc: &Document, seq: &Sequence, clip: &Clip) -> Vec<Violati
             }
         }
     }
-    if let ClipContent::Nested { sequence } = &clip.content
+    if let ClipContent::Nested { sequence, .. } = &clip.content
         && doc.sequence(sequence).is_none()
     {
         out.push(Violation::new(
@@ -269,19 +269,157 @@ pub fn validate_clip(doc: &Document, seq: &Sequence, clip: &Clip) -> Vec<Violati
     out
 }
 
-/// Invariante 6: grafo de `Nested` acíclico e com profundidade ≤ 16.
-pub fn validate_nested_graph(doc: &Document) -> Vec<Violation> {
+/// Arestas `pai → filho` do grafo de nested, a partir do índice de cada sequence (O(#nested)).
+fn nested_edges(doc: &Document) -> BTreeMap<&SequenceId, BTreeSet<&SequenceId>> {
     let mut edges: BTreeMap<&SequenceId, BTreeSet<&SequenceId>> = BTreeMap::new();
     for (id, seq) in doc.sequences() {
         let e = edges.entry(id).or_default();
-        for c in seq.clips() {
-            if let ClipContent::Nested { sequence } = &c.content
-                && let Some((target, _)) = doc.sequences().find(|(sid, _)| *sid == sequence)
-            {
+        for (_, n) in seq.nested_refs() {
+            if let Some((target, _)) = doc.sequences().find(|(sid, _)| *sid == &n.target) {
                 e.insert(target);
             }
         }
     }
+    edges
+}
+
+/// Caminho `from → … → to` seguindo nested (inclui as pontas), se existir. `from == to` ⇒ `[from]`.
+pub fn nested_path(doc: &Document, from: &SequenceId, to: &SequenceId) -> Option<Vec<SequenceId>> {
+    let edges = nested_edges(doc);
+    fn dfs<'a>(
+        n: &'a SequenceId,
+        to: &SequenceId,
+        edges: &BTreeMap<&'a SequenceId, BTreeSet<&'a SequenceId>>,
+        seen: &mut BTreeSet<&'a SequenceId>,
+        path: &mut Vec<SequenceId>,
+    ) -> bool {
+        path.push(n.clone());
+        if n == to {
+            return true;
+        }
+        if seen.insert(n) {
+            for next in edges.get(n).into_iter().flatten() {
+                if dfs(next, to, edges, seen, path) {
+                    return true;
+                }
+            }
+        }
+        path.pop();
+        false
+    }
+    let start = doc
+        .sequences()
+        .find(|(id, _)| *id == from)
+        .map(|(id, _)| id)?;
+    let mut path = Vec::new();
+    dfs(start, to, &edges, &mut BTreeSet::new(), &mut path).then_some(path)
+}
+
+/// Maior número de saltos descendo a partir de `seq` (0 = sem filhos). Protegido contra ciclos.
+pub fn nested_depth_below(doc: &Document, seq: &SequenceId) -> usize {
+    let edges = nested_edges(doc);
+    fn go<'a>(
+        n: &'a SequenceId,
+        edges: &BTreeMap<&'a SequenceId, BTreeSet<&'a SequenceId>>,
+        memo: &mut BTreeMap<&'a SequenceId, usize>,
+        visiting: &mut BTreeSet<&'a SequenceId>,
+    ) -> usize {
+        if let Some(d) = memo.get(n) {
+            return *d;
+        }
+        if !visiting.insert(n) {
+            return 0;
+        }
+        let d = edges
+            .get(n)
+            .into_iter()
+            .flatten()
+            .map(|c| 1 + go(c, edges, memo, visiting))
+            .max()
+            .unwrap_or(0);
+        visiting.remove(n);
+        memo.insert(n, d);
+        d
+    }
+    let Some((start, _)) = doc.sequences().find(|(id, _)| *id == seq) else {
+        return 0;
+    };
+    go(start, &edges, &mut BTreeMap::new(), &mut BTreeSet::new())
+}
+
+/// Maior número de saltos subindo até `seq` (0 = ninguém a referencia).
+pub fn nested_depth_above(doc: &Document, seq: &SequenceId) -> usize {
+    let edges = nested_edges(doc);
+    let mut parents: BTreeMap<&SequenceId, BTreeSet<&SequenceId>> = BTreeMap::new();
+    for (p, children) in &edges {
+        for c in children {
+            parents.entry(c).or_default().insert(p);
+        }
+    }
+    fn go<'a>(
+        n: &'a SequenceId,
+        parents: &BTreeMap<&'a SequenceId, BTreeSet<&'a SequenceId>>,
+        memo: &mut BTreeMap<&'a SequenceId, usize>,
+        visiting: &mut BTreeSet<&'a SequenceId>,
+    ) -> usize {
+        if let Some(d) = memo.get(n) {
+            return *d;
+        }
+        if !visiting.insert(n) {
+            return 0;
+        }
+        let d = parents
+            .get(n)
+            .into_iter()
+            .flatten()
+            .map(|p| 1 + go(p, parents, memo, visiting))
+            .max()
+            .unwrap_or(0);
+        visiting.remove(n);
+        memo.insert(n, d);
+        d
+    }
+    let Some((start, _)) = doc.sequences().find(|(id, _)| *id == seq) else {
+        return 0;
+    };
+    go(start, &parents, &mut BTreeMap::new(), &mut BTreeSet::new())
+}
+
+/// Adicionar a aresta `parent → target` quebraria o DAG ou o limite de profundidade? Devolve a
+/// violação (ciclo com o caminho em `message`, ou profundidade) **antes** de qualquer escrita.
+pub fn check_nested_edge(
+    doc: &Document,
+    parent: &SequenceId,
+    target: &SequenceId,
+) -> Option<Violation> {
+    let refs = vec![
+        EntityRef::new(EntityKind::Sequence, parent.as_str()),
+        EntityRef::new(EntityKind::Sequence, target.as_str()),
+    ];
+    if let Some(path) = nested_path(doc, target, parent) {
+        let chain: Vec<&str> = path.iter().map(SequenceId::as_str).collect();
+        return Some(Violation::new(
+            ErrorCode::NestedCycle,
+            format!(
+                "nesting {parent} -> {target} would create a cycle: {parent} -> {}",
+                chain.join(" -> ")
+            ),
+            refs,
+        ));
+    }
+    let depth = nested_depth_above(doc, parent) + 1 + nested_depth_below(doc, target);
+    (depth > MAX_NESTING_DEPTH).then(|| {
+        Violation::new(
+            ErrorCode::NestedDepth,
+            format!("nesting {parent} -> {target} reaches depth {depth} > {MAX_NESTING_DEPTH}"),
+            refs,
+        )
+    })
+}
+
+/// Invariante 6: grafo de `Nested` acíclico e com profundidade ≤ 16.
+pub fn validate_nested_graph(doc: &Document) -> Vec<Violation> {
+    let edges = nested_edges(doc);
     let mut out = Vec::new();
     // DFS com cores; `depth[n]` = comprimento do maior caminho a partir de n.
     #[derive(Clone, Copy, PartialEq)]

@@ -3,12 +3,15 @@
 mod check;
 mod clips;
 mod keyframes;
+mod nested;
 mod ripple;
 mod structure;
 
 use crate::command::Command;
 use crate::ctx::{CommandOutput, Ctx};
 use crate::error::Result;
+
+pub(crate) use nested::reconcile_follow;
 
 pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<CommandOutput> {
     match command {
@@ -64,6 +67,41 @@ pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<Comman
             },
         ),
         Command::DeleteTrack { track } => structure::delete_track(ctx, track),
+        Command::DeleteSequence { sequence } => structure::delete_sequence(ctx, sequence),
+        Command::RenameSequence { sequence, name } => {
+            structure::rename_sequence(ctx, sequence, name)
+        }
+        Command::InsertNested {
+            track,
+            start,
+            sequence,
+            id,
+            name,
+            duration,
+            source_in,
+            follow_length,
+            split_at_insert,
+            split_new_id,
+        } => nested::insert_nested(
+            ctx,
+            track,
+            *start,
+            sequence,
+            id.as_ref(),
+            name,
+            *duration,
+            *source_in,
+            *follow_length,
+            *split_at_insert,
+            split_new_id.as_ref(),
+        ),
+        Command::SetNestedTarget { clip, sequence } => {
+            nested::set_nested_target(ctx, clip, sequence)
+        }
+        Command::SetFollowLength {
+            clip,
+            follow_length,
+        } => nested::set_follow_length(ctx, clip, *follow_length),
         Command::AddMarker {
             sequence,
             id,

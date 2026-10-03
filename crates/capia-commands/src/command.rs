@@ -126,6 +126,14 @@ pub enum Command {
     DeleteTrack {
         track: TrackId,
     },
+    /// Apaga a sequence (e seu conteúdo). Recusa com `IN_USE` se outra sequence a usa como nested.
+    DeleteSequence {
+        sequence: SequenceId,
+    },
+    RenameSequence {
+        sequence: SequenceId,
+        name: String,
+    },
     AddMarker {
         sequence: SequenceId,
         #[serde(default)]
@@ -154,6 +162,37 @@ pub enum Command {
         split_at_insert: bool,
         #[serde(default)]
         split_new_id: Option<ClipId>,
+    },
+    /// Insere uma sequence dentro de outra. `duration` omitida ⇒ duração da filha menos `source_in`
+    /// (alinhada ao frame do pai, mínimo 1 frame). Ciclo/profundidade/alvo são validados antes.
+    InsertNested {
+        track: TrackId,
+        start: Ticks,
+        sequence: SequenceId,
+        #[serde(default)]
+        id: Option<ClipId>,
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        duration: Option<Ticks>,
+        #[serde(default)]
+        source_in: Ticks,
+        #[serde(default)]
+        follow_length: bool,
+        #[serde(default)]
+        split_at_insert: bool,
+        #[serde(default)]
+        split_new_id: Option<ClipId>,
+    },
+    /// Aponta um clip nested para outra sequence (mesmas validações da inserção).
+    SetNestedTarget {
+        clip: ClipId,
+        sequence: SequenceId,
+    },
+    /// Liga/desliga o acompanhamento da duração da sequence filha (ADR-045).
+    SetFollowLength {
+        clip: ClipId,
+        follow_length: bool,
     },
     MoveClips {
         moves: Vec<ClipMove>,
@@ -234,6 +273,11 @@ impl Command {
             Self::AddTrack { .. } => "add_track",
             Self::SetTrackFlags { .. } => "set_track_flags",
             Self::DeleteTrack { .. } => "delete_track",
+            Self::DeleteSequence { .. } => "delete_sequence",
+            Self::RenameSequence { .. } => "rename_sequence",
+            Self::InsertNested { .. } => "insert_nested",
+            Self::SetNestedTarget { .. } => "set_nested_target",
+            Self::SetFollowLength { .. } => "set_follow_length",
             Self::AddMarker { .. } => "add_marker",
             Self::MoveMarker { .. } => "move_marker",
             Self::DeleteMarker { .. } => "delete_marker",

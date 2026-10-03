@@ -29,9 +29,12 @@ pub enum ClipContent {
     Solid {
         color: String,
     },
-    /// Outra sequence do projeto (referência compartilhada; DAG com profundidade ≤ 16).
+    /// Outra sequence do projeto (referência compartilhada; DAG com profundidade ≤ 16). Com
+    /// `follow_length`, a duração do clip acompanha a da sequence filha (ADR-045).
     Nested {
         sequence: SequenceId,
+        #[serde(default, skip_serializing_if = "core::ops::Not::not")]
+        follow_length: bool,
     },
 }
 

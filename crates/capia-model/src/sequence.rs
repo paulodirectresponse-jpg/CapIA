@@ -1,6 +1,6 @@
-use crate::clip::Clip;
+use crate::clip::{Clip, ClipContent};
 use crate::error::ErrorCode;
-use crate::ids::{ClipId, MarkerId, TrackId};
+use crate::ids::{ClipId, MarkerId, SequenceId, TrackId};
 use capia_time::{FrameRate, Ticks};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -105,6 +105,26 @@ fn default_sample_rate() -> u32 {
 /// a aplicação de ops; a invariante de não-sobreposição é checada na validação.
 type TrackIndex = BTreeSet<(Ticks, ClipId)>;
 
+/// Referência de um clip `Nested` (índice derivado; não é serializado).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NestedRef {
+    pub target: SequenceId,
+    pub follow_length: bool,
+}
+
+fn nested_ref_of(clip: &Clip) -> Option<NestedRef> {
+    match &clip.content {
+        ClipContent::Nested {
+            sequence,
+            follow_length,
+        } => Some(NestedRef {
+            target: sequence.clone(),
+            follow_length: *follow_length,
+        }),
+        _ => None,
+    }
+}
+
 /// Sequence: tracks, clips e marcadores. Coleções são privadas para manter o índice por track
 /// consistente; toda mutação passa pelas ops primitivas (`Document::apply_op`).
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -115,6 +135,8 @@ pub struct Sequence {
     markers: BTreeMap<MarkerId, Marker>,
     #[serde(skip)]
     by_track: BTreeMap<TrackId, TrackIndex>,
+    #[serde(skip)]
+    nested_index: BTreeMap<ClipId, NestedRef>,
 }
 
 #[derive(Deserialize)]
@@ -144,6 +166,7 @@ impl Sequence {
             clips: BTreeMap::new(),
             markers: BTreeMap::new(),
             by_track: BTreeMap::new(),
+            nested_index: BTreeMap::new(),
         }
     }
 
@@ -173,12 +196,17 @@ impl Sequence {
             };
             index.insert((clip.start, clip.id.clone()));
         }
+        let nested_index = clips
+            .values()
+            .filter_map(|c| nested_ref_of(c).map(|n| (c.id.clone(), n)))
+            .collect();
         Ok(Self {
             header,
             tracks,
             clips,
             markers,
             by_track,
+            nested_index,
         })
     }
 
@@ -217,6 +245,11 @@ impl Sequence {
 
     pub fn marker(&self, id: &MarkerId) -> Option<&Marker> {
         self.markers.get(id)
+    }
+
+    /// Clips `Nested` desta sequence e para onde apontam (índice derivado, O(log n)).
+    pub fn nested_refs(&self) -> impl Iterator<Item = (&ClipId, &NestedRef)> {
+        self.nested_index.iter()
     }
 
     pub fn marker_count(&self) -> usize {
@@ -367,6 +400,9 @@ impl Sequence {
             ));
         }
         index.insert((clip.start, clip.id.clone()));
+        if let Some(n) = nested_ref_of(&clip) {
+            self.nested_index.insert(clip.id.clone(), n);
+        }
         self.clips.insert(clip.id.clone(), clip);
         Ok(())
     }
@@ -378,6 +414,7 @@ impl Sequence {
         if let Some(index) = self.by_track.get_mut(&clip.track) {
             index.remove(&(clip.start, clip.id.clone()));
         }
+        self.nested_index.remove(id);
         Ok(clip)
     }
 
@@ -410,7 +447,18 @@ impl Sequence {
     /// Verifica que o índice por track bate com os clips (usado em testes e na validação).
     pub fn index_is_consistent(&self) -> bool {
         let total: usize = self.by_track.values().map(BTreeSet::len).sum();
-        total == self.clips.len()
+        let nested_ok = self.nested_index.len()
+            == self
+                .clips
+                .values()
+                .filter(|c| nested_ref_of(c).is_some())
+                .count()
+            && self
+                .clips
+                .values()
+                .all(|c| self.nested_index.get(&c.id) == nested_ref_of(c).as_ref());
+        nested_ok
+            && total == self.clips.len()
             && self.tracks.len() == self.by_track.len()
             && self.clips.values().all(|c| {
                 self.by_track

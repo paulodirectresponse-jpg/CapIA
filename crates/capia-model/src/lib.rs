@@ -25,8 +25,9 @@ pub use ops::{PrimitiveOp, TrackSlot};
 pub use property::{
     Animatable, Interp, Keyframe, PropertySet, PropertySpec, property_spec, property_specs,
 };
-pub use sequence::{Marker, Sequence, SequenceHeader, Track, TrackKind, TrackRole};
+pub use sequence::{Marker, NestedRef, Sequence, SequenceHeader, Track, TrackKind, TrackRole};
 pub use validate::{
     MAX_CLIPS_PER_SEQUENCE, MAX_NESTING_DEPTH, MAX_TRACKS_PER_SEQUENCE, Violation,
-    content_fits_track, validate_clip, validate_document, validate_nested_graph, validate_sequence,
+    check_nested_edge, content_fits_track, nested_depth_above, nested_depth_below, nested_path,
+    validate_clip, validate_document, validate_nested_graph, validate_sequence,
 };
