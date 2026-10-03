@@ -101,3 +101,8 @@ Por fingerprint (portanto compartilhado entre projetos): probe, frame index, tra
 ## 9. Import
 
 Arrastar arquivos/pastas → probe síncrono leve → asset criado imediatamente (utilizável) → jobs: full hash, frame index, thumbnails, waveform, proxy (se necessário), transcrição (se configurado auto). A timeline nunca espera jobs para permitir edição.
+
+## 10. O que a M07 implementou (e onde diverge deste documento)
+
+Implementado: identidade por conteúdo, hash em streaming, dedup (um asset por conteúdo por projeto), catálogo no `.capia` (schema 2), import atômico, online/offline/modified, relink por conteúdo, `verify`, cache `CacheKey`/`CacheDir` e miniatura (ADR-046..049).
+**Divergências conscientes:** (1) hash = **SHA-256 do arquivo inteiro no import** (sem fingerprint BLAKE3 amostrado + job de hash completo em background — não há jobs ainda; o prefixo `sha256:` deixa a troca como migração futura); (2) o `AssetId` é derivado do hash na criação (`ast_<32 hex>`), não há `AssetVersion`/`MediaFile` separados ainda; (3) o status `Missing` não existe (só `offline`); (4) *force-relink*, relink em lote por pasta e busca por nome+tamanho ficam para depois. Itens das §3, §6–§8 (Global Library, Asset Gateway, mídia gerada, análises) seguem fora de escopo.

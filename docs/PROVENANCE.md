@@ -52,6 +52,9 @@ Candidatos já avaliados (decisão arquivo a arquivo **na Fase 2**, só após te
 | `MartinDelophy/ai-video-editor` | `36cf7b9` | SAFE_WITH_OBLIGATIONS (código) / DO_NOT_USE (pesos/modelos) | Contrato de comandos (`baseRevision`, ids de operação idempotentes, preview→apply, diff), MCP/WebMCP | ADR-029/ADR-030 (reimplementados do zero; ideias); nada copiado |
 | `tjameswilliams/ai-video-editor` | `93f79bb` | **DO_NOT_USE** (PolyForm NC) | Auditoria M02 (arquitetura em alto nível) | **Nenhuma** implementação baseada nele; clean-room para Brain/Tool System |
 | `itsjwill/vanta`, `abekyo/abekyo-editor` | `350b053`, `d442894` | DO_NOT_USE / REFERENCE_ONLY | Auditoria M02 | Nenhum código; padrão de schema+validate+render headless como inspiração de contrato (Fase 6) |
+| crate `sha2` 0.10 (RustCrypto) | 0.10.9 | MIT/Apache-2.0 (dependência) | SHA-256 em *streaming* de arquivos de mídia (M07, ADR-046); aceleração por instruções SHA-NI quando existem | Verificada por `cargo-deny`; nenhum código copiado |
+| Fixtures de mídia `tests/fixtures/media/*` | — | Próprias | Geradas por `tools/gen-media-fixtures.sh` com FFmpeg a partir de fontes **sintéticas** (`testsrc`, `sine`, `color`); sem conteúdo de terceiros (M07) | Versionadas (poucos KiB); regra §2.7 satisfeita |
+| FFmpeg/ffprobe do CI | distro (apt) / Chocolatey | LGPL/GPL (binário **externo**) | Usado só para **testes** no CI; não é distribuído nem linkado (ADR-032/047: o produto usa a build própria LGPL) | Nenhum código incorporado |
 | Remotion | — | **DO_NOT_USE** | Licença verificada na auditoria | Fora do caminho do produto |
 | BtbN FFmpeg-Builds `n8.1.3 lgpl-shared` | `autobuild-2026-09-23-14-55` | LGPL-3.0 (binário) | Inventário de codecs/licença (S3) | **Somente inspeção**; não é dependência do produto (ADR-032: build própria) |
 | FFmpeg | tag `n8.1.3` (`1041abdc…`) | LGPL-2.1+ (config mínima) | Build mínima de prova (S3) | Origem da build própria; manifesto na release |

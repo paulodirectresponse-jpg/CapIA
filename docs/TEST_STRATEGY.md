@@ -104,3 +104,13 @@ Regressões > 10% falham o CI de benchmark (rodado em máquina dedicada, não em
 - **Propriedade com salvar/reabrir:** `properties.rs` roda engine persistido × engine em memória em *lockstep*, reabrindo aleatoriamente, e compara `export_state()`. Orçamento: 1.000 sequências por gerador por padrão (cada commit faz fsync); CI release com `CAPIA_PROP_CASES=5000`.
 - **Corrupção/migrations:** `schema.rs` (12 variantes + byte-fuzz de 300 rodadas; migration v2 sintética).
 - **Mutação manual** registrada em `docs/STATUS.md` (11 mutações, todas detectadas).
+
+## Assets, mídia e composição (M07)
+
+- **Fixtures reais mínimas e versionadas** (`tests/fixtures/media`, ≈ 110 KiB; geradas de forma determinística por `tools/gen-media-fixtures.sh` com fontes sintéticas): vídeo+áudio, vídeo sem áudio, WAV, PNG com alfa, JPEG, arquivo inválido. Versionar (em vez de gerar no teste) tira a dependência do *encoder* da máquina; o FFmpeg só é necessário para **ler** (ffprobe). Goldens de metadados normalizados em `crates/capia-media/tests/golden` comparam só campos estáveis entre versões (sem `bit_rate`).
+- **FFmpeg no CI é explícito** (apt / Chocolatey) e a versão vai para o log; `CAPIA_REQUIRE_FFMPEG=1` transforma a ausência em FALHA. Lógica de import/dedup/offline/relink roda com um `MediaProbe` falso (`capia_assets::testing`), independente do FFmpeg.
+- **Processos:** timeout, flood de stdout, backend ausente, JSON malformado e injeção de argumentos (Unix e Windows) em `capia-media`.
+- **Propriedade com assets** (`capia-project/tests/properties_assets.rs`): modelo de referência independente (arquivos × conteúdos; pares de mesmo tamanho distinguíveis só por hash) prevê cada resultado de import/relink/verify; mistura clips, `delete_asset`, comandos de composição, undo/redo e **reabertura** (documento e catálogo idênticos). Orçamento: 200 casos × 40 passos por padrão; `CAPIA_IO_PROP_CASES` (5.000 no Linux/release no CI; 100 no Windows).
+- **Composição:** `capia-commands/tests/compose.rs` (24) + os cinco comandos no gerador de `properties_nested`/`capia-store/tests/properties` (undo/redo exatos, DAG válido, reabertura).
+- **Atomicidade do import:** crash tests reais (`capia-store/tests/crash.rs`) com o catálogo na transação do commit; escritor obsoleto não deixa linha de catálogo.
+- **Mutação manual:** 14 mutações + a combinada de ciclo (STATUS).

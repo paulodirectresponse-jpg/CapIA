@@ -162,3 +162,7 @@ Cópia consistente (SQLite Online Backup API) do `.capia` para a pasta de backup
 ## Formato `.capia` v1 (M06)
 
 Implementado em `capia-store` conforme ADR-042..044. **Divergências deliberadas** desta seção §6: `synchronous=FULL` (não NORMAL) e schema mais novo é **rejeitado** (não abre read-only). O documento é persistido como snapshot + eventos, não como tabelas por entidade.
+
+## Schema 2 — catálogo de mídia (M07)
+
+Migration v1→v2 (aditiva, com backup): `media_assets(asset_id PK, kind, content_hash UNIQUE, size_bytes, display_name, location_json, known_paths_json, media_info_json, status, status_checked_ms, imported_ms)` e `asset_events(seq, asset_id, kind, detail_json, at_ms)` (append-only). O catálogo **não** é parte do documento (nem do digest nem do undo): o documento guarda só o `Asset` lógico (`id`, nome, duração, flags); onde está o arquivo, o hash, os metadados normalizados e o estado online/offline/modified são fatos do ambiente (ADR-046/048). O arquivo de mídia nunca entra no `.capia`. Detalhes: ADR-048.

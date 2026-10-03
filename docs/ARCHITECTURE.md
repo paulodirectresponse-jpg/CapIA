@@ -189,3 +189,7 @@ Time/tracks/clips/nested → `TIMELINE_ENGINE.md` · UX → `TIMELINE_UX.md` · 
 ## Persistência, facade e CLI (M06)
 
 `capia-store` (SQLite, journal) → `capia-project` (facade: `Project`, `parse_transaction`) → `capia-cli`. Matriz de dependências em `tools/check-architecture.mjs`.
+
+## Mídia e assets (M07)
+
+`capia-media` (probe/ffprobe atrás de `MediaProbe`, processos limitados) e `capia-assets` (identidade por conteúdo, hash em streaming, import, verify, relink, cache) ficam **abaixo** de `capia-store`, que persiste o catálogo (schema 2); `capia-project` orquestra o import atômico (catálogo + `register_asset` na mesma transação) e a CLI traduz argumentos. Dependências: `capia-time → capia-media`; `{capia-model, capia-media} → capia-assets`; `{capia-commands, capia-assets} → capia-store`. O núcleo puro (`time/model/commands`) segue sem IO e sem FFmpeg (ADR-046..049; matriz em `tools/check-architecture.mjs`).

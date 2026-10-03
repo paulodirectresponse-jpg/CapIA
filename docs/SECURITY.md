@@ -88,3 +88,7 @@ trait SecretStore {
 - Local-first; uploads apenas do necessário (`ARCHITECTURE.md` §9) e conforme `PrivacyPolicy` do Brain Profile.
 - O usuário vê, por Run, o que foi enviado a cada provider (tipo, tamanho), sem precisar de logs.
 - Retenção de prompts/respostas configurável.
+
+## Mídia como entrada hostil (M07)
+
+Todo arquivo de mídia e toda saída do ffprobe são **entrada não confiável** (ADR-047): caminhos validados (tamanho, NUL, arquivo regular — FIFO/dispositivo/diretório rejeitados sem abrir bloqueando), arquivo vazio rejeitado, symlink pendente/laço ⇒ erro estruturado; o ffprobe roda **sem shell**, com o caminho como um único argumento `file:<abs>` e `-protocol_whitelist file`, com **timeout** (30 s, processo morto), **teto de stdout/stderr** (8 MiB/64 KiB) e demuxers de playlist/rede rejeitados; o JSON é normalizado com aritmética inteira (sem float), `0/0`/NaN/∞/negativos/valores absurdos (duração > 1.000 h, dimensão > 65.536 px, fps > 1.000, canais > 64, 768 kHz) viram `None`/erro estruturado; hash recalculado em *streaming* (memória constante) e o arquivo não pode mudar durante o import. Um arquivo hostil jamais causa pânico nem trava o app.

@@ -180,3 +180,7 @@ Implementado em `crates/capia-commands` (ver `docs/STATUS.md` para o que falta).
 ## Journal e nested (M06)
 
 O engine recebe um `Journal` (`set_journal`); cada commit/undo/redo chama `Journal::append` **antes** de publicar o novo estado. Falha ⇒ `PERSISTENCE_FAILED` e memória intacta. `Engine::restore(EngineState)` / `export_state()` reconstroem/inspecionam o estado (documento, histórico, cursor, `operation_id`s, resultados). Comandos nested novos: `delete_sequence` (`IN_USE` se referenciada), `rename_sequence`, `insert_nested`, `set_nested_target`, `set_follow_length` — ver ADR-045.
+
+## Comandos da M07
+
+`delete_asset` (`IN_USE` se algum clip referencia o asset; o catálogo permanece) e os cinco comandos de composição `duplicate_sequence`, `make_unique`, `flatten_nested`, `create_nested_from_selection`, `generate_variants` (semântica e ids determinísticos na ADR-050). **Relink e verify não são comandos** (ADR-048 §6): mudam onde está o arquivo, não a edição, e não entram no undo; ficam na trilha `asset_events`.

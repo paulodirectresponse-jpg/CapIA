@@ -6,7 +6,6 @@
 use capia_media::*;
 use capia_time::{TICKS_PER_SECOND, Ticks};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -222,6 +221,7 @@ fn thumbnail_is_a_png_and_respects_the_size_limit() {
 #[cfg(unix)]
 mod fake_backend {
     use super::*;
+    use std::time::Duration;
     use std::os::unix::fs::PermissionsExt;
 
     fn script(dir: &Path, body: &str) -> MediaToolchain {

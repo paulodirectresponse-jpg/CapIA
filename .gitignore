@@ -19,6 +19,11 @@ credentials*
 *.wav
 *.mp3
 *.m4a
+# cache derivado de projeto (descartável; ADR-049)
+*.capia-cache/
+# EXCEÇÃO deliberada: fixtures mínimas e sintéticas dos testes (poucos KiB; tools/gen-media-fixtures.sh)
+!/tests/fixtures/media/
+!/tests/fixtures/media/*
 
 # Build outputs
 /target/
