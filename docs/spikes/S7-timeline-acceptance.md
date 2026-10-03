@@ -1,5 +1,7 @@
 # S7 — Suíte de aceitação de comportamento da timeline
 
+> **Atualização M05:** as 8 decisões D-S7 foram **fechadas pelo Product Owner (ADR-039)** — D-S7-1, 3, 4 e 8 mudaram. A suíte tem agora **120 cenários** (108 + 12) e é executada pelo **engine Rust** (`crates/capia-commands/tests/acceptance.rs`). O oráculo Python abaixo está **congelado** e reflete as regras provisórias da M03; o texto desta página é histórico. Valem `docs/DECISIONS.md` ADR-039 e `docs/STATUS.md`.
+
 **Pergunta:** conseguimos especificar o comportamento CapCut-like (placement, snapping, ripple, retime, group move, keyframes) como suíte **nossa**, executável e independente do OpenCut?
 
 **Resultado: CONFIRMADO.** **108 cenários** em `tests/acceptance/timeline/*.json`, **108/108 consistentes** com um oráculo descartável; a validação por mutação detecta regressões.
@@ -34,7 +36,7 @@
 
 Cada cenário traz `provenance`: `basis` (`capia-spec` ou `opencut-behavior+capia-spec`), referência à spec do CapIA e, quando o comportamento foi *observado* no OpenCut, `repo@commit` + arquivos consultados com a nota "comportamento observado, reimplementado do zero; nenhum código ou literal de teste copiado". **Nenhum teste do OpenCut foi copiado.** Cenários onde o CapIA **diverge deliberadamente** do OpenCut têm `diverges_from_opencut` com a razão (ex.: keyframes fora do clip são preservados; overlap validado no snap; ripple de sequência recusa em vez de criar overlaps; track magnética nunca é auto-selecionada).
 
-## Comportamentos definidos por esta suíte que o PO pode querer confirmar (não bloqueiam a Fase 2)
+## Comportamentos definidos por esta suíte — *versão M03 (provisória; superada pela ADR-039)*
 
 | # | Regra proposta | Alternativa |
 |---|---|---|

@@ -46,15 +46,15 @@ Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, 
 
 **Critérios de conclusão:**
 - [ ] Script via `capia-cli` cria projeto com 3 sequences (2 hooks + `BODY_MASTER` nested), transações, undo/redo, e exporta MP4 corretos (duração/fps/sync verificados por probe).
-- [ ] Testes de propriedade do Command Engine (≥ 10.000 sequências aleatórias) sem violação de invariantes; `apply∘undo = id`.
-- [ ] **Suíte de aceitação `tests/acceptance/timeline` (108 cenários, ADR-036) 100% verde em `capia-commands`**, com exatidão em Ticks e atomicidade nos erros.
-- [ ] **Idempotência e plan token (ADR-029/030):** testes de replay, de kill no meio do commit e de rejeição de token adulterado/expirado/consumido/de outro ator.
-- [ ] **Paridade nativo × WASM** por hash sobre o modelo real, em CI (ADR-016).
+- [x] Testes de propriedade do Command Engine (≥ 10.000 sequências aleatórias) sem violação de invariantes; `apply∘undo = id` *(M05: `crates/capia-commands/tests/properties.rs`, 10.000 sequências × 8 comandos por execução)*.
+- [x] **Suíte de aceitação `tests/acceptance/timeline` (120 cenários: 108 + 12 da M05, ADR-036/039) 100% verde em `capia-commands`**, com exatidão em Ticks e atomicidade nos erros *(M05; mutação detecta regressões)*.
+- [ ] **Idempotência e plan token (ADR-029/030):** testes de replay, de kill no meio do commit e de rejeição de token adulterado/expirado/consumido/de outro ator. *(M05: replay, conflitos de id, token adulterado/expirado/outro ator/consumido/drift ✅; **kill no meio do commit** depende do `capia-store` — pendente.)*
+- [x] **Paridade nativo × WASM** por hash sobre o modelo real, em CI (ADR-016) *(M05: `tools/check-wasm-parity.mjs`, 150 sequências por digest, nativo × `wasm32-wasip1`)*.
 - [ ] Teste de paridade preview×export bit-idêntico (sem proxy) no corpus de teste; golden frames em GPU de software (WARP/llvmpipe).
 - [ ] Conformidade de mídia (ADR-035): seek por índice 100% exato e conformação de cadência = `frame_at` em corpus CFR/VFR sintético.
 - [ ] Corpus VFR/29,97/23,976/59,94/44,1 kHz: drift A/V ≤ 1 frame em 10 min.
 - [ ] Kill -9 durante transações e jobs: projeto reabre íntegro em 100% dos testes de crash.
-- [ ] Benchmarks: transação de 500 ops < 200 ms em projeto de 10.000 clips; abrir projeto de 10.000 clips < 2 s.
+- [ ] Benchmarks: transação de 500 ops < 200 ms em projeto de 10.000 clips; abrir projeto de 10.000 clips < 2 s. *(M05, release, só o modelo em memória: tx de 500 ops ≈ 16 ms; carregar+indexar+validar 10.000 clips ≈ 17 ms; falta medir "abrir" com SQLite quando houver `capia-store`.)*
 - [ ] Migration de fixture v1→v2 sintética testada.
 
 ---

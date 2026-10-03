@@ -192,7 +192,7 @@ Seções: **A. ADRs** · **B. Requisitos reformulados** · **C. Decisões aberta
 
 ### ADR-036 — Suíte de aceitação de comportamento da timeline como ativo normativo
 **Status:** Accepted (M03, spike S7 — `docs/spikes/S7-timeline-acceptance.md`)
-**Decisão:** `tests/acceptance/timeline/*.json` (108 cenários em formato de dados, independentes de implementação) são o **critério de aceitação da Fase 2** de `capia-commands` e fonte de verdade de comportamento (placement, snapping, ripple, retime, group move, keyframes). Cada cenário tem `provenance` e, onde o CapIA diverge do OpenCut, `diverges_from_opencut`. As regras D-S7-1..8 (S7) são **propostas** a confirmar pelo Product Owner; mudanças nelas alteram cenários, não código. Nenhum teste de terceiros foi copiado.
+**Decisão:** `tests/acceptance/timeline/*.json` (108 cenários em formato de dados, independentes de implementação) são o **critério de aceitação da Fase 2** de `capia-commands` e fonte de verdade de comportamento (placement, snapping, ripple, retime, group move, keyframes). Cada cenário tem `provenance` e, onde o CapIA diverge do OpenCut, `diverges_from_opencut`. As regras D-S7-1..8 eram **propostas**; foram **fechadas pelo PO na M05 (ADR-039)** e a suíte tem hoje 120 cenários. Nenhum teste de terceiros foi copiado.
 
 ### ADR-037 — Gates de fase: Fase 2 inicia com OD-1 aberto; OD-1 é hard gate da Fase 3
 **Status:** Accepted (M04, decisão do Product Owner)
@@ -217,6 +217,42 @@ Fechar OD-1 = relatório do S1 executado em Windows (`tools/s1-preview-spike`), 
 - **Shell Tauri:** capabilities mínimas (`core:default`), CSP estrita, `bundle.active = false` (sem instalador até a Fase 6); ícone é **placeholder** gerado por script, não identidade visual.
 - **Licenças:** `cargo-deny` (allow-list; GPL/AGPL/non-commercial falham) + `tools/check-licenses.mjs` (JS). MPL-2.0 é *permitido para revisão* (5 crates Rust do Tauri e `lightningcss` no build do Vite, hoje); `exceptions` humanas ficam vazias.
 **Consequências:** o grafo é pequeno e auditável; o preço é manter a matriz atualizada a cada crate novo.
+
+### ADR-039 — Decisões S7 definitivas (D-S7-1..8), substituindo as versões PROVISIONAL
+**Estado:** Aceita (Product Owner, M05) · **Substitui** o caráter provisório descrito na ADR-036.
+**Contexto:** a suíte de aceitação (ADR-036) nasceu com 8 regras propostas. O PO as fechou na M05; algumas mudaram.
+**Decisão:**
+
+| # | Regra definitiva | Mudou? |
+|---|---|---|
+| D-S7-1 | O core aceita velocidade de clip de **0,01× a 100×**; fora disso `OUT_OF_RANGE`. A UI pode expor faixa menor. Sem time-stretch de áudio avançado agora. | **Sim** (era [1/100, 5]) |
+| D-S7-2 | Inserção no interior de um clip em track magnética → `NOT_ON_BOUNDARY`, salvo `split_at_insert = true`. | Não |
+| D-S7-3 | **Sem conflito global simplista.** Ripple tem `ripple_scope` (`Track`, `Tracks[...]`, `Group`, `Sequence`) e `sync_lock` por track (e rótulo de grupo). Só tracks **participantes** são deslocadas; tracks travadas ou fora do escopo ficam intactas. Se as invariantes não puderem ser preservadas → `RIPPLE_CONFLICT` **estruturado** (clips, tracks, faixa, sugestão). | **Sim** |
+| D-S7-4 | O threshold de snap nasce em **pixels** da UI e é convertido para **ticks** conforme o zoom (`px / pps × 705.600.000`, racional, half-up em ticks). **Sem floor** para frames inteiros. O destino final respeita o alinhamento aplicável. | **Sim** (era floor em frames) |
+| D-S7-5 | Empate de distância: `playhead > marcador > borda de clip > menor timestamp`. | Não |
+| D-S7-6 | Trim **nunca** destrói keyframes fora da região visível (reestender os traz de volta). Split calcula o valor interpolado no ponto de divisão e cria o estado de fronteira em **ambas** as metades, preservando a animação. | Não (reforçada: split exato inclusive em Bézier) |
+| D-S7-7 | O core **rejeita** valor inválido; a UI pode fazer clamp preventivo; o core nunca depende da UI. | Não |
+| D-S7-8 | Bordas de **vídeo** que precisam de alinhamento usam **half-up** e duração mínima de 1 frame. Áudio, mapeamento de fonte e tempo interno ficam em ticks/subframe. **Não** arredondar a timeline inteira para frames. | **Sim** (escopo do arredondamento) |
+
+**Consequências:** cenários da suíte atualizados (RTM-006, SNP-014..016) e **12 cenários novos** (RTM-018/019, RPL-021..025, SNP-017..019, KF-022/023) → **120 cenários**. O oráculo Python (`spikes/s7-oracle`) fica **congelado** (serviu para provar consistência na M03); a verdade executável é o harness Rust em `crates/capia-commands/tests/acceptance.rs`.
+
+### ADR-040 — Modelo de escrita e invariantes da Fase 2 (escolhas de implementação)
+**Estado:** Aceita (M05).
+**Decisão:**
+1. **Ops primitivas com entidade inteira:** `Clip/Track/Marker/Sequence/Asset { old: Option<E>, new: Option<E> }`. A inversa é trocar `old`/`new`; `apply` verifica que o estado bate com `old` (determinismo de undo/replay). O conjunto `affected` e os conflitos são em nível de **entidade** (mais conservador que "entidade+campo" de `COMMAND_SYSTEM.md` §7; refinar só se a prática mostrar falsos conflitos).
+2. **Alinhamento (invariante 3 refinada):** clips em tracks **visuais** têm `start`/`duration` múltiplos do frame da sequence. Em tracks **de áudio** só se exige tick inteiro: 44,1/48 kHz não dividem a duração de frame NTSC (ex.: 23.543.520 ticks ÷ 14.700 não é inteiro), então forçar frame no áudio criaria erro de timing — coerente com D-S7-8.
+3. **Tempo de conteúdo:** todo clip tem `source_in` + `speed` + `reversed` (`content_t = source_in + (t − start)·speed`; reverso inverte). Keyframes vivem em tempo de conteúdo. Conteúdo **sem fonte externa** (texto, imagem, sólido) tem "tempo local desde a criação": o `split` re-basa a metade direita em 0; `Media` e `Nested` não.
+4. **Ids determinísticos:** ids não informados derivam de `SHA-256(operation_id|tipo|slot)`, então replay, re-preview e `apply_plan` produzem os mesmos ids (e o mesmo `diff_digest`).
+5. **Plano:** `preview` de transação já aplicada devolve `already_applied` (sem token). Reenvio de `apply_plan` consumido devolve o **resultado original** (idempotente); `PLAN_CONSUMED` fica reservado. `apply_plan` **recomputa** a transação sobre o estado atual e exige o mesmo `diff_digest` (rebase seguro); qualquer falha de recomputação vira `PLAN_STATE_CHANGED` com a causa no `hint`.
+6. **Revisão:** `Document.revision` é monotônica (commit, undo e redo incrementam). O histórico guarda só o ramo ativo; a auditoria guarda commit/undo/redo. `Sequence.revision` por sequence fica para quando houver cache de render que precise dela.
+7. **JSON canônico dos digests:** `serde_json` com chaves ordenadas, compacto, `f64` no formato mais curto que faz round-trip (`float_roundtrip`) — subconjunto determinístico e **interno** de RFC 8785 (digests não são interoperáveis com terceiros).
+8. **Fora desta missão (documentado em STATUS):** `permissions` por ator (Fase 4), caminhos de ref (`$seq.tracks.main`), transições, efeitos, legendas, grupos de clips, nested commands (o **modelo** e as invariantes de nested/ciclo/profundidade existem), `move` para/de track magnética (reorder, Fase 3), persistência `.capia`.
+
+### ADR-041 — Dependências do núcleo, criptografia local e paridade nativo × WASM
+**Estado:** Aceita (M05) · atualiza ADR-038 (matriz de dependências).
+**Decisão:** `capia-time`/`capia-model` podem depender de `serde`; `capia-commands` de `serde` + `serde_json` (matriz de `tools/check-architecture.mjs` atualizada de propósito). **SHA-256 e HMAC-SHA-256 são implementados no próprio crate** (≈100 linhas, vetores FIPS 180-4 e RFC 4231 nos testes): nenhuma dependência de criptografia no núcleo, comportamento idêntico em WASM, superfície auditável. A chave do token de plano é **injetada** (aleatória por processo, só em memória; `Debug` do engine nunca a imprime). Testes de propriedade usam gerador xorshift **com semente** (sem `proptest`; reprodutível por semente). **Paridade nativo × WASM** (ADR-016) = `examples/parity` executado nativamente e em `wasm32-wasip1` (WASI do Node) com saídas idênticas por digest do documento (`tools/check-wasm-parity.mjs`, no CI).
+**Alternativas:** `sha2`/`hmac` (RustCrypto — permissivas, mas mais dependências no núcleo); `proptest`/`wasm-bindgen-test` (mais ferramentas pesadas); só `cargo check` para WASM (não prova paridade de comportamento).
+**Consequências:** o núcleo continua pequeno (2 dependências externas diretas); a corretude de SHA/HMAC depende dos vetores de teste (revisar se o uso crescer além de digests/tokens internos).
 
 ---
 

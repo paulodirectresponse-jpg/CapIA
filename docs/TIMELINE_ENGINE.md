@@ -40,8 +40,8 @@ Faixa: i64 cobre ~415 anos. **Em JavaScript**, `Number` representa inteiros exat
 
 1. **Toda posição e duração no modelo é `Ticks`.** Floats só existem na UI (pixels) e em parâmetros não temporais (opacidade, escala).
 2. Conversões frame↔ticks e sample↔ticks são **exatas** quando a taxa divide o timebase; para taxas exóticas (ex.: 12,5 fps OK; 23,98 declarado de forma errada), o probe normaliza para a racional padrão mais próxima e registra `rate_normalized=true`.
-3. Arredondamento único e documentado: `floor` para "qual frame contém t", `round-half-up` para snapping de valores vindos da UI.
-4. **Invariante de alinhamento (V1):** `start` e `duration` de todo clip numa sequence são múltiplos da duração de frame da sequence. Áudio pode ter ajuste fino sub-frame via propriedade `audio_offset: Ticks` (alinhado a amostra), não via posição.
+3. Arredondamento único e documentado: `floor` para "qual frame contém t", `round-half-up` para alinhar bordas de **vídeo** e para durações após retime (mínimo de 1 frame). Áudio, mapeamento de fonte e tempo interno ficam em ticks/subframe — **não** se arredonda a timeline inteira para frames (ADR-039, D-S7-8). O threshold de snap nasce em pixels e é convertido para **ticks** conforme o zoom, sem floor para frames (D-S7-4).
+4. **Invariante de alinhamento (V1):** `start` e `duration` de todo clip em track **visual** são múltiplos da duração de frame da sequence (`NOT_FRAME_ALIGNED` caso contrário). Clips em track **de áudio** só exigem tick inteiro (44,1/48 kHz não dividem o frame NTSC — ADR-040); o ajuste fino de fonte vive em `source_in` (ticks).
 5. Cada sequence tem `frame_rate` próprio. Ao mudar o fps de uma sequence, um comando realinha todos os clips (round) — operação explícita e desfazível.
 
 ### 1.4 Tempo de origem (source time) vs tempo de timeline
@@ -121,6 +121,7 @@ Seguindo o modelo mental do CapCut, um clip de mídia com vídeo+áudio carrega 
 - `Keyframe { time: Ticks (relativo ao conteúdo), value, interp: Hold|Linear|Bezier{..}|Ease(preset) }`.
 - **Tempo do keyframe é relativo ao conteúdo do clip** (para mídia: tempo de origem; para texto/sólido: tempo local desde a criação). Assim, mover o clip preserva a animação e trimar a entrada não desloca a animação em relação ao conteúdo (comportamento de editores profissionais).
 - Avaliação determinística e idêntica em preview/export (função pura em `capia-model`).
+- **Trim nunca destrói keyframes** (D-S7-6): recortar só muda a janela visível; reestender restaura a animação. **Split** particiona os keyframes no ponto de divisão, calcula o valor interpolado e cria o keyframe de fronteira nas duas metades (curvas Bézier divididas com exatidão por de Casteljau); antes do primeiro keyframe a metade esquerda vira estática no primeiro valor, depois do último a direita vira estática no último. Conteúdo sem fonte externa (texto/imagem/sólido) re-basa o tempo local da metade direita em 0.
 
 ### Transições
 - Entidade própria ligada a um corte: `Transition { id, track_id, left_clip, right_clip, kind, duration, alignment: Center|StartAtCut|EndAtCut, params }`.
@@ -169,7 +170,7 @@ O compilador expande nested como **subgrafo** com seu próprio formato: o subgra
 | overwrite | Substitui conteúdo no range (corta/remove o que estiver por baixo). |
 | move | Muda `start` e/ou `track`. Não pode sobrepor na track destino. |
 | trim (in/out) | Ajusta borda; limitado por handles da mídia (imagem/texto/sólido: ilimitado). Em track magnética: ripple. |
-| ripple trim / ripple delete | Remove o tempo e fecha o gap na track (opcionalmente em todas as tracks não travadas — `ripple_scope: Track|Sequence`). |
+| ripple trim / ripple delete | Remove o tempo e fecha o gap. **`ripple_scope`** (`Track`, `Tracks[..]`, `Group`, `Sequence`) + **`sync_lock`** por track (ADR-039, D-S7-3): só as tracks participantes são deslocadas; travadas ou fora do escopo ficam intactas; se um clip de track participante cruza o trecho afetado → `RIPPLE_CONFLICT` estruturado (clips, tracks, faixa e sugestão), nada é aplicado. |
 | split | Divide em `t` em dois clips com IDs novos para a metade direita; keyframes e efeitos copiados; transições preservadas nas bordas externas. |
 | slip / roll / slide | Fase 3 (opcionais para V1; o modelo já suporta). |
 | lock | Track travada rejeita qualquer comando que a altere (`TRACK_LOCKED`), inclusive de IA. |

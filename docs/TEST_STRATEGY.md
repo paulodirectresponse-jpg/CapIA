@@ -6,8 +6,8 @@ O núcleo (tempo, modelo, comandos, persistência, render) é onde bugs custam p
 
 | Camada | Tipo de teste | Ferramentas (candidatas) |
 |---|---|---|
-| `capia-time` | Unitários + **propriedade** (conversões, arredondamento, overflow, limites JS) | `cargo test`, `proptest` |
-| `capia-model` / `capia-commands` | Propriedade (sequências aleatórias de comandos), unitários por comando, golden JSON | `proptest`, `insta` |
+| `capia-time` | Unitários + **propriedade** (conversões, arredondamento, overflow, limites JS) | `cargo test` (gerador xorshift com semente; sem `proptest`, ADR-041) |
+| `capia-model` / `capia-commands` | Propriedade (sequências aleatórias de comandos, ≥ 10.000 por execução), unitários por comando, golden por digest, paridade nativo × WASM | `cargo test`; `tests/properties.rs`, `tests/golden.rs`, `tools/check-wasm-parity.mjs` |
 | `capia-store` | Round-trip, migrations com fixtures, crash/kill, corrupção, backup/restore | testes de integração, processos filhos |
 | `capia-media` | Corpus de conformidade (VFR, fps, rotação, áudio), frame-exactness | corpus em `/testdata` |
 | `capia-render` | Golden frames, paridade preview×export, sync A/V | comparação bit-a-bit e perceptual (SSIM/PSNR) |
@@ -19,7 +19,7 @@ O núcleo (tempo, modelo, comandos, persistência, render) é onde bugs custam p
 
 ## 1.1 Ativos de teste normativos
 
-- **Suíte de aceitação de comportamento da timeline** — `tests/acceptance/timeline/*.json` (108 cenários, S7/ADR-036): critério de aceitação da Fase 2 para `capia-commands`; o harness converte frames→Ticks e exige exatidão e atomicidade nos erros.
+- **Suíte de aceitação de comportamento da timeline** — `tests/acceptance/timeline/*.json` (120 cenários: 108 da M03 + 12 da M05, ADR-036/039): critério de aceitação da Fase 2 para `capia-commands`; o harness converte frames→Ticks e exige exatidão e atomicidade nos erros.
 - **Paridade nativo × WASM** (S4/ADR-016): hash de um workload determinístico sobre o modelo real, idêntico no nativo e no WASM, em CI.
 - **Conformidade de mídia** (S2/ADR-035): clipes sintéticos CFR/VFR com índice de frame gravado na imagem (`spikes/s2-frame-exact/generate.sh` como ponto de partida); seek por índice 100% exato; conformação de cadência = `frame_at`; sync A/V ≤ 1 amostra.
 - **Golden frames sem GPU:** wgpu em llvmpipe/WARP no CI (S6 mostrou que roda).

@@ -164,3 +164,15 @@ Após commit: `DocumentChanged { revision, entry_id, patches: Vec<PrimitiveOp>, 
 - `capia-commands` é puro (sem IO), compila para WASM e é usado também pela UI para ghost previews.
 - Funções de expansão são determinísticas: mesmo snapshot + mesmo comando ⇒ mesmas ops (IDs novos vêm de um gerador injetado — determinístico em teste).
 - Testes de propriedade obrigatórios: `apply ∘ undo = id`, `undo ∘ redo = id`, invariantes sempre válidas após qualquer sequência aleatória de comandos válidos, round-trip de serialização (ver `TEST_STRATEGY.md`).
+
+## 12. Estado da implementação (M05) e desvios deliberados
+
+Implementado em `crates/capia-commands` (ver `docs/STATUS.md` para o que falta). Escolhas registradas na ADR-040/041:
+
+- **Ops primitivas por entidade inteira** (`old`/`new`), não por `field_path`: inversa trivial e verificação de estado em `apply`; conflitos em nível de entidade.
+- **Ids derivados** de `operation_id` quando o comando não informa o id (replay/re-preview geram os mesmos ids e o mesmo `diff_digest`).
+- **`preview`** de transação já aplicada devolve `already_applied` (sem token). **`apply_plan`** recomputa sobre o estado atual e exige `diff_digest` idêntico; reenvio após sucesso devolve o resultado original (`PLAN_CONSUMED` reservado).
+- Tokens: `plan_id.HMAC-SHA256(K, plan_id|plan_digest|diff_digest|base_revision|actor_id|scope|expires_at)`; `K` injetada (por processo, só memória); comparação em tempo constante; store de planos limitado (64) com TTL.
+- `Agent`/`Api` → `PREVIEW_REQUIRED` em `execute`. `PERMISSION_DENIED` por comando e o gate humano ficam para a Fase 4.
+- Refs: só `$nome` (sem caminhos `$seq.tracks.main`).
+- Digests usam JSON canônico interno (chaves ordenadas; subconjunto de RFC 8785), não interoperável com terceiros.

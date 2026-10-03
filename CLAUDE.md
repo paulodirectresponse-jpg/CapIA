@@ -43,7 +43,7 @@ Estado atual e próxima missão: **leia `docs/STATUS.md` primeiro.**
 
 - **Fase 2 (motor headless) pode iniciar com OD-1 aberto.** Não construir preview embutido nem UI de editor nela.
 - **Fase 3 (editor/preview) NÃO inicia sem OD-1 fechado** (S1 executado em Windows via `tools/s1-preview-spike`). `OUTPUT-H264` (export MP4/H.264 confiável no Windows) deve estar definido antes da entrega do Editor.
-- As 8 decisões `D-S7-*` estão **PROVISIONAL** (`docs/STATUS.md`): não implemente comportamento que dependa delas sem aprovação do PO.
+- As 8 decisões `D-S7-*` são **definitivas** (ADR-039, PO na M05). Mudá-las exige novo ADR e atualização dos cenários em `tests/acceptance/timeline/`.
 
 ## Comandos (workspace)
 
@@ -52,6 +52,8 @@ cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warni
 cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands   # núcleo sem IO
 pnpm install && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:tools && pnpm build
 pnpm check:arch && pnpm check:licenses && cargo deny check licenses bans sources
+pnpm check:parity         # paridade nativo × WASM (precisa do target wasm32-wasip1)
+cargo test --release -p capia-commands --test perf -- --ignored --nocapture   # metas de desempenho
 pnpm desktop:build        # tauri build --no-bundle  (o front precisa estar construído: pnpm --filter @capia/desktop build)
 ```
 

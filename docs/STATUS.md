@@ -1,81 +1,82 @@
 # STATUS
 
-**Última atualização:** 2026-10-02 · **Fase atual:** FASE 1 — Fundação (encerrada tecnicamente na M04; ver "Gates") · **Próxima:** FASE 2 — Motor
+**Última atualização:** 2026-10-03 · **Fase atual:** FASE 2 — Motor (headless) · **Missão corrente:** M05 concluída (Core Engine Foundation) · **Próxima:** M06 (ver "Próxima missão")
 
 ## Gates de fase (decisão do Product Owner, ADR-037)
 
 ```
-Fase 2 — Motor (headless)     PODE iniciar com OD-1 aberto.
+Fase 2 — Motor (headless)     EM ANDAMENTO (OD-1 aberto não bloqueia).
 Fase 3 — Editor / Preview     NÃO pode iniciar sem OD-1 fechado (S1 medido em Windows).
 ```
 
-OD-1 = presenter do preview na janela Tauri/WebView2. O pacote de medição está pronto: `tools/s1-preview-spike/` (`.\run.ps1`).
+OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto: `tools/s1-preview-spike/` (`.\run.ps1`). **Fora do escopo da Fase 2:** preview embutido na janela e UI de editor.
 
 ## Estado
 
 | Item | Estado |
 |---|---|
-| Código de produto | Scaffold apenas (sem timeline/clips/comandos/render/IA). Código descartável em `/spikes` e `tools/s1-preview-spike` |
-| Workspace | ✅ Cargo (4 crates do núcleo + shell Tauri) + pnpm (2 pacotes + app desktop); fronteiras verificadas por `tools/check-architecture.mjs` |
-| CI | ✅ escrito (`.github/workflows/ci.yml`, validado com `actionlint`); **ainda não executado em runner real** (depende do push) |
-| Licenças | ✅ `cargo-deny` + `tools/check-licenses.mjs` (detecta GPL/AGPL/non-commercial; não substitui auditoria humana) |
-| Decisões abertas | **OD-1** (gate da Fase 3) · **OUTPUT-H264** (antes da entrega do Editor) · 8 decisões S7 `PROVISIONAL` |
-| Spikes | S2–S7 concluídos (M03) · S1 = pacote pronto, aguardando execução em Windows |
-| Git | Commits locais em `claude/happy-bardeen-feyypa`; ver "Blockers" |
+| Núcleo de tempo (`capia-time`) | ✅ `Ticks` (aritmética *checked*, half-up/floor), `Rational`, `FrameRate`, `TimeRange` — 23 testes |
+| Modelo (`capia-model`) | ✅ Document com compartilhamento estrutural, Sequence/Track/Clip/Marker/Asset, keyframes (Bézier exato), **ops primitivas invertíveis**, invariantes (sobreposição, magnética, alinhamento, família, fonte, nested DAG/profundidade 16, limites) — 20 testes |
+| Command Engine (`capia-commands`) | ✅ 19 comandos, transações atômicas, histórico/undo/redo, `operation_id` idempotente (ADR-029), `preview → apply_plan` por token HMAC (ADR-030), rebase/`CONFLICT`, refs `$nome`, auditoria — ver "O que existe" |
+| Suíte de aceitação (ADR-036) | ✅ **120/120** cenários no engine real (108 + 12 da M05); mutação detecta regressões |
+| Persistência `.capia`, assets, mídia, render, preview, CLI | ❌ ainda não (restante da Fase 2) |
+| CI | ✅ executa em runner real desde a M05 (ver "Validação"); jobs Linux verdes incl. perf e paridade WASM |
+| Decisões abertas | **OD-1** (gate da Fase 3) · **OUTPUT-H264** (antes da entrega do Editor). **As 8 decisões S7 estão definitivas** (ADR-039) |
+| Git | `main` = M01–M04 + correção de CI; M05 em `claude/m05-core-engine` (sem PR aberto: não solicitado) |
 
-## Decisões S7 — PROVISIONAL (aguardam aprovação do Product Owner)
+## O que existe (M05)
 
-A suíte `tests/acceptance/timeline` (ADR-036) já codifica estes comportamentos. **Nada na M04 depende deles.** Aprovar = manter; alterar = mudar cenários (dados), não código.
+**Comandos (v1):** `register_asset` · `create_sequence` · `add_track` · `set_track_flags` · `delete_track` · `add_marker` · `move_marker` · `delete_marker` · `insert_clip` · `move_clips` (estrito) · `delete_clip` · `trim_clip` · `split_clip` · `set_clip_speed` · `set_property` · `add_keyframe` · `move_keyframe` · `delete_keyframe` · `set_keyframe_interp`.
+**Funções puras de UX/engine:** `resolve_placement` · `resolve_snap` · `threshold_ticks` · `resolve_group_move` · `eval_property`.
+**Garantias testadas:** toda escrita passa pelo Engine; `Agent`/`Api` só por preview (`PREVIEW_REQUIRED`); erro ⇒ documento idêntico; `apply∘undo = id`, `undo∘redo = id`; replays nunca duplicam edições; token adulterado/expirado/de outro ator/outra chave é rejeitado; plano só aplica se o `diff_digest` recomputado for idêntico.
 
-**D-S7-1 · Faixa de velocidade de clip** — `PROVISIONAL`
-- *Proposto:* `set_clip_speed` aceita velocidade racional em **[1/100, 5]**; fora disso `OUT_OF_RANGE` (RTM-006..009).
-- *Motivo:* limite finito evita durações absurdas e respeita o teto de 24 h de timeline.
-- *OpenCut:* mesma faixa (0,01–5), mas ele **clampa** (inválida vira 1); o CapIA rejeita (ver D-S7-7).
-- *Impacto:* validação do comando, slider da UI, erros acionáveis para a IA; mudar a faixa altera só cenários RTM.
+### Ainda NÃO implementado (escopo declarado fora da M05)
 
-**D-S7-2 · Inserção em track magnética no meio de um clip** — `PROVISIONAL`
-- *Proposto:* `insert_clip` com `start` dentro de um clip → `NOT_ON_BOUNDARY`, salvo `split_at_insert=true` (PLC-009/010).
-- *Motivo:* planos de IA/API precisam de semântica inequívoca; a intenção de drop (antes/depois/dividir) é decisão da UI.
-- *OpenCut:* resolve na UI (placement/alvo de drop); não há erro equivalente no nível de comando.
-- *Impacto:* contrato de `insert_clip`; a UI deve resolver a intenção antes de enviar; `generate_variants`.
+- Persistência `.capia` (SQLite), `applied_operations`/histórico em disco, teste de *kill -9* no commit (depende do `capia-store`).
+- Comandos: pastas/organização, `duplicate/delete/rename_sequence`, `reorder_*`, `duplicate_clip`, `replace_clip_media`, `freeze_frame`, `detach_audio`, nested (`create_nested_from_selection`, `make_unique`, `flatten_nested`, `set_follow_length`, `generate_variants` — o **modelo** e as invariantes de nested/ciclo/profundidade já existem), efeitos, transições, texto/legendas, grupos de clips, clipboard, deliverables, comandos de assets além de `register_asset`.
+- Mover clips **para/de track magnética** (semântica de *reorder*, Fase 3) → `UNSUPPORTED_COMMAND`.
+- Caminhos de ref (`$seq.tracks.main`); só `$nome` simples.
+- `permissions` por ator (`PERMISSION_DENIED`; Fase 4) e gate humano de aprovação do plano (`plan_id + diff_digest`).
+- Coalescing por `gesture_id`; undo seletivo por ator (Fase 5); `Sequence.revision` individual.
+- Conflitos em nível de campo (hoje por entidade — ADR-040).
 
-**D-S7-3 · Ripple com escopo "sequence"** — `PROVISIONAL`
-- *Proposto:* `RIPPLE_CONFLICT` se um clip de outra track destravada sobrepõe o trecho removido; tracks travadas ficam intactas (RPL-006..008).
-- *Motivo:* não criar sobreposições nem cortar conteúdo de outras tracks implicitamente (V1 conservador).
-- *OpenCut:* desloca só elementos a partir do corte (`rippleShiftElements`) e deixa os que atravessam — pode gerar overlap.
-- *Impacto:* o usuário pode precisar dividir/travar antes; a alternativa estilo Premiere (cortar em todas as tracks) muda comando e UX.
+## Missões
 
-**D-S7-4 · Conversão px→frames do limiar de snap** — `PROVISIONAL`
-- *Proposto:* `floor(px / px_por_s × fps)` em frames inteiros (SNP-014..016).
-- *Motivo:* inteiro em frames; o limiar nunca excede o orçamento em pixels.
-- *OpenCut:* retorna ticks fracionários (`px / pps × TICKS_PER_SECOND`).
-- *Impacto:* sensação do snap em zoom baixo (limiar 0 → só frame exato); trivial de ajustar.
+| Missão | Resultado |
+|---|---|
+| M01 — Fundação arquitetural | ✅ docs + `.gitignore` |
+| M02 — Auditoria open-source | ✅ `OPEN_SOURCE_AUDIT.md`; estratégia C |
+| M03 — Fechamento e spikes S1–S7 | ✅ S2–S7 medidos; ADR-029..036; `PROVENANCE.md`; `tests/acceptance` (108 cenários) |
+| M04 — Scaffold, CI e preparação | ✅ workspace Rust+TS, shell Tauri, CI, licenças/arquitetura, pacote S1, ADR-037/038 |
+| **M05 — Core Engine Foundation (Fase 2)** | ✅ tempo, modelo, Command Engine, suíte de aceitação 120/120, propriedade 10.000, idempotência/plano, paridade WASM, ADR-039..041 |
 
-**D-S7-5 · Desempate no snap** — `PROVISIONAL`
-- *Proposto:* mesma distância → playhead > marcador > bordas de clip/início da sequence; depois o menor tempo (SNP-006..008).
-- *Motivo:* resultado determinístico e previsível (testável).
-- *OpenCut:* mantém o primeiro alvo encontrado (ordem de iteração).
-- *Impacto:* qual alvo "ganha" em empates; afeta UX e testes de snapping.
+## Validação M05 (saída real; container Linux, Rust 1.97.0, Node 22, pnpm 10.28)
 
-**D-S7-6 · Keyframes fora do trecho visível** — `PROVISIONAL`
-- *Proposto:* trim **não apaga** keyframes; reestender restaura a animação; split cria keyframe de fronteira interpolado nas duas metades (KF-007..013).
-- *Motivo:* edição não destrutiva; coerente com ADR-025 (keyframes no tempo do conteúdo).
-- *OpenCut:* `clampAnimationsToDuration` descarta keyframes além da nova duração (mantém só a fronteira). O split com keyframe de fronteira é equivalente.
-- *Impacto:* tamanho dos dados e UI de "keyframes inativos"; alternativa = descartar como o OpenCut.
+| Verificação | Resultado |
+|---|---|
+| `cargo fmt --all -- --check` · `cargo clippy --workspace --all-targets -- -D warnings` | ✅ · ✅ sem avisos |
+| `cargo test --workspace` | ✅ **79 testes** (time 23 · model 20 · commands 33 · project 2 · desktop 1) + 2 de desempenho `#[ignore]` |
+| Aceitação (`tests/acceptance.rs`) | ✅ **120 cenários** (placement 19 · snapping 19 · ripple 25 · retime 19 · group move 15 · keyframes 23) |
+| Mutação na suíte (3 defeitos injetados no engine: limiar de snap exclusivo, obstáculo inclusivo no group move, arredondamento por truncamento) | ✅ 3/3 detectados (1, 1 e 3 cenários falham) |
+| Propriedade (`tests/properties.rs`) | ✅ **10.000 sequências × 8 comandos** (≈ 50 mil comandos aceitos: insert 19,4 k · trim 4,8 k · delete 4,6 k · keyframe 3,7 k · split 2,7 k · speed 2,4 k · move 0,5 k …); determinismo de replay em 300 sequências × 12 comandos |
+| Engine (`tests/engine.rs`) | ✅ 21 testes: replay, `OPERATION_ID_REUSED/CONFLICT`, undo não libera ids, `PREVIEW_REQUIRED`, token adulterado/expirado/outro ator/outra chave/store limitado, drift (rebase seguro × `PLAN_STATE_CHANGED`), `CONFLICT` por `base_revision`, refs, `max_ops`, histórico, `RIPPLE_CONFLICT` estruturado, track travada |
+| SHA-256/HMAC próprios | ✅ vetores FIPS 180-4 (incl. 1 M de `a`) e RFC 4231 (casos 1, 2, 6) |
+| Desempenho (`--release`, modelo em memória) | ✅ transação de **500 ops em 10.000 clips ≈ 16 ms** (meta < 200 ms) · carregar + indexar + validar 10.000 clips ≈ **17 ms** (meta < 2 s) |
+| Paridade nativo × WASM (`pnpm check:parity`) | ✅ 150 sequências aleatórias: digests do documento **idênticos** entre nativo e `wasm32-wasip1` (WASI do Node) — cobre floats de Bézier e JSON |
+| Golden digest (`tests/golden.rs`) | ✅ trava a semântica do engine (25 sequências) |
+| WASM: `cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands` | ✅ |
+| `pnpm lint` · `format:check` · `test:tools` (15) · `check:arch` · `cargo deny check licenses bans sources` | ✅ ✅ ✅ ✅ ✅ |
+| CI no GitHub (runner real) | `main`: M04 falhou **uma vez** no `gitleaks-action` (range inválido com commit raiz) → corrigido (CLI sobre o histórico completo) → **verde**. Branch `claude/m05-core-engine`: jobs Linux (núcleo + perf + paridade, TypeScript, políticas/segredos) ✅ — resultado do job Windows no relatório final |
 
-**D-S7-7 · Valor fora do range numa propriedade** — `PROVISIONAL`
-- *Proposto:* comandos **rejeitam** (`OUT_OF_RANGE`); a UI faz clamp antes de enviar (KF-005/006, RTM-006/007).
-- *Motivo:* um plano de IA nunca é alterado silenciosamente.
-- *OpenCut:* clampa parâmetros numéricos.
-- *Impacto:* mensagens de erro das tools de IA; registro de propriedades com faixas.
+### Limites do que foi validado
 
-**D-S7-8 · Arredondamento de duração ao mudar velocidade** — `PROVISIONAL`
-- *Proposto:* `round-half-up` para frame inteiro, **mínimo 1 frame** (RTM-003..005).
-- *Motivo:* invariante de alinhamento a frame (ADR-007).
-- *OpenCut:* arredonda a ticks inteiros (não a frames).
-- *Impacto:* duração final ±0,5 frame; consistência preview/export.
+- A suíte de aceitação foi **escrita à mão a partir da especificação**, não gerada pelo engine; porém os 12 cenários novos e a atualização de 4 são da M05 e foram escritos com o mesmo método (valores derivados à mão — ver `provenance`).
+- Conflitos de plano são detectados por **recomputação + digest**; não há teste de concorrência real (o engine é *single-writer* por construção; o ator de projeto vem com o `capia-store`/`capia-engine`).
+- Desempenho medido só no **modelo em memória**; "abrir projeto" com SQLite será medido com o `capia-store`.
+- Paridade WASM por **digest do documento**, não por execução no navegador (WebView/V8); o WASI do Node usa o mesmo motor V8.
+- Teste de *crash* (kill no meio do commit) **não** existe ainda (não há persistência).
 
-## OUTPUT-H264 — risco técnico explícito (NÃO resolvido na M04)
+## OUTPUT-H264 — risco técnico explícito (NÃO resolvido)
 
 Antes da **entrega do Editor** (saída da Fase 3) é preciso um caminho **confiável** de exportação **MP4/H.264 no Windows**:
 
@@ -87,63 +88,22 @@ Antes da **entrega do Editor** (saída da Fase 3) é preciso um caminho **confi�
 *Desconhecido:* qualidade/velocidade em vídeo real; disponibilidade de encoder de hardware na máquina mínima (iGPU); comportamento do Media Foundation; política de download/licença do binário OpenH264; patentes H.264/HEVC/AAC (decisão jurídica/comercial).
 *Responsável:* Product Owner (com apoio jurídico para patentes). *Sugestão:* spike dedicado em Windows (mesma sessão do S1). *Estado:* **ABERTO**.
 
-## Missões
+## Próxima missão (sugestão)
 
-| Missão | Resultado |
-|---|---|
-| M01 — Fundação arquitetural | ✅ docs + `.gitignore` |
-| M02 — Auditoria open-source | ✅ `OPEN_SOURCE_AUDIT.md`; estratégia C |
-| M03 — Fechamento e spikes S1–S7 | ✅ S2–S7 medidos; ADR-029..036; `PROVENANCE.md`; `tests/acceptance` (108 cenários) |
-| **M04 — Scaffold, CI e preparação** | ✅ workspace Rust+TS, shell Tauri, CI, verificação de licenças/arquitetura, pacote S1 para Windows, ADR-037/038 |
-
-## Validação M04 (saída real dos comandos, container Linux; toolchain Rust 1.97.0, Node 22, pnpm 10.28)
-
-| Verificação | Resultado |
-|---|---|
-| `cargo fmt --all -- --check` | ✅ |
-| `cargo check --workspace` (inclui o shell Tauri) | ✅ |
-| `cargo clippy --workspace --all-targets -- -D warnings` | ✅ sem avisos |
-| `cargo test --workspace` | ✅ **12 testes** (time 5 · model 2 · commands 2 · project 2 · desktop 1) |
-| WASM: `cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands` | ✅ (ADR-016) |
-| `pnpm typecheck` · `lint` · `format:check` | ✅ ✅ ✅ |
-| `pnpm test` | ✅ **13 testes** (engine-bindings 10 · editor-ui 2 · desktop 1) |
-| `pnpm test:tools` | ✅ **12 testes** (arquitetura 7 · licenças 5) |
-| `pnpm build` (Vite) | ✅ |
-| `pnpm desktop:build` (`tauri build --no-bundle`, release) | ✅ binário de 7,5 MB |
-| **App aberto de verdade** (Xvfb, Linux/WebKitGTK) | ✅ processo vivo, janela "CapIA" 1280×720; screenshot mostra o título e a linha "Engine capia-engine v0.0.0 · API 1 · schema documento 1 / comandos 1", que atravessa IPC Tauri → `capia-project` → `engine-bindings` → React |
-| `pnpm check:arch` | ✅ 5 crates Rust e 3 pacotes JS dentro das fronteiras, sem ciclos |
-| `pnpm check:licenses` | ✅ 227 pacotes JS: 224 permitidos, **0 bloqueados**, 3 para revisão (`lightningcss`, MPL-2.0, só no build do Vite) |
-| `cargo deny check licenses bans sources` | ✅ grafo Windows: 246 crates de terceiros, todos permissivos; **5 MPL-2.0** para revisão (`cssparser`, `cssparser-macros`, `dtoa-short`, `option-ext`, `selectors`, via Tauri) |
-| `cargo deny check advisories` (informativo no CI) | ⚠️ 1 aviso `unmaintained`: `proc-macro-error` (via `glib-macros`/GTK, **só Linux**; ausente no grafo Windows) |
-| Detector de licenças prova que barra | ✅ workspace descartável com crates GPL-3.0, AGPL-3.0 e PolyForm-Noncommercial → `rejected`, exit 4 |
-| `actionlint` no `ci.yml` | ✅ |
-| Pacote S1: cross-compile **e link** para `x86_64-pc-windows-gnu` | ✅ PE32+ de 32 MB; `clippy` sem avisos |
-| Pacote S1: parser real do PowerShell 7.6 em `run.ps1` + `selftest.ps1` | ✅ 0 erros de sintaxe; 8 verificações de lógica |
-
-### O que NÃO foi validado
-
-- **Build/execução no Windows** (MSVC + WebView2): o app só rodou em Linux. O CI do Windows existe mas **nunca rodou em runner real**; `gitleaks-action` e `cargo-deny-action` idem.
-- O harness S1 **nunca foi executado** (nem em Windows, nem em Wine); só compilado/cross-linkado e com a lógica de correlação testada. Não compilado com MSVC.
-- `tauri build` gerou apenas o binário (sem instalador, de propósito).
-- O ícone é placeholder.
-
-## Métricas da M04
-
-- **Marcos:** scaffold (4 crates + shell + 3 pacotes TS) · CI (4 jobs) · 2 ferramentas de política com 12 testes · pacote S1 completo · 2 ADRs · gates de fase e decisões S7 documentados.
-- **Testes:** 12 Rust + 13 TS + 12 de ferramentas + 8 do selftest PowerShell = **45 automatizados**, todos verdes.
-- **Auditoria de consistência entre documentos (script):** 257 verificações (ADRs citadas existem, caminhos, seções, estado de OD-1..4, termos obsoletos, as 8 decisões S7, texto dos gates); 0 problemas reais; 9 apontamentos esperados (caminhos de *outros* repositórios citados no audit e `packages/ui-timeline`, que nasce na Fase 3).
-- **Riscos eliminados:** workspace compila/linka e roda ponta a ponta no Linux; Tauri 2 + wgpu 29 + webview2-com compilam para Windows; núcleo comprovadamente livre de Tauri/IA/render e compilável para WASM; detector de licenças provado; sintaxe e lógica do runner S1 validadas.
-- **Retrabalho:** typescript 7 → fixado em 6.0.3 (peer do typescript-eslint); `cargo fmt`/clippy ajustados 2×; erros de config do `cargo-deny` (2); `node --test` com diretório; 2 defeitos no `run.ps1` achados em revisão (`$args` automático, aspas em caminhos com espaço); 1 comando de limpeza bloqueado pela proteção do ambiente e 1 `pkill` que matou o próprio shell (refeitos).
-- **Custo aproximado:** ~0,22 M tokens de contexto nesta missão (estimativa); custo em dinheiro **não informado**.
+**M06 — Persistência e Engine API headless (resto do critério 1 da Fase 2):**
+1. `capia-store` (arquivo `.capia` = SQLite): documento, `applied_operations` e histórico **na mesma transação** do commit; autosave por transação; migrations; recovery; **teste de kill -9 no meio do commit** (fecha o item de idempotência da Fase 2) e abrir 10.000 clips < 2 s.
+2. `capia-cli` mínimo sobre a Engine API: criar projeto com 3 sequences (2 hooks + `BODY_MASTER` *nested*), transações, undo/redo (script reproduzível).
+3. Comandos de nested (`create_nested_from_selection`, `make_unique`, `flatten_nested`, `set_follow_length`) e `generate_variants`, usando o modelo/invariantes já prontos.
+Depois: `capia-assets` → `capia-media` (probe/frame index/decode) → `capia-render` (compositor wgpu) → export. Não iniciar Fase 3 antes de OD-1.
 
 ## Blockers
 
-1. **Push ao GitHub (403)** — persistente desde a M01; testado de novo no início da M04 (antes de qualquer alteração): `Claude doesn't have GitHub access to paulodirectresponse-jpg/CapIA`. Correção: reconectar em https://claude.ai/connect-github e instalar o Claude GitHub App no repositório. O resultado do push final desta missão está no relatório da sessão.
-2. **S1 em Windows** — gate da Fase 3 (não bloqueia a Fase 2).
-3. **Primeira execução do CI** — depende do push.
+1. **S1 em Windows** — gate da Fase 3 (não bloqueia a Fase 2).
+2. **OUTPUT-H264** — antes da entrega do Editor.
+3. *(resolvido na M05)* Push ao GitHub (403) e primeira execução do CI.
 
 ## Notas
 
 - Leia `CLAUDE.md` e este arquivo primeiro; depois os docs da missão.
-- Nenhum código de terceiros incorporado (`docs/PROVENANCE.md` §4 vazio).
+- Nenhum código de terceiros incorporado (`docs/PROVENANCE.md` §4 vazio). SHA-256/HMAC foram escritos do zero a partir de FIPS 180-4/RFC 2104/4231.
 - Ao concluir uma missão, atualize esta página.

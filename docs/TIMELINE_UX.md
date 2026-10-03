@@ -80,7 +80,7 @@ Todas as interações acima resultam em **um comando** (ou uma transação) do C
 ## 5. Snapping
 
 - Alvos: playhead, bordas de clips (todas as tracks visíveis), marcadores, início da sequence, bordas de keyframes, e (quando houver transcript) **limites de palavras** — muito útil em DR.
-- Limiar em pixels (padrão 8 px) convertido para Ticks no zoom atual; o resultado é sempre arredondado para frame.
+- Limiar em pixels (padrão 8 px) convertido para **Ticks** no zoom atual (`px ÷ px_por_segundo × 705.600.000`), **sem floor para frames inteiros** (D-S7-4); o destino final respeita o alinhamento a frame em tracks visuais (half-up). Empate de distância: playhead > marcador > borda de clip > menor timestamp (D-S7-5). Implementado em `capia-commands::{threshold_ticks, resolve_snap, resolve_group_move}`.
 - Indicador visual da linha de snap e do alvo.
 - Função pura, testável, rodando na UI (WASM do core para os alvos e alinhamento).
 
