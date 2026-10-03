@@ -8,6 +8,10 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Injeção de falhas nos jobs de mídia (park/abort em pontos do índice/waveform/proxy) — SÓ testes.
+failpoints = ["capia-media/failpoints"]
+
 [dependencies]
 capia-time.workspace = true
 capia-model.workspace = true
@@ -18,3 +22,7 @@ capia-media.workspace = true
 capia-jobs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+# habilita `failpoints` nos testes de crash sem expor a feature no build normal
+capia-project = { path = ".", features = ["failpoints"] }

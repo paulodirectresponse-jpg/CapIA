@@ -648,6 +648,27 @@ impl Project {
         }
     }
 
+    /// Falha rápido (no submit, não no job) se o asset não tem o stream que o derivado precisa.
+    fn require_stream(rec: &AssetRecord, video: bool) -> Result<(), ProjectError> {
+        let ok = if video {
+            rec.media.video().is_some()
+        } else {
+            rec.media.audio().is_some()
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err(ProjectError::Asset(AssetError::new(
+                AssetErrorCode::Media(capia_media::MediaErrorCode::MediaUnsupportedFormat),
+                format!(
+                    "asset {} has no {} stream",
+                    rec.asset_id,
+                    if video { "video" } else { "audio" }
+                ),
+            )))
+        }
+    }
+
     fn submit_derived<F>(
         &self,
         kind: JobKind,
@@ -682,6 +703,7 @@ impl Project {
         priority: Priority,
     ) -> Result<Submitted, ProjectError> {
         let (rec, file) = self.online_source(id)?;
+        Self::require_stream(&rec, true)?;
         let dedup = derive::dedup_key_index(&rec);
         self.submit_derived(
             JobKind::FrameIndex,
@@ -714,6 +736,7 @@ impl Project {
         priority: Priority,
     ) -> Result<Submitted, ProjectError> {
         let (rec, file) = self.online_source(id)?;
+        Self::require_stream(&rec, false)?;
         let dedup = derive::dedup_key_waveform(&rec);
         self.submit_derived(
             JobKind::Waveform,
@@ -747,6 +770,10 @@ impl Project {
         priority: Priority,
     ) -> Result<Submitted, ProjectError> {
         let (rec, file) = self.online_source(id)?;
+        Self::require_stream(&rec, true)?;
+        profile
+            .validate()
+            .map_err(|e| ProjectError::Asset(e.into()))?;
         let dedup = derive::dedup_key_proxy(&rec, &profile);
         let params = json!({ "asset_id": id.as_str(), "profile": profile });
         self.submit_derived(

@@ -322,6 +322,7 @@ dependencies = [
  "capia-jobs",
  "capia-media",
  "capia-model",
+ "capia-project",
  "capia-store",
  "capia-time",
  "serde",

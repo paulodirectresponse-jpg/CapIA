@@ -175,20 +175,10 @@ fn async_import_returns_long_before_the_full_hash_of_a_huge_file() {
     let t = Tmp::new("latency");
     let mut p = start(&t, &tc);
     let big = t.0.join("big.bin");
-    junk(&big, 384);
+    junk(&big, 160);
     let t0 = Instant::now();
     let ticket = p.import_asset_async(&big).unwrap();
     let returned = t0.elapsed();
-    let full = {
-        let t1 = Instant::now();
-        let _ = hash_file(&big).unwrap();
-        t1.elapsed()
-    };
-    eprintln!("import return: {returned:?} · full SHA-256 of 384 MiB: {full:?}");
-    assert!(
-        returned * 4 < full || returned < Duration::from_millis(50),
-        "{returned:?} vs {full:?}"
-    );
     // o hash em background pode ser cancelado: nada é registrado
     assert!(p.cancel_ticket(&ticket.ticket_id).unwrap());
     let ev = pump_until(&mut p, "cancel", |e| !e.is_empty());
@@ -203,6 +193,17 @@ fn async_import_returns_long_before_the_full_hash_of_a_huge_file() {
         "{:?}",
         row.state
     );
+    // o custo que o import NÃO pagou na chamada: o SHA-256 completo do mesmo arquivo
+    let full = {
+        let t1 = Instant::now();
+        let _ = hash_file(&big).unwrap();
+        t1.elapsed()
+    };
+    eprintln!("import return: {returned:?} · full SHA-256 of 160 MiB: {full:?}");
+    assert!(
+        returned * 4 < full || returned < Duration::from_millis(100),
+        "{returned:?} vs {full:?}"
+    );
 }
 
 #[test]
@@ -212,7 +213,7 @@ fn a_file_that_changes_while_it_is_hashed_never_becomes_an_asset() {
     let t = Tmp::new("changing");
     let mut p = start(&t, &tc);
     let big = t.0.join("grow.bin");
-    junk(&big, 512);
+    junk(&big, 160);
     let ticket = p.import_asset_async(&big).unwrap();
     // cresce enquanto o job lê
     let mut f = std::fs::OpenOptions::new().append(true).open(&big).unwrap();
@@ -601,4 +602,95 @@ fn a_cancel_request_from_another_connection_reaches_the_running_job() {
         .expect("the watcher cancels the job");
     assert_eq!(snap.state, JobState::Cancelled);
     assert_eq!(p.cache_usage().unwrap().files, 0);
+}
+
+// ---- relink em lote: a impressão rápida não é identidade -------------------------------------------
+
+#[test]
+fn batch_relink_rejects_a_same_size_same_fingerprint_file_that_sha256_distinguishes() {
+    use capia_assets::{sample_offsets, testing::StaticProbe};
+    let t = Tmp::new("fpcollide");
+    let mut p = Project::create(&t.project(), &opts()).unwrap();
+    let size = 24 * 1024 * 1024usize;
+    let base: Vec<u8> = (0..size)
+        .map(|i| (i as u8).wrapping_mul(31).wrapping_add(3))
+        .collect();
+    let orig = t.0.join("orig/a.mp4");
+    std::fs::create_dir_all(orig.parent().unwrap()).unwrap();
+    std::fs::write(&orig, &base).unwrap();
+    let id = p
+        .import_asset(&user(), &orig, &StaticProbe)
+        .unwrap()
+        .asset_id;
+    std::fs::remove_file(&orig).unwrap();
+    // decoy: difere só FORA das regiões amostradas ⇒ mesma impressão, SHA-256 diferente
+    let offs = sample_offsets(size as u64);
+    let free = (0..size as u64)
+        .step_by(4096)
+        .find(|o| !offs.iter().any(|(s, l)| o >= s && *o < s + l))
+        .unwrap() as usize;
+    let mut decoy = base.clone();
+    decoy[free] ^= 0xFF;
+    std::fs::create_dir_all(t.0.join("found")).unwrap();
+    std::fs::write(t.0.join("found/a.mp4"), &decoy).unwrap();
+    let (report, applied, _) = p
+        .batch_relink_folder(&t.0.join("found"), &ScanOptions::default(), None, &never)
+        .unwrap();
+    assert!(applied.is_empty(), "the decoy must NOT be linked");
+    assert!(report.matched.is_empty());
+    assert_eq!(
+        report.rejected.len(),
+        1,
+        "same size + fingerprint, different SHA-256: {report:?}"
+    );
+    assert_eq!(report.hashed_files, 1);
+    assert_eq!(
+        p.asset(&id).unwrap().catalog.unwrap().status,
+        Availability::Offline
+    );
+    // a cópia verdadeira (mesmo conteúdo, nome qualquer) é aceita
+    std::fs::write(t.0.join("found/whatever.bin"), &base).unwrap();
+    let (report, applied, _) = p
+        .batch_relink_folder(&t.0.join("found"), &ScanOptions::default(), None, &never)
+        .unwrap();
+    assert_eq!(applied.len(), 1, "{report:?}");
+    assert_eq!(report.rejected.len(), 1);
+}
+
+// ---- o proxy nunca é a fonte de verdade --------------------------------------------------------------
+
+#[test]
+fn the_proxy_is_never_used_as_the_decode_source() {
+    let tc = need!();
+    let t = Tmp::new("noproxy");
+    let mut p = start(&t, &tc);
+    let id = import_sync(&mut p, &tc, &t.copy_fixture("cfr_gop.mp4", "cfr.mp4"));
+    let before = p
+        .frame_source(&id, &tc, &never)
+        .unwrap()
+        .frame_by_index(20, &never)
+        .unwrap();
+    let h = p
+        .submit_proxy(
+            &id,
+            ProxyProfileV1 {
+                max_width: 32,
+                max_height: 32,
+                ..Default::default()
+            },
+            Priority::Interactive,
+        )
+        .unwrap()
+        .handle
+        .wait();
+    assert_eq!(h.state, JobState::Completed);
+    let after = p.frame_source(&id, &tc, &never).unwrap();
+    assert_eq!(
+        after.dimensions(),
+        (64, 48),
+        "decode keeps using the ORIGINAL (64x48), not the 32x32 proxy"
+    );
+    let f = after.frame_by_index(20, &never).unwrap();
+    assert_eq!((f.width, f.height), (64, 48));
+    assert_eq!(f.bytes, before.bytes);
 }

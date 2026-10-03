@@ -72,7 +72,6 @@ fn produce_publishes_atomically_and_hits_the_second_time() {
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     // sem temporários nem locks sobrando
     assert_eq!(count_files(&c.root().join(".tmp")), 0);
-    assert_eq!(count_files(&c.root().join(".locks")), 0);
 }
 
 #[test]

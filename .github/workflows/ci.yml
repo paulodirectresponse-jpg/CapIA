@@ -51,6 +51,8 @@ jobs:
         env:
           CAPIA_REQUIRE_FFMPEG: "1"
           CAPIA_IO_PROP_CASES: "100"
+          # pipeline de mídia (FFmpeg real): propriedade em orçamento smoke; crash/cancel/mutação reais seguem
+          CAPIA_MEDIA_PROP_CASES: "2"
       - name: Build do aplicativo desktop (sem instalador)
         run: pnpm desktop:build
 
@@ -72,16 +74,25 @@ jobs:
           ffprobe -version | head -1
           ffmpeg -version | head -1
       - run: cargo fmt --all -- --check
-      - name: Clippy do núcleo, mídia, assets, store, projeto e CLI
-        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-media -p capia-assets -p capia-store -p capia-project -p capia-cli --all-targets -- -D warnings
-      - name: Testes (núcleo, nested/compose, mídia, assets, migrations, crash, concorrência, CLI)
-        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-media -p capia-assets -p capia-store -p capia-project -p capia-cli
+      - name: Clippy do núcleo, jobs, mídia, assets, store, projeto e CLI
+        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-media -p capia-assets -p capia-store -p capia-project -p capia-cli --all-targets -- -D warnings
+      - name: Testes (núcleo, nested/compose, jobs, mídia, assets, migrations, crash, concorrência, CLI)
+        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-media -p capia-assets -p capia-store -p capia-project -p capia-cli
       - name: "Propriedades com IO ampliadas (release) — salvar/reabrir e assets"
         run: |
           cargo test --release -p capia-store --test properties -- --nocapture
           cargo test --release -p capia-project --test properties_assets -- --nocapture
         env:
           CAPIA_IO_PROP_CASES: "5000"
+      - name: "Pipeline de mídia ampliado (release) — propriedade ponta a ponta com FFmpeg real"
+        run: cargo test --release -p capia-project --test properties_media -- --nocapture
+        env:
+          CAPIA_MEDIA_PROP_CASES: "40"
+      - name: Desempenho dos jobs, do hash e do pipeline de mídia (release; medições)
+        run: |
+          cargo test --release -p capia-jobs --test perf -- --ignored --nocapture
+          cargo test --release -p capia-assets --test perf_hash -- --ignored --nocapture
+          cargo test --release -p capia-project --test perf_media -- --ignored --nocapture --test-threads=1
       - name: Desempenho da persistência, 10.000 clips (release; sanity check)
         run: cargo test --release -p capia-store --test perf -- --ignored --nocapture
       - name: Desempenho de assets/mídia, 10.000 assets (release; sanity check)

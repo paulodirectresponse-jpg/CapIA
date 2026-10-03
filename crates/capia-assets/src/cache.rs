@@ -8,11 +8,10 @@ use capia_media::{MediaErrorCode, MediaToolchain, ThumbnailRequest, extract_fram
 use capia_time::Ticks;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CacheKey {
@@ -124,19 +123,18 @@ static TMP: AtomicU64 = AtomicU64::new(0);
 /// Chaves em produção neste processo (+ condvar para acordar quem espera).
 static HELD: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
 static HELD_CV: Condvar = Condvar::new();
-/// Lock de disco abandonado há mais que isto é considerado de um processo morto.
-const STALE_LOCK: Duration = Duration::from_secs(600);
 
 /// Exclusão por chave: em-processo (mutex) + arquivo `.lock` (entre processos).
 #[derive(Debug)]
 pub struct KeyLock {
     key: PathBuf,
-    file: PathBuf,
+    /// Handle com o lock do SO (fechar = liberar).
+    file: Option<std::fs::File>,
 }
 
 impl Drop for KeyLock {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.file);
+        self.file = None; // libera o lock do SO antes de acordar os da mesma máquina
         let mut held = HELD.lock().unwrap_or_else(PoisonError::into_inner);
         held.remove(&self.key);
         HELD_CV.notify_all();
@@ -240,33 +238,24 @@ impl CacheDir {
         // a partir daqui o `KeyLock` (mesmo em erro) solta a chave em-processo
         let mut lock = KeyLock {
             key: final_path.clone(),
-            file: PathBuf::new(),
+            file: None,
         };
+        // entre processos: lock **consultivo do SO** (`flock`/`LockFileEx`), liberado automaticamente
+        // quando o processo morre — um crash nunca deixa a chave presa (bug achado pelo crash test)
         let lock_dir = self.root.join(".locks");
         std::fs::create_dir_all(&lock_dir).map_err(|e| io_err("cannot create the lock dir", e))?;
-        let file = lock_dir.join(format!("{}.lock", key.hex));
-        let started = Instant::now();
+        let path = lock_dir.join(format!("{}.lock", key.hex));
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|e| io_err("cannot open the cache lock", e))?;
         loop {
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&file)
-            {
-                Ok(mut f) => {
-                    let _ = writeln!(f, "{}", std::process::id());
-                    break;
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    let stale = std::fs::metadata(&file)
-                        .and_then(|m| m.modified())
-                        .ok()
-                        .and_then(|t| t.elapsed().ok())
-                        .is_some_and(|age| age > STALE_LOCK);
-                    if stale {
-                        let _ = std::fs::remove_file(&file);
-                        continue;
-                    }
-                    if cancel() || started.elapsed() > STALE_LOCK {
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    if cancel() {
                         return Err(AssetError::new(
                             AssetErrorCode::AssetCancelled,
                             "cancelled while waiting for the cache lock",
@@ -274,10 +263,12 @@ impl CacheDir {
                     }
                     std::thread::sleep(Duration::from_millis(10));
                 }
-                Err(e) => return Err(io_err("cannot take the cache lock", e)),
+                Err(std::fs::TryLockError::Error(e)) => {
+                    return Err(io_err("cannot take the cache lock", e));
+                }
             }
         }
-        lock.file = file;
+        lock.file = Some(file);
         Ok(lock)
     }
 
@@ -417,9 +408,21 @@ impl CacheDir {
         Ok(r)
     }
 
-    /// Apaga temporários de produções interrompidas mais velhos que `older_than`.
+    /// Apaga temporários de produções interrompidas mais velhos que `older_than` e os arquivos de
+    /// lock que ninguém segura (limpeza explícita; o lock em si é do SO, não do arquivo).
     pub fn sweep_temp(&self, older_than: Duration) -> u64 {
         let mut n = 0;
+        if let Ok(rd) = std::fs::read_dir(self.root.join(".locks")) {
+            for e in rd.flatten() {
+                let free = std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(e.path())
+                    .is_ok_and(|f| f.try_lock().is_ok());
+                if free {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
+        }
         if let Ok(rd) = std::fs::read_dir(self.temp_dir()) {
             for e in rd.flatten() {
                 let old = e
