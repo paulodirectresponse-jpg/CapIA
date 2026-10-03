@@ -10,6 +10,7 @@ use serde::Serialize;
 mod assets;
 mod derive;
 mod error;
+mod force_relink;
 mod pipeline;
 mod project;
 
@@ -18,8 +19,15 @@ pub use assets::{
 };
 pub use derive::FrameSource;
 pub use error::ProjectError;
+pub use force_relink::{DependentClip, ForceRelinkResult};
 pub use pipeline::{ImportTicket, PipelineOptions, PumpEvent};
 pub use project::{ParseError, Project, parse_transaction};
+
+// tipos de jobs/tickets que os adaptadores precisam (a CLI não depende de `capia-jobs` direto)
+pub use capia_jobs::{
+    JobError, JobHandle, JobId, JobKind, JobSnapshot, JobState, Priority, Submitted,
+};
+pub use capia_store::{TicketRow, TicketState};
 
 /// Versão da Engine API exposta aos adaptadores.
 pub const ENGINE_API_VERSION: u32 = 1;

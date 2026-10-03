@@ -103,6 +103,13 @@ pub enum Command {
     DeleteAsset {
         asset: AssetId,
     },
+    /// Atualiza os metadados **lógicos** de um asset existente (duração, vídeo/áudio, nome) — o
+    /// documento-lado do *force relink* (ADR-058). Valida **todos** os clips dependentes: o trecho
+    /// de fonte que consomem tem de caber na nova duração e as faixas que usam têm de existir.
+    /// Nenhum trim silencioso: ou tudo continua válido ou `CONFLICT` com a lista de clips.
+    UpdateAsset {
+        asset: Asset,
+    },
     CreateSequence {
         #[serde(default)]
         id: Option<SequenceId>,
@@ -349,6 +356,7 @@ impl Command {
         match self {
             Self::RegisterAsset { .. } => "register_asset",
             Self::DeleteAsset { .. } => "delete_asset",
+            Self::UpdateAsset { .. } => "update_asset",
             Self::DuplicateSequence { .. } => "duplicate_sequence",
             Self::MakeUnique { .. } => "make_unique",
             Self::FlattenNested { .. } => "flatten_nested",

@@ -11,12 +11,12 @@ use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-fn usage(io: &mut Io<'_>, msg: &str) -> i32 {
+pub(crate) fn usage(io: &mut Io<'_>, msg: &str) -> i32 {
     let _ = std::io::Write::write_fmt(&mut io.err, format_args!("error: {msg}\n"));
     2
 }
 
-fn project_err(io: &mut Io<'_>, e: &ProjectError, json: bool) -> i32 {
+pub(crate) fn project_err(io: &mut Io<'_>, e: &ProjectError, json: bool) -> i32 {
     if json {
         let _ = writeln!(io.err, "{}", json!({ "error": e.to_json() }));
     } else {
@@ -44,7 +44,7 @@ fn media_config(a: &Args) -> Result<MediaConfig, String> {
     })
 }
 
-fn locate(a: &Args, io: &mut Io<'_>) -> Result<MediaToolchain, i32> {
+pub(crate) fn locate(a: &Args, io: &mut Io<'_>) -> Result<MediaToolchain, i32> {
     let cfg = match media_config(a) {
         Ok(c) => c,
         Err(m) => return Err(usage(io, &m)),
@@ -85,6 +85,15 @@ pub(crate) fn run(cmd: &str, args: &Args, opts: &StoreOptions, io: &mut Io<'_>) 
     };
     let rest = &args.positional[1..];
 
+    if cmd == "media" && matches!(sub, "index" | "frame" | "waveform" | "proxy") {
+        return crate::media_cmd::run_media(sub, rest, args, opts, io);
+    }
+    if cmd == "asset" && matches!(sub, "force-relink" | "relink-folder") {
+        return crate::media_cmd::run_asset_ext(sub, rest, args, opts, io);
+    }
+    if cmd == "asset" && sub == "import" && args.is_async {
+        return crate::media_cmd::import_async(rest, args, opts, io);
+    }
     if cmd == "media" {
         if sub != "probe" || rest.len() != 1 {
             return usage(io, "usage: capia media probe <arquivo>");

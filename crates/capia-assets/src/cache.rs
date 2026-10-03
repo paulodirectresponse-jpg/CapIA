@@ -97,7 +97,7 @@ pub struct Produced {
     pub hit: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CacheUsage {
     pub files: u64,
     pub bytes: u64,
@@ -108,7 +108,7 @@ pub struct CacheUsage {
     pub temp_bytes: u64,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct GcReport {
     pub removed_files: u64,
     pub removed_bytes: u64,

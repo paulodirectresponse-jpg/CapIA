@@ -70,6 +70,86 @@ pub(crate) fn delete_asset(ctx: &mut Ctx, id: &capia_model::AssetId) -> Result<C
     Ok(ctx.take_output(None))
 }
 
+/// `update_asset` (ADR-058): troca os metadados lógicos de um asset existente, recusando se algum
+/// clip dependente deixaria de ser válido. Os motivos são estruturados (um item por clip).
+pub(crate) fn update_asset(ctx: &mut Ctx, asset: &Asset) -> Result<CommandOutput> {
+    let Some(old) = ctx.doc.asset(&asset.id).cloned() else {
+        return Err(CommandError::new(
+            ErrorCode::NotFound,
+            format!("asset {} does not exist", asset.id),
+        )
+        .with_entities([EntityRef::new(EntityKind::Asset, asset.id.as_str())]));
+    };
+    if asset.duration.is_some_and(|d| d <= Ticks::ZERO) {
+        return Err(CommandError::new(
+            ErrorCode::OutOfRange,
+            "asset duration must be positive",
+        ));
+    }
+    let mut conflicts: Vec<serde_json::Value> = Vec::new();
+    let mut entities: Vec<EntityRef> = Vec::new();
+    for (sid, seq) in ctx.doc.sequences() {
+        for c in seq.clips().filter(|c| c.content.asset() == Some(&asset.id)) {
+            let mut reasons: Vec<serde_json::Value> = Vec::new();
+            if let capia_model::ClipContent::Media {
+                has_video,
+                has_audio,
+                ..
+            } = &c.content
+            {
+                if *has_video && !asset.has_video {
+                    reasons.push(serde_json::json!({ "reason": "MISSING_VIDEO_STREAM" }));
+                }
+                if *has_audio && !asset.has_audio {
+                    reasons.push(serde_json::json!({ "reason": "MISSING_AUDIO_STREAM" }));
+                }
+                if let Some(len) = asset.duration
+                    && !c.fits_source(len)
+                {
+                    reasons.push(serde_json::json!({
+                        "reason": "SOURCE_RANGE_EXCEEDS_NEW_MEDIA",
+                        "new_duration_ticks": len.0,
+                        "source_in_ticks": c.source_in.0,
+                        "clip_duration_ticks": c.duration.0,
+                    }));
+                }
+            }
+            if !reasons.is_empty() {
+                entities.push(EntityRef::new(EntityKind::Clip, c.id.as_str()));
+                conflicts.push(serde_json::json!({
+                    "sequence": sid.as_str(),
+                    "clip": c.id.as_str(),
+                    "reasons": reasons,
+                }));
+            }
+        }
+    }
+    if !conflicts.is_empty() {
+        return Err(CommandError::new(
+            ErrorCode::Conflict,
+            format!(
+                "the new media of asset {} is incompatible with {} clip(s); nothing was changed (no silent trim)",
+                asset.id,
+                conflicts.len()
+            ),
+        )
+        .with_entities(entities)
+        .with_hint(serde_json::json!({
+            "conflicts": conflicts,
+            "suggestion": "trim or replace those clips first, or relink a file with enough media",
+        })));
+    }
+    if old == *asset {
+        return Ok(ctx.take_output(Some(asset.id.0.clone())));
+    }
+    ctx.emit(PrimitiveOp::Asset {
+        id: asset.id.clone(),
+        old: Some(old),
+        new: Some(asset.clone()),
+    })?;
+    Ok(ctx.take_output(Some(asset.id.0.clone())))
+}
+
 pub(crate) fn create_sequence(
     ctx: &mut Ctx,
     id: Option<&SequenceId>,

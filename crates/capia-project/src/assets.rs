@@ -90,7 +90,7 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-fn doc_asset(rec: &AssetRecord) -> Asset {
+pub(crate) fn doc_asset(rec: &AssetRecord) -> Asset {
     let m = &rec.media;
     Asset {
         id: rec.asset_id.clone(),
@@ -102,7 +102,7 @@ fn doc_asset(rec: &AssetRecord) -> Asset {
     }
 }
 
-fn push_alias(known: &mut Vec<String>, path: &str) {
+pub(crate) fn push_alias(known: &mut Vec<String>, path: &str) {
     if !known.iter().any(|k| k == path) {
         known.push(path.to_owned());
         if known.len() > MAX_KNOWN_PATHS {

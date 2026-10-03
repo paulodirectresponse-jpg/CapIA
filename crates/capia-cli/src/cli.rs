@@ -28,6 +28,19 @@ ASSETS E MÍDIA:
   capia asset verify  <projeto.capia> <asset-id>       recalcula o hash e detecta arquivo alterado/ausente
   capia asset relink  <projeto.capia> <asset-id> <arquivo>   só aceita o MESMO conteúdo (senão ASSET_HASH_MISMATCH)
   capia asset thumbnail <projeto.capia> <asset-id> [--at SEGUNDOS] [--size PX]   miniatura no cache
+  capia asset import  <projeto.capia> <arquivo> --async   devolve o ticket na hora; hash/probe em job; finaliza e sai
+  capia asset force-relink <projeto.capia> <asset-id> <arquivo> [--dry-run]   troca o CONTEÚDO (valida clips; sem trim silencioso)
+  capia asset relink-folder <projeto.capia> <pasta> [--max-depth N] [--max-files N] [--follow-links]
+                                                       relink em lote por tamanho → impressão → SHA-256 (nunca por nome)
+  capia media index    <projeto.capia> <asset-id>      índice de quadros (PTS/DTS/keyframe reais) no cache
+  capia media frame    <projeto.capia> <asset-id> [--at SEG | --index N] [--out quadro.ppm]   decode exato de um quadro
+  capia media waveform <projeto.capia> <asset-id> [--buckets N]    waveform multirresolução (min/max/rms)
+  capia media proxy    <projeto.capia> <asset-id> [--max-width N] [--max-height N] [--quality 2..31] [--no-audio]
+  capia job list   <projeto.capia> [--state queued|running|completed|failed|cancelled|interrupted] [--json]
+  capia job status <projeto.capia> <job-id> [--json]
+  capia job cancel <projeto.capia> <job-id>            cancela (mata o ffmpeg); vale entre processos
+  capia cache info  <projeto.capia> [--json]           uso do cache derivado (arquivos/bytes por tipo)
+  capia cache clean <projeto.capia> [--all]            remove derivados órfãos/temporários (ou tudo com --all)
   capia media probe   <arquivo> [--json]               metadados normalizados (ffprobe)
         [--ffprobe CAMINHO] [--ffmpeg CAMINHO] [--timeout-ms N]
 
@@ -49,6 +62,22 @@ pub(crate) struct Args {
     pub(crate) timeout_ms: Option<String>,
     pub(crate) at: Option<String>,
     pub(crate) size: Option<String>,
+    pub(crate) index: Option<String>,
+    pub(crate) out: Option<String>,
+    pub(crate) max_width: Option<String>,
+    pub(crate) max_height: Option<String>,
+    pub(crate) quality: Option<String>,
+    pub(crate) buckets: Option<String>,
+    pub(crate) state: Option<String>,
+    pub(crate) max_depth: Option<String>,
+    pub(crate) max_files: Option<String>,
+    pub(crate) priority: Option<String>,
+    pub(crate) follow_links: bool,
+    pub(crate) no_audio: bool,
+    pub(crate) dry_run: bool,
+    pub(crate) all: bool,
+    pub(crate) is_async: bool,
+    pub(crate) progress: bool,
 }
 
 fn parse_args(raw: &[String]) -> Result<Args, String> {
@@ -67,6 +96,22 @@ fn parse_args(raw: &[String]) -> Result<Args, String> {
             "--timeout-ms" => a.timeout_ms = Some(value("--timeout-ms")?),
             "--at" => a.at = Some(value("--at")?),
             "--size" => a.size = Some(value("--size")?),
+            "--index" => a.index = Some(value("--index")?),
+            "--out" => a.out = Some(value("--out")?),
+            "--max-width" => a.max_width = Some(value("--max-width")?),
+            "--max-height" => a.max_height = Some(value("--max-height")?),
+            "--quality" => a.quality = Some(value("--quality")?),
+            "--buckets" => a.buckets = Some(value("--buckets")?),
+            "--state" => a.state = Some(value("--state")?),
+            "--max-depth" => a.max_depth = Some(value("--max-depth")?),
+            "--max-files" => a.max_files = Some(value("--max-files")?),
+            "--priority" => a.priority = Some(value("--priority")?),
+            "--follow-links" => a.follow_links = true,
+            "--no-audio" => a.no_audio = true,
+            "--dry-run" => a.dry_run = true,
+            "--all" => a.all = true,
+            "--async" => a.is_async = true,
+            "--progress" => a.progress = true,
             flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
             _ => a.positional.push(arg.clone()),
         }
@@ -220,6 +265,9 @@ pub(crate) fn run(raw: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i
         Ok(o) => o,
         Err(m) => return usage(&mut io, &m),
     };
+    if matches!(cmd.as_str(), "job" | "cache") {
+        return crate::media_cmd::run(cmd, &args, &opts, &mut io);
+    }
     if matches!(cmd.as_str(), "asset" | "media") {
         return crate::assets_cmd::run(cmd, &args, &opts, &mut io);
     }

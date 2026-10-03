@@ -953,6 +953,7 @@ fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()
     match cmd {
         Command::RegisterAsset { .. }
         | Command::DeleteAsset { .. }
+        | Command::UpdateAsset { .. }
         | Command::CreateSequence { .. } => {}
         Command::AddTrack { sequence, .. } | Command::AddMarker { sequence, .. } => {
             sub(&mut sequence.0, refs)?

@@ -18,6 +18,7 @@ pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<Comman
     match command {
         Command::RegisterAsset { asset } => structure::register_asset(ctx, asset),
         Command::DeleteAsset { asset } => structure::delete_asset(ctx, asset),
+        Command::UpdateAsset { asset } => structure::update_asset(ctx, asset),
         Command::DuplicateSequence {
             source,
             new_sequence,
