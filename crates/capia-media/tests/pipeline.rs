@@ -359,3 +359,278 @@ fn block_decode_streams_the_whole_stream_and_can_be_cancelled() {
     .unwrap_err();
     assert_eq!(err.code, MediaErrorCode::MediaCancelled);
 }
+
+// ---- waveform ------------------------------------------------------------------------------
+
+#[test]
+fn waveform_from_a_real_file_matches_the_decoded_pcm() {
+    let tc = need!();
+    let w = generate_waveform(
+        &tc,
+        &fixture("tone_44k.wav"),
+        0,
+        44_100,
+        std::time::Duration::from_secs(30),
+        &never,
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(w.total_samples(), 44_100);
+    assert_eq!(w.duration(), Ticks(TICKS_PER_SECOND));
+    // pico global = pico do PCM decodificado
+    let all = pcm(
+        &tc,
+        "tone_44k.wav",
+        &audio_req(44_100, 1, Ticks(0), Ticks(TICKS_PER_SECOND)),
+    );
+    let max = all.samples.iter().cloned().fold(f32::MIN, f32::max);
+    let top = w.level(w.level_count() - 1).unwrap();
+    assert_eq!(top.len(), 1);
+    assert!((top[0].max - max).abs() < 1e-6);
+    let bytes = w.encode();
+    assert_eq!(Waveform::decode(&bytes).unwrap(), w);
+    let err = generate_waveform(
+        &tc,
+        &fixture("tone_44k.wav"),
+        0,
+        44_100,
+        std::time::Duration::from_secs(30),
+        &|| true,
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(err.code, MediaErrorCode::MediaCancelled);
+    // stream inexistente ⇒ erro estruturado, nunca waveform parcial
+    assert!(
+        generate_waveform(
+            &tc,
+            &fixture("tone_44k.wav"),
+            9,
+            44_100,
+            std::time::Duration::from_secs(30),
+            &never,
+            &mut |_| {}
+        )
+        .is_err()
+    );
+}
+
+// ---- proxy ---------------------------------------------------------------------------------
+
+fn tmp(name: &str) -> PathBuf {
+    let d = std::env::temp_dir().join(format!("capia-media-proxy-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    d.join(name)
+}
+
+fn pid_alive(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        std::path::Path::new(&format!("/proc/{pid}")).exists()
+    }
+    #[cfg(windows)]
+    {
+        let o = std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&o.stdout).contains(&pid.to_string())
+    }
+}
+
+#[test]
+fn proxy_keeps_every_frame_and_the_vfr_timestamps() {
+    let tc = need!();
+    let out = tmp("vfr_proxy.mov");
+    let mut last = 0u64;
+    let rep = generate_proxy(
+        &tc,
+        &fixture("vfr.mp4"),
+        &out,
+        &ProxyProfileV1 {
+            max_width: 32,
+            max_height: 32,
+            audio: ProxyAudio::None,
+            ..Default::default()
+        },
+        false,
+        1_000_000,
+        std::time::Duration::from_secs(60),
+        None,
+        &never,
+        &mut |d, _| last = d,
+    )
+    .unwrap();
+    assert_eq!(rep.encoder.name, "mjpeg");
+    let v = rep.info.video().unwrap();
+    assert!(v.width <= 32 && v.height <= 32 && v.width % 2 == 0 && v.height % 2 == 0);
+    // mesma contagem de quadros e mesmos *instantes* (em ticks) que o original
+    let orig = load(&tc, "vfr.mp4");
+    let pinfo = FfprobeBackend::new(tc.clone()).probe(&out).unwrap();
+    let pv = pinfo.video().unwrap();
+    let pidx = build_frame_index(
+        &tc,
+        &out,
+        pv.index,
+        pv.time_base.unwrap(),
+        0,
+        &IndexOptions::default(),
+        &never,
+        &mut |_, _| {},
+    )
+    .unwrap();
+    assert_eq!(pidx.len(), orig.index.len());
+    for i in 0..orig.index.len() {
+        let (a, b) = (orig.index.time_of(i).unwrap().0, pidx.time_of(i).unwrap().0);
+        assert!(
+            (a - b).abs() <= TICKS_PER_SECOND / 10_000,
+            "frame {i}: {a} vs {b}"
+        );
+    }
+    let _ = std::fs::remove_file(&out);
+}
+
+#[test]
+fn proxy_with_hardware_h264_reports_unavailable_when_missing() {
+    let tc = need!();
+    let enc = list_encoders(&tc).unwrap();
+    let hw_present = HARDWARE_H264_ENCODERS
+        .iter()
+        .any(|h| enc.iter().any(|e| e == h));
+    let r = select_encoder(ProxyCodec::H264Hardware, &enc);
+    assert_eq!(r.is_ok(), hw_present);
+    if let Err(e) = r {
+        assert_eq!(e.code, MediaErrorCode::MediaEncoderUnavailable);
+    }
+}
+
+#[test]
+fn cancelling_a_proxy_kills_ffmpeg_and_leaves_no_file() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+    let tc = need!();
+    // entrada longa o bastante para o encode não terminar antes do cancelamento
+    let long = tmp("long_src.mkv");
+    let ff = tc.ffmpeg.clone().unwrap();
+    let st = std::process::Command::new(&ff)
+        .args([
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=30:duration=240",
+        ])
+        .args(["-c:v", "mpeg4", "-q:v", "10"])
+        .arg(&long)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let out = tmp("cancel_proxy.mov");
+    let pid = Arc::new(AtomicU32::new(0));
+    let cancelled = AtomicBool::new(false);
+    let err = generate_proxy(
+        &tc,
+        &long,
+        &out,
+        &ProxyProfileV1 {
+            max_width: 640,
+            max_height: 360,
+            audio: ProxyAudio::None,
+            jpeg_quality: 2,
+            ..Default::default()
+        },
+        false,
+        240_000_000,
+        std::time::Duration::from_secs(120),
+        Some(pid.clone()),
+        &|| cancelled.load(Ordering::SeqCst),
+        &mut |_, _| cancelled.store(true, Ordering::SeqCst),
+    )
+    .unwrap_err();
+    assert_eq!(err.code, MediaErrorCode::MediaCancelled);
+    let p = pid.load(Ordering::SeqCst);
+    assert_ne!(p, 0, "the pid was recorded");
+    assert!(
+        !pid_alive(p),
+        "ffmpeg process {p} must be gone after cancel"
+    );
+    assert!(!out.exists(), "the partial proxy must be removed");
+    let _ = std::fs::remove_file(&long);
+}
+
+// ---- runner de streaming -------------------------------------------------------------------
+
+fn endless_source_args() -> Vec<std::ffi::OsString> {
+    [
+        "-v",
+        "error",
+        "-re",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=64x64:rate=30",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+    ]
+    .iter()
+    .map(std::ffi::OsString::from)
+    .collect()
+}
+
+#[test]
+fn streaming_runner_stops_early_and_kills_the_child() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    let tc = need!();
+    let pid = Arc::new(AtomicU32::new(0));
+    let mut lim = StreamLimits::new(std::time::Duration::from_secs(30));
+    lim.pid_sink = Some(pid.clone());
+    let mut got = 0usize;
+    let out = run_streaming(
+        tc.ffmpeg.as_ref().unwrap(),
+        &endless_source_args(),
+        &lim,
+        &never,
+        &mut |c| {
+            got += c.len();
+            Ok(if got > 50_000 {
+                Flow::Stop
+            } else {
+                Flow::Continue
+            })
+        },
+    )
+    .unwrap();
+    assert!(out.stopped_early);
+    assert!(!pid_alive(pid.load(Ordering::SeqCst)));
+}
+
+#[test]
+fn streaming_runner_kills_on_cancel_and_on_timeout() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    let tc = need!();
+    for (timeout_ms, cancel_now, code) in [
+        (30_000u64, true, MediaErrorCode::MediaCancelled),
+        (300, false, MediaErrorCode::MediaProbeTimeout),
+    ] {
+        let pid = Arc::new(AtomicU32::new(0));
+        let mut lim = StreamLimits::new(std::time::Duration::from_millis(timeout_ms));
+        lim.pid_sink = Some(pid.clone());
+        let started = std::time::Instant::now();
+        let err = run_streaming(
+            tc.ffmpeg.as_ref().unwrap(),
+            &endless_source_args(),
+            &lim,
+            &|| cancel_now && started.elapsed() > std::time::Duration::from_millis(200),
+            &mut |_| Ok(Flow::Continue),
+        )
+        .unwrap_err();
+        assert_eq!(err.code, code);
+        assert!(!pid_alive(pid.load(Ordering::SeqCst)), "{code}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
+}

@@ -498,7 +498,7 @@ mod tests {
     #[test]
     fn frame_len_checks_overflow_and_limits() {
         let l = DecodeLimits::default();
-        assert_eq!(frame_len(64, 48, &l).unwrap(), 64 * 48 * 4);
+        assert_eq!(frame_len(64, 48, &l).ok(), Some(64 * 48 * 4));
         assert!(frame_len(0, 10, &l).is_err());
         assert!(frame_len(u32::MAX, u32::MAX, &l).is_err());
         assert!(frame_len(65_536, 65_536, &l).is_err());

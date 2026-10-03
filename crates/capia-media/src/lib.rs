@@ -11,8 +11,10 @@ mod info;
 mod limits;
 mod normalize;
 mod process;
+mod proxy;
 mod thumbnail;
 mod toolchain;
+mod waveform;
 
 pub use decode::{
     AudioPcm, AudioRequest, DEFAULT_MAX_FRAME_BYTES, DEFAULT_MAX_PCM_BYTES, DecodeLimits,
@@ -33,5 +35,13 @@ pub use normalize::{normalize_ffprobe_json, parse_decimal_ticks, parse_frame_rat
 pub use process::{
     Flow, RunLimits, RunOutput, StreamLimits, StreamOutput, run_bounded, run_collect, run_streaming,
 };
+pub use proxy::{
+    FpsPolicy, HARDWARE_H264_ENCODERS, PROXY_PRODUCER, ProxyAudio, ProxyCodec, ProxyEncoder,
+    ProxyProfileV1, ProxyReport, generate_proxy, list_encoders, select_encoder,
+};
 pub use thumbnail::{ThumbnailRequest, extract_frame_png};
 pub use toolchain::{MediaConfig, MediaToolchain, ToolSource};
+pub use waveform::{
+    BASE_BLOCK, MAX_WAVEFORM_SAMPLES, Peak, WAVEFORM_MAGIC, WAVEFORM_PRODUCER, WAVEFORM_VERSION,
+    Waveform, WaveformBuilder, generate_waveform,
+};
