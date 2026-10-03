@@ -48,7 +48,7 @@ fn stat(path: &Path) -> Result<std::fs::Metadata, AssetError> {
 }
 
 /// Valida o caminho de entrada e devolve a forma absoluta (sem `canonicalize`: ADR-048 §3).
-pub(crate) fn absolute_checked(path: &Path) -> Result<PathBuf, AssetError> {
+pub fn absolute_checked(path: &Path) -> Result<PathBuf, AssetError> {
     let bad = |m: &str| AssetError::new(AssetErrorCode::AssetPathInvalid, m.to_owned());
     let os = path.as_os_str();
     if os.is_empty() {

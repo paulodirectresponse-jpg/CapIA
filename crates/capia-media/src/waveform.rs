@@ -7,6 +7,7 @@
 
 use crate::decode::decode_audio_blocks;
 use crate::error::{MediaError, MediaErrorCode};
+use crate::failpoints::fp;
 use crate::toolchain::MediaToolchain;
 use capia_time::Ticks;
 use sha2::{Digest, Sha256};
@@ -350,6 +351,9 @@ pub fn generate_waveform(
         timeout,
         cancel,
         &mut |block| {
+            if seen == 0 {
+                fp!("waveform_running");
+            }
             b.push(block)?;
             seen += block.len() as u64;
             progress(seen);

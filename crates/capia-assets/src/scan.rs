@@ -8,7 +8,7 @@ use crate::fingerprint::fingerprint_file;
 use crate::hash::{ContentHash, FileDigest, hash_file_job};
 use crate::record::AssetRecord;
 use capia_model::AssetId;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
@@ -30,20 +30,20 @@ impl Default for ScanOptions {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScannedFile {
     pub path: PathBuf,
     pub size: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScanIssue {
     pub path: String,
     pub code: String,
     pub message: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScanReport {
     pub files: Vec<ScannedFile>,
     pub dirs_visited: u64,
@@ -211,21 +211,21 @@ impl From<&AssetRecord> for RelinkTarget {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchedAsset {
     pub asset_id: AssetId,
     pub path: PathBuf,
     pub size: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AmbiguousAsset {
     pub asset_id: AssetId,
     /// Vários arquivos com o conteúdo certo: nada é relinkado sem escolha explícita.
     pub candidates: Vec<PathBuf>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RejectedCandidate {
     pub asset_id: AssetId,
     pub path: PathBuf,
@@ -233,7 +233,7 @@ pub struct RejectedCandidate {
     pub found_hash: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchError {
     pub asset_id: Option<AssetId>,
     pub path: Option<String>,
@@ -241,7 +241,7 @@ pub struct MatchError {
     pub message: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatchRelinkReport {
     pub matched: Vec<MatchedAsset>,
     pub unresolved: Vec<AssetId>,

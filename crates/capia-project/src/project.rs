@@ -2,19 +2,21 @@
 //! (CLI hoje; Tauri/REST/MCP depois) usam — nenhum deles fala com o SQLite nem escreve no
 //! documento por fora do Command Engine.
 
+use crate::pipeline::Pipeline;
 use capia_commands::{
     Actor, CommandEnvelope, CommandError, CommitResult, Engine, EngineConfig, PreviewResult,
     Transaction,
 };
 use capia_model::Document;
 use capia_store::{
-    Catalog, CatalogOp, PendingCatalog, ProjectInfo, ProjectStore, StoreError, StoreOptions,
-    ValidationReport, random_plan_key,
+    Catalog, CatalogOp, JobStore, PendingCatalog, ProjectInfo, ProjectStore, StoreError,
+    StoreOptions, ValidationReport, random_plan_key,
 };
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .ok()
@@ -31,6 +33,10 @@ pub struct Project {
     catalog: Catalog,
     /// Fila de efeitos do catálogo que o journal aplica na transação do próximo commit.
     pending: PendingCatalog,
+    /// Persistência de jobs/tickets (conexão própria; schema 3).
+    jobs: Arc<JobStore>,
+    /// Executor de jobs de mídia, quando iniciado (`start_pipeline`).
+    pub(crate) pipeline: Option<Pipeline>,
 }
 
 impl Project {
@@ -55,11 +61,14 @@ impl Project {
         let pending = store.pending_catalog();
         let engine = store.into_engine(state, random_plan_key()?, EngineConfig::default())?;
         let catalog = Catalog::open(path, opts.busy_timeout)?;
+        let jobs = Arc::new(JobStore::open(path, opts.busy_timeout)?);
         Ok(Self {
             engine,
             path: path.to_path_buf(),
             catalog,
             pending,
+            jobs,
+            pipeline: None,
         })
     }
 
@@ -69,6 +78,10 @@ impl Project {
 
     pub(crate) fn catalog_mut(&mut self) -> &mut Catalog {
         &mut self.catalog
+    }
+
+    pub(crate) fn job_store(&self) -> &Arc<JobStore> {
+        &self.jobs
     }
 
     pub(crate) fn queue_catalog(&self, op: CatalogOp) -> Result<(), StoreError> {

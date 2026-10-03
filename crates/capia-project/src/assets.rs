@@ -112,7 +112,7 @@ fn push_alias(known: &mut Vec<String>, path: &str) {
 }
 
 impl Project {
-    fn project_dir(&self) -> Option<PathBuf> {
+    pub(crate) fn project_dir(&self) -> Option<PathBuf> {
         std::path::absolute(self.path())
             .ok()
             .and_then(|p| p.parent().map(Path::to_path_buf))
@@ -134,7 +134,18 @@ impl Project {
         let now = now_ms();
         let dir = self.project_dir();
         let prepared = prepare_import(path, dir.as_deref(), probe, now)?;
-        let mut rec = prepared.record;
+        self.commit_prepared(actor, prepared.record, now)
+    }
+
+    /// Segunda metade do import: classifica o registro **já preparado** (hash+probe feitos, de
+    /// forma síncrona ou por job) contra o catálogo/documento e grava. Sem IO de mídia.
+    pub(crate) fn commit_prepared(
+        &mut self,
+        actor: &Actor,
+        mut rec: AssetRecord,
+        now: u64,
+    ) -> Result<ImportResult, ProjectError> {
+        let dir = self.project_dir();
         let new_path = rec.location.path.clone();
         let existing = self.catalog().find_by_hash(&rec.content_hash)?;
         let in_doc = self.document().asset(&rec.asset_id).is_some();
@@ -348,7 +359,7 @@ impl Project {
         }
     }
 
-    fn managed(&self, id: &AssetId) -> Result<AssetRecord, ProjectError> {
+    pub(crate) fn managed(&self, id: &AssetId) -> Result<AssetRecord, ProjectError> {
         match self.catalog().get(id)? {
             Some(r) => Ok(r),
             None if self.document().asset(id).is_some() => Err(ProjectError::invalid(
@@ -397,11 +408,23 @@ impl Project {
         id: &AssetId,
         new_file: &Path,
     ) -> Result<RelinkResult, ProjectError> {
-        let mut rec = self.managed(id)?;
+        let rec = self.managed(id)?;
         let check = check_relink(&rec, new_file)?;
+        self.apply_relink_unchecked(id, &check.path, "manual")
+    }
+
+    /// Grava o relink (localização nova, online, alias do caminho antigo) **sem** reconferir o
+    /// conteúdo: o chamador já provou o hash (relink manual, em lote ou import).
+    pub(crate) fn apply_relink_unchecked(
+        &mut self,
+        id: &AssetId,
+        new_abs: &Path,
+        mode: &str,
+    ) -> Result<RelinkResult, ProjectError> {
+        let mut rec = self.managed(id)?;
         let dir = self.project_dir();
         let from = rec.location.path.clone();
-        let location = AssetLocation::from_path(&check.path, dir.as_deref());
+        let location = AssetLocation::from_path(new_abs, dir.as_deref());
         let to = location.path.clone();
         push_alias(&mut rec.known_paths, &from);
         rec.location = location;
@@ -410,7 +433,7 @@ impl Project {
         self.catalog_mut().apply(&CatalogOp {
             record: rec.clone(),
             event: CatalogEventKind::Relink,
-            detail: json!({ "from": from, "to": to, "auto": false }),
+            detail: json!({ "from": from, "to": to, "auto": false, "mode": mode }),
             at_ms: rec.status_checked_ms,
         })?;
         Ok(RelinkResult {

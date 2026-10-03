@@ -55,6 +55,7 @@ pub const MIGRATIONS: &[Migration] = &[
 /// é reescrito. Nada daqui entra no documento nem no undo.
 const MEDIA_JOBS_SQL: &str = "
 ALTER TABLE media_assets ADD COLUMN fingerprint TEXT;
+CREATE INDEX media_assets_fingerprint ON media_assets(fingerprint);
 
 CREATE TABLE jobs (
     job_id          TEXT    PRIMARY KEY NOT NULL CHECK (length(job_id) BETWEEN 1 AND 128),

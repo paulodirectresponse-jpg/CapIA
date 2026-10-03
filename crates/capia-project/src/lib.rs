@@ -8,13 +8,17 @@
 use serde::Serialize;
 
 mod assets;
+mod derive;
 mod error;
+mod pipeline;
 mod project;
 
 pub use assets::{
     AssetView, ImportOutcome, ImportResult, RelinkResult, VerifyResult, expected_asset_id,
 };
+pub use derive::FrameSource;
 pub use error::ProjectError;
+pub use pipeline::{ImportTicket, PipelineOptions, PumpEvent};
 pub use project::{ParseError, Project, parse_transaction};
 
 /// Versão da Engine API exposta aos adaptadores.

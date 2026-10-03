@@ -14,7 +14,7 @@
 mod executor;
 mod types;
 
-pub use executor::{Executor, ExecutorConfig, JobHandle, Submitted};
+pub use executor::{Canceller, Executor, ExecutorConfig, JobHandle, Submitted};
 pub use types::{
     CODE_CANCELLED, CODE_PANICKED, CancelToken, JobCtx, JobError, JobId, JobKind, JobSink,
     JobSnapshot, JobSpec, JobState, Priority, Progress, SubmitError,

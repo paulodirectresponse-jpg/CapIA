@@ -22,7 +22,8 @@ pub use hash::{
     ContentHash, FileDigest, FileStamp, file_stamp, hash_file, hash_file_job, hash_reader,
 };
 pub use import::{
-    PreparedAsset, asset_id_for, display_name_of, prepare_import, prepare_import_job,
+    PreparedAsset, absolute_checked, asset_id_for, display_name_of, prepare_import,
+    prepare_import_job,
 };
 pub use location::{AssetLocation, relative_path, resolve_candidates};
 pub use record::{AssetKind, AssetRecord, Availability};

@@ -297,7 +297,7 @@ pub fn generate_proxy(
             {
                 if !seen_progress {
                     seen_progress = true;
-                    fp!("proxy:first-progress");
+                    fp!("proxy_running");
                 }
                 progress(us.max(0) as u64, duration_us_hint);
             }

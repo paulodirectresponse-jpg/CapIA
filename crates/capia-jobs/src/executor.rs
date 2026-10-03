@@ -107,6 +107,39 @@ fn new_id() -> JobId {
 }
 
 impl Core {
+    fn cancel(&self, id: &JobId) -> bool {
+        let mut inner = lock(&self.inner);
+        let Some(shared) = inner.jobs.get(id).cloned() else {
+            return false;
+        };
+        let q_pos = Priority::ALL.iter().find_map(|p| {
+            inner.queues[p.index()]
+                .iter()
+                .position(|e| lock(&e.shared.snapshot).id == *id)
+                .map(|pos| (p.index(), pos))
+        });
+        if let Some((q, pos)) = q_pos {
+            inner.queues[q].remove(pos);
+            drop(inner);
+            let key = {
+                let mut s = lock(&shared.snapshot);
+                s.state = JobState::Cancelled;
+                s.finished_ms = Some(now_ms());
+                s.error = Some(JobError::cancelled());
+                s.dedup_key.clone()
+            };
+            self.record(&shared.view());
+            self.finish(&shared, key.as_deref(), id);
+            return true;
+        }
+        drop(inner);
+        if lock(&shared.snapshot).state.is_terminal() {
+            return false;
+        }
+        shared.token.cancel();
+        true
+    }
+
     fn record(&self, snap: &JobSnapshot) {
         if let Some(s) = &self.sink {
             s.record(snap);
@@ -301,6 +334,24 @@ impl JobHandle {
     }
 }
 
+/// Cancelador compartilhável do executor.
+#[derive(Clone)]
+pub struct Canceller {
+    core: Arc<Core>,
+}
+
+impl Canceller {
+    pub fn cancel(&self, id: &JobId) -> bool {
+        self.core.cancel(id)
+    }
+}
+
+impl core::fmt::Debug for Canceller {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("Canceller")
+    }
+}
+
 pub struct Executor {
     core: Arc<Core>,
     workers: Mutex<Vec<JoinHandle<()>>>,
@@ -450,36 +501,14 @@ impl Executor {
     /// Cancela: job na fila sai da fila na hora (`cancelled`); job em execução recebe o token
     /// (quem o repassa ao processo filho o mata). `false` se já terminou ou é desconhecido.
     pub fn cancel(&self, id: &JobId) -> bool {
-        let mut inner = lock(&self.core.inner);
-        let Some(shared) = inner.jobs.get(id).cloned() else {
-            return false;
-        };
-        let q_pos = Priority::ALL.iter().find_map(|p| {
-            inner.queues[p.index()]
-                .iter()
-                .position(|e| lock(&e.shared.snapshot).id == *id)
-                .map(|pos| (p.index(), pos))
-        });
-        if let Some((q, pos)) = q_pos {
-            inner.queues[q].remove(pos);
-            drop(inner);
-            let key = {
-                let mut s = lock(&shared.snapshot);
-                s.state = JobState::Cancelled;
-                s.finished_ms = Some(now_ms());
-                s.error = Some(JobError::cancelled());
-                s.dedup_key.clone()
-            };
-            self.core.record(&shared.view());
-            self.core.finish(&shared, key.as_deref(), id);
-            return true;
+        self.core.cancel(id)
+    }
+
+    /// Cancelador barato e clonável (para observadores em outras threads).
+    pub fn canceller(&self) -> Canceller {
+        Canceller {
+            core: Arc::clone(&self.core),
         }
-        drop(inner);
-        if lock(&shared.snapshot).state.is_terminal() {
-            return false;
-        }
-        shared.token.cancel();
-        true
     }
 
     /// Desliga: o que está na fila vira `interrupted`; o que roda recebe cancelamento (e termina

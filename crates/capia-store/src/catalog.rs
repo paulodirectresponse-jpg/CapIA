@@ -266,6 +266,19 @@ impl Catalog {
         raw.map(to_record).transpose()
     }
 
+    /// Assets cuja impressão rápida é `fp` (triagem: **não** é identidade).
+    pub fn find_by_fingerprint(&self, fp: &str) -> StoreResult<Vec<AssetRecord>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {COLUMNS} FROM media_assets WHERE fingerprint = ?1 ORDER BY asset_id"
+        ))?;
+        let rows = stmt.query_map([fp], raw_row)?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(to_record(r?)?);
+        }
+        Ok(out)
+    }
+
     /// Grava uma operação numa transação própria (`IMMEDIATE`): tudo ou nada.
     pub fn apply(&mut self, op: &CatalogOp) -> StoreResult<()> {
         let tx = self
