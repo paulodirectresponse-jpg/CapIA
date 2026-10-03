@@ -231,7 +231,11 @@ mod tests {
         let (p, a) = sh(&format!("echo $$ > '{}'; exec sleep 30", pidfile.display()));
         let e = run_bounded(&p, &a, &lim(600, 1024)).unwrap_err();
         assert_eq!(e.code, MediaErrorCode::MediaProbeTimeout);
-        let pid: u32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
+        let pid: u32 = std::fs::read_to_string(&pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
         assert!(
             !Path::new(&format!("/proc/{pid}")).exists(),
             "process {pid} survived the timeout"

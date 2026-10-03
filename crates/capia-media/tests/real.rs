@@ -97,7 +97,10 @@ fn multiple_streams_have_an_explicit_deterministic_default() {
     let m = probe(&t, "multi_stream.mp4").unwrap();
     assert_eq!(m.container.stream_count, 3);
     assert_eq!(
-        m.streams.iter().map(capia_media::StreamInfo::index).collect::<Vec<_>>(),
+        m.streams
+            .iter()
+            .map(capia_media::StreamInfo::index)
+            .collect::<Vec<_>>(),
         [0, 1, 2]
     );
     // o PRIMEIRO áudio é o padrão, mesmo havendo outro com sample rate diferente
