@@ -221,8 +221,8 @@ fn thumbnail_is_a_png_and_respects_the_size_limit() {
 #[cfg(unix)]
 mod fake_backend {
     use super::*;
-    use std::time::Duration;
     use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
 
     fn script(dir: &Path, body: &str) -> MediaToolchain {
         let p = dir.join("ffprobe");
