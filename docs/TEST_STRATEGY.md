@@ -114,3 +114,17 @@ Regressões > 10% falham o CI de benchmark (rodado em máquina dedicada, não em
 - **Composição:** `capia-commands/tests/compose.rs` (24) + os cinco comandos no gerador de `properties_nested`/`capia-store/tests/properties` (undo/redo exatos, DAG válido, reabertura).
 - **Atomicidade do import:** crash tests reais (`capia-store/tests/crash.rs`) com o catálogo na transação do commit; escritor obsoleto não deixa linha de catálogo.
 - **Mutação manual:** 14 mutações + a combinada de ciclo (STATUS).
+
+## Jobs e pipeline de mídia (M08)
+
+- **Executor** (`capia-jobs/tests/executor.rs`, 13): justiça (créditos 6/3/1: o background avança sob enxurrada de interativos), cancelamento de job na fila e em execução, dedup, fila cheia, *panic* contido, `shutdown ⇒ interrupted`, progresso monotônico.
+- **Processos reais:** cancelar/timeout/`Flow::Stop` **matam o filho** (o PID some — Unix `/proc`, Windows `tasklist`), proxy cancelado não deixa arquivo (`capia-media/tests/pipeline.rs`).
+- **Quadros identificáveis:** fixtures cujo luma é função do número do quadro (`cfr_gop.mp4` GOP longo + B-frames, `vfr.mp4` com buracos de timestamp, mkv `ffv1` com offset de 3 s) provam por **pixels** que o quadro entregue é o do índice — não `N/fps`. Áudio: intervalos exatos em amostras a 44.100 e 48.000 Hz, início ≠ 0, clipes curtos, além do fim, stream de áudio não-padrão.
+- **Formatos binários** `CIDX`/`CWFM`: ida e volta exata; **toda truncagem e todo byte alterado** é rejeitado sem pânico.
+- **Cache v2:** produção atômica, parcial nunca publicado, corrompido vira *miss*, 12 produtores da mesma chave geram **uma** vez, chaves diferentes não se bloqueiam, GC/invalidar/limpar.
+- **Hash:** cancelável entre blocos, detecta crescimento, regravação e troca do arquivo; **colisão deliberada** da impressão rápida separada pelo SHA-256 (32 MiB, difere só fora das regiões amostradas).
+- **Pipeline com FFmpeg real** (`capia-project/tests/pipeline.rs`, `force_relink.rs`): import assíncrono (ticket → pending → finalizado; identidade = SHA-256), latência de retorno vs hash completo, cancelamento, arquivo mudando durante o hash, índice/waveform/proxy/decode via cache, dedup de jobs, fonte trocada recusada, **o proxy nunca é fonte de decode**, relink em lote por conteúdo (nunca por nome; ambíguo/rejeitado/isca de mesmo tamanho), force relink (conflitos estruturados, sem trim).
+- **Crash real** (`capia-project/tests/crash_media.rs`): o processo filho é morto (SIGKILL/TerminateProcess) **dentro** do índice, do waveform, da codificação do proxy e com um import pendente. Pai: projeto válido, job `interrupted` (nunca `completed`), nenhum derivado parcial publicado, retry funciona. *(Achou um bug real: lock de cache por arquivo `create_new` deixava a chave presa — agora lock do SO.)*
+- **Propriedade** (`properties_media.rs`): sequências aleatórias importar/derivar/decodificar/cancelar/offline/relink em lote/reabrir contra um modelo independente; `CAPIA_MEDIA_PROP_CASES` (6 por padrão; 40 no Linux/release; 2 no Windows).
+- **Mutação manual** (`tools/mutation-m08.py`): 13 mutações com o teste que as mata (ver STATUS).
+- **Medições** (`#[ignore]`, release): `capia-jobs/tests/perf.rs`, `capia-assets/tests/perf_hash.rs`, `capia-project/tests/perf_media.rs`.

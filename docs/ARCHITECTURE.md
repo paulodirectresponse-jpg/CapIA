@@ -63,6 +63,7 @@ Alternativas avaliadas e rejeitadas: Electron (sem ganho real — o trabalho pes
   capia-model                Entidades do documento, IDs, invariantes (sem IO, WASM)
   capia-commands             Command Engine: comandos, primitive ops, transações, histórico (sem IO, WASM)
   capia-store                SQLite, formato .capia, migrations, autosave, snapshots, recovery
+  capia-jobs                 Executor genérico de jobs (prioridades por créditos, cancelamento real, dedup) — M08
   capia-media                Probe, demux/decode (libav), frame index, VFR, HW decode, thumbnails, waveforms
   capia-assets               Bibliotecas, fingerprint, dedup, relink, offline, versões, proveniência
   capia-gateway              Asset Gateway: trait de adapter, registro, sandbox de sidecars
@@ -189,6 +190,12 @@ Time/tracks/clips/nested → `TIMELINE_ENGINE.md` · UX → `TIMELINE_UX.md` · 
 ## Persistência, facade e CLI (M06)
 
 `capia-store` (SQLite, journal) → `capia-project` (facade: `Project`, `parse_transaction`) → `capia-cli`. Matriz de dependências em `tools/check-architecture.mjs`.
+
+## Jobs e pipeline de mídia (M08)
+
+`capia-jobs` (genérico: nada de SQLite/FFmpeg/documento) é executor bounded com prioridades por créditos, cancelamento cooperativo (que **mata** o FFmpeg) e deduplicação (ADR-052). `capia-media` ganha índice de quadros `CIDX`, decode exato, PCM f32, waveform `CWFM` e proxy (ADR-054..056); `capia-assets` ganha impressão rápida, hash de job, cache v2 com produção atômica e relink em lote (ADR-053/057/058); `capia-store` ganha o schema 3 (`jobs`, `import_tickets`) e o `JobStore` (conexão própria; é o `JobSink` do executor); `capia-project` orquestra: `start_pipeline`, `import_asset_async` (ticket), `pump` (a thread do projeto grava), `submit_*`, `force_relink_asset`, `batch_relink_folder`, `cache_*`. Dependências novas: `capia-time → capia-media` (já existia), `capia-jobs` solto (sem dependências internas) → `{capia-store, capia-project}`. O núcleo puro segue sem IO: `capia-jobs`, FFmpeg e sistema de arquivos **não** vão para WASM (`cargo check --target wasm32-unknown-unknown` só de `time/model/commands`).
+
+**Regra de escrita:** workers só calculam e escrevem **cache**; documento e catálogo só mudam na thread do projeto (`pump`), pelo engine/catálogo. Um único processo é dono do executor de um projeto (lock do SO).
 
 ## Mídia e assets (M07)
 

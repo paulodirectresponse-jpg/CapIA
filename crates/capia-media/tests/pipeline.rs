@@ -636,3 +636,238 @@ fn streaming_runner_kills_on_cancel_and_on_timeout() {
         assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 }
+
+// ---- timestamps com deslocamento, outro container e stream de áudio não-padrão ---------------------------
+
+/// mkv sem perdas (ffv1: o luma sai EXATO) com os timestamps deslocados 3 s: o índice usa os PTS
+/// reais do container e o decode ainda acha o quadro certo.
+#[test]
+fn a_container_with_a_nonzero_start_offset_still_decodes_the_exact_frame() {
+    let tc = need!();
+    let dir = std::env::temp_dir().join(format!("capia-offset-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("offset.mkv");
+    let st = std::process::Command::new(tc.ffmpeg.as_ref().unwrap())
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i"])
+        .arg("nullsrc=size=64x48:rate=25:duration=1,format=yuv420p,geq=lum='20+7*N':cb=128:cr=128")
+        .args([
+            "-c:v",
+            "ffv1",
+            "-g",
+            "5",
+            "-fps_mode",
+            "passthrough",
+            "-output_ts_offset",
+            "3",
+        ])
+        .arg(&file)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let info = FfprobeBackend::new(tc.clone()).probe(&file).unwrap();
+    let v = info.video().unwrap().clone();
+    let index = build_frame_index(
+        &tc,
+        &file,
+        v.index,
+        v.time_base.unwrap(),
+        0,
+        &IndexOptions::default(),
+        &never,
+        &mut |_, _| {},
+    )
+    .unwrap();
+    assert_eq!(index.len(), 25);
+    assert!(
+        index.start_pts() != 0,
+        "the stream really starts late: {}",
+        index.start_pts()
+    );
+    assert_eq!(
+        index.time_of(0),
+        Some(Ticks(0)),
+        "times are relative to the first frame"
+    );
+    for i in [0usize, 7, 13, 24] {
+        let f = decode_frame_by_index(
+            &tc,
+            &file,
+            &index,
+            v.width,
+            v.height,
+            i,
+            &DecodeLimits::default(),
+            &never,
+        )
+        .unwrap();
+        let want = expected_gray(20 + 7 * i as i32);
+        assert!(
+            (luma(&f) - want).abs() <= 1,
+            "frame {i}: {} vs {want}",
+            luma(&f)
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_non_default_audio_stream_is_decoded_by_its_absolute_index() {
+    let tc = need!();
+    let path = fixture("multi_stream.mp4");
+    let info = FfprobeBackend::new(tc.clone()).probe(&path).unwrap();
+    let audios: Vec<_> = info
+        .streams
+        .iter()
+        .filter_map(|s| match s {
+            StreamInfo::Audio(a) => Some(a.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(audios.len(), 2);
+    for a in &audios {
+        let pcm = decode_audio(
+            &tc,
+            &path,
+            &AudioRequest {
+                stream_index: a.index,
+                sample_rate: a.sample_rate,
+                channels: 1,
+                start: Ticks(0),
+                duration: Ticks(TICKS_PER_SECOND / 4),
+            },
+            DEFAULT_MAX_PCM_BYTES,
+            std::time::Duration::from_secs(30),
+            &never,
+        )
+        .unwrap();
+        assert_eq!(
+            pcm.frames,
+            u64::from(a.sample_rate / 4),
+            "stream #{}",
+            a.index
+        );
+        assert!(pcm.samples.iter().any(|s| s.abs() > 0.02));
+    }
+}
+
+// ---- decode de intervalo (um processo para N quadros) --------------------------------------------------
+
+#[test]
+fn a_frame_range_equals_the_individual_frames_in_a_single_process() {
+    let tc = need!();
+    let v = load(&tc, "cfr_gop.mp4");
+    let path = fixture("cfr_gop.mp4");
+    for (first, count) in [(10usize, 12usize), (0, 5), (45, 5), (20, 1)] {
+        let mut got = Vec::new();
+        let n = decode_frame_range(
+            &tc,
+            &path,
+            &v.index,
+            v.w,
+            v.h,
+            first,
+            count,
+            &DecodeLimits::default(),
+            &never,
+            &mut |f| {
+                got.push(f);
+                Flow::Continue
+            },
+        )
+        .unwrap();
+        assert_eq!(n, count);
+        for (k, f) in got.iter().enumerate() {
+            assert_eq!(f.index, first + k);
+            assert_eq!(
+                f.bytes,
+                decode(&tc, "cfr_gop.mp4", &v, first + k).bytes,
+                "frame {}",
+                first + k
+            );
+        }
+    }
+    // VFR: o intervalo segue os PTS reais (e não N/25)
+    let vv = load(&tc, "vfr.mp4");
+    let mut luma_seq = Vec::new();
+    decode_frame_range(
+        &tc,
+        &fixture("vfr.mp4"),
+        &vv.index,
+        vv.w,
+        vv.h,
+        2,
+        8,
+        &DecodeLimits::default(),
+        &never,
+        &mut |f| {
+            luma_seq.push(luma(&f));
+            Flow::Continue
+        },
+    )
+    .unwrap();
+    for (k, l) in luma_seq.iter().enumerate() {
+        assert!(
+            (l - expected_gray(20 + 8 * (2 + k as i32))).abs() <= 3,
+            "vfr range frame {k}"
+        );
+    }
+    // Stop encerra cedo; limites e cancelamento
+    let mut seen = 0;
+    let n = decode_frame_range(
+        &tc,
+        &path,
+        &v.index,
+        v.w,
+        v.h,
+        0,
+        30,
+        &DecodeLimits::default(),
+        &never,
+        &mut |_| {
+            seen += 1;
+            if seen == 3 {
+                Flow::Stop
+            } else {
+                Flow::Continue
+            }
+        },
+    )
+    .unwrap();
+    assert_eq!((n, seen), (3, 3));
+    for (first, count) in [(0usize, 0usize), (0, 513), (45, 10)] {
+        let e = decode_frame_range(
+            &tc,
+            &path,
+            &v.index,
+            v.w,
+            v.h,
+            first,
+            count,
+            &DecodeLimits::default(),
+            &never,
+            &mut |_| Flow::Continue,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(
+                e.code,
+                MediaErrorCode::MediaLimitExceeded | MediaErrorCode::MediaFrameNotFound
+            ),
+            "{first}+{count}"
+        );
+    }
+    let e = decode_frame_range(
+        &tc,
+        &path,
+        &v.index,
+        v.w,
+        v.h,
+        0,
+        10,
+        &DecodeLimits::default(),
+        &|| true,
+        &mut |_| Flow::Continue,
+    )
+    .unwrap_err();
+    assert_eq!(e.code, MediaErrorCode::MediaCancelled);
+}

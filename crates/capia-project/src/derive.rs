@@ -367,6 +367,29 @@ impl FrameSource {
         .map_err(media_err)
     }
 
+    /// `count` quadros consecutivos a partir do lógico `first`, com UM processo (scrub/reprodução).
+    pub fn frames(
+        &self,
+        first: usize,
+        count: usize,
+        cancel: Cancel<'_>,
+        on_frame: &mut dyn FnMut(RawFrame) -> capia_media::Flow,
+    ) -> Result<usize, AssetError> {
+        capia_media::decode_frame_range(
+            &self.toolchain,
+            &self.file,
+            &self.index,
+            self.width,
+            self.height,
+            first,
+            count,
+            &DecodeLimits::default(),
+            cancel,
+            on_frame,
+        )
+        .map_err(media_err)
+    }
+
     pub fn frame_by_index(&self, i: usize, cancel: Cancel<'_>) -> Result<RawFrame, AssetError> {
         decode_frame_by_index(
             &self.toolchain,

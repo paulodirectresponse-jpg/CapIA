@@ -184,3 +184,7 @@ O engine recebe um `Journal` (`set_journal`); cada commit/undo/redo chama `Journ
 ## Comandos da M07
 
 `delete_asset` (`IN_USE` se algum clip referencia o asset; o catálogo permanece) e os cinco comandos de composição `duplicate_sequence`, `make_unique`, `flatten_nested`, `create_nested_from_selection`, `generate_variants` (semântica e ids determinísticos na ADR-050). **Relink e verify não são comandos** (ADR-048 §6): mudam onde está o arquivo, não a edição, e não entram no undo; ficam na trilha `asset_events`.
+
+## Comando da M08
+
+`update_asset{asset}` (ADR-058): atualiza os metadados **lógicos** (duração, vídeo/áudio, nome) de um asset existente — o lado do documento do *force relink*. Valida todos os clips dependentes (trecho de fonte cabe na nova duração; streams usados existem) e, se algum ficaria inválido, devolve `CONFLICT` com `hint.conflicts[]` (um item por clip: `sequence`, `clip`, `reasons[]` ∈ `SOURCE_RANGE_EXCEEDS_NEW_MEDIA | MISSING_VIDEO_STREAM | MISSING_AUDIO_STREAM`) sem alterar nada — **nunca trim silencioso**. Desfazível como qualquer comando; o catálogo (onde está o arquivo) continua fora do undo (ADR-048 §6).

@@ -220,6 +220,128 @@ pub fn decode_frame_by_index(
     ))
 }
 
+/// Decodifica `count` quadros **consecutivos** (apresentação) a partir do quadro lógico `first`
+/// com **um único** processo do ffmpeg (scrub/reprodução: evita o custo de um processo por quadro).
+/// `on_frame` recebe cada quadro em ordem; devolver `Flow::Stop` encerra cedo (mata o ffmpeg).
+/// Devolve quantos quadros entregou. O intervalo `[pts(first), pts(last)]` do índice contém
+/// exatamente esses quadros (o índice é ordenado por PTS), então `select=between(pts,…)` os
+/// seleciona sem contar nada. Teto: 512 quadros e `count × frame` ≤ 4 × `max_frame_bytes`.
+#[allow(clippy::too_many_arguments)]
+pub fn decode_frame_range(
+    tc: &MediaToolchain,
+    path: &Path,
+    index: &FrameIndex,
+    width: u32,
+    height: u32,
+    first: usize,
+    count: usize,
+    limits: &DecodeLimits,
+    cancel: &dyn Fn() -> bool,
+    on_frame: &mut dyn FnMut(RawFrame) -> Flow,
+) -> Result<usize, MediaError> {
+    let ffmpeg = ffmpeg_of(tc)?;
+    let bad = |m: String| MediaError::new(MediaErrorCode::MediaFrameNotFound, m);
+    if count == 0 || count > 512 {
+        return Err(MediaError::new(
+            MediaErrorCode::MediaLimitExceeded,
+            "a frame range must have 1..=512 frames",
+        ));
+    }
+    let last = first
+        .checked_add(count - 1)
+        .filter(|l| *l < index.len())
+        .ok_or_else(|| bad(format!("frames {first}+{count} are outside the index")))?;
+    let len = frame_len(width, height, limits)?;
+    if (len as u64).saturating_mul(count as u64) > limits.max_frame_bytes.saturating_mul(4) {
+        return Err(MediaError::new(
+            MediaErrorCode::MediaLimitExceeded,
+            "the frame range exceeds the byte limit",
+        ));
+    }
+    let (pf, pl) = (index.entries()[first].pts, index.entries()[last].pts);
+    let abs = checked_input_path(path)?;
+    let kf = index.keyframe_before(first).unwrap_or(0);
+    let mut args: Vec<OsString> = [
+        "-v",
+        "error",
+        "-nostdin",
+        "-noautorotate",
+        "-protocol_whitelist",
+        "file",
+        "-seek_timestamp",
+        "1",
+    ]
+    .iter()
+    .map(OsString::from)
+    .collect();
+    let t = absolute_ticks(index, index.entries()[kf].pts);
+    args.push("-ss".into());
+    args.push(seconds_arg(t, false).into());
+    args.push("-copyts".into());
+    args.push("-i".into());
+    args.push(file_url_arg(&abs));
+    for a in [
+        "-map".to_owned(),
+        format!("0:{}", index.stream_index()),
+        "-an".into(),
+        "-sn".into(),
+        "-vf".into(),
+        format!("select=between(pts\\,{pf}\\,{pl})"),
+        "-fps_mode".into(),
+        "passthrough".into(),
+        "-frames:v".into(),
+        count.to_string(),
+        "-f".into(),
+        "rawvideo".into(),
+        "-pix_fmt".into(),
+        "rgba".into(),
+        "pipe:1".into(),
+    ] {
+        args.push(a.into());
+    }
+    let mut carry: Vec<u8> = Vec::with_capacity(len);
+    let mut delivered = 0usize;
+    let out = run_streaming(
+        ffmpeg,
+        &args,
+        &StreamLimits::new(limits.timeout),
+        cancel,
+        &mut |chunk| {
+            carry.extend_from_slice(chunk);
+            while carry.len() >= len && delivered < count {
+                let bytes: Vec<u8> = carry.drain(..len).collect();
+                let i = first + delivered;
+                delivered += 1;
+                let frame = RawFrame {
+                    width,
+                    height,
+                    stride: width as usize * 4,
+                    pixel_format: PixelFormat::Rgba8,
+                    pts: index.entries()[i].pts,
+                    index: i,
+                    time: index.time_of(i).unwrap_or(Ticks(0)),
+                    bytes,
+                };
+                if on_frame(frame) == Flow::Stop {
+                    return Ok(Flow::Stop);
+                }
+            }
+            Ok(if delivered >= count {
+                Flow::Stop
+            } else {
+                Flow::Continue
+            })
+        },
+    )?;
+    if !out.stopped_early && delivered < count {
+        return Err(MediaError::new(
+            MediaErrorCode::MediaFrameNotFound,
+            format!("the decoder produced {delivered} of {count} frames"),
+        ));
+    }
+    Ok(delivered)
+}
+
 /// Decodifica o quadro **em ou antes de** `at` (o que o preview mostra no tempo `at`).
 #[allow(clippy::too_many_arguments)]
 pub fn decode_frame_at(

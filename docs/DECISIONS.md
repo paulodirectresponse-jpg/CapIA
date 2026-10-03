@@ -337,7 +337,7 @@ Fechar OD-1 = relatório do S1 executado em Windows (`tools/s1-preview-spike`), 
 **Consequências:** um projeto aberto em outra máquina mostra `offline` até o relink; o catálogo ocupa ~1 KiB/asset (medido com 10.000).
 
 ### ADR-049 — Cache derivado: `CacheKey`, diretório separado e descartabilidade
-**Estado:** Aceita (M07) · relaciona ADR-017 (representações regeneráveis).
+**Estado:** Aceita (M07) · §2 (layout de diretórios) e §3 (escrita atômica) **superados em parte pela ADR-057** (M08) · relaciona ADR-017 (representações regeneráveis).
 **Decisão:**
 1. **O cache é descartável por definição:** nada necessário para **abrir** ou **editar** o projeto existe só no cache; apagar o diretório de cache não corrompe nem altera o `.capia` (testado). O cache nunca é tratado como dado permanente (sem referência do documento/catálogo ao arquivo do cache além da chave).
 2. **`CacheKey` determinística** = SHA-256 de uma codificação canônica de `(content_hash, operation, params canônicos, produtor+versão)` → `<op>/<2 hex>/<64 hex>.<ext>`; inclui a **versão do produtor** (ex.: `thumbnail/1` + versão do ffmpeg) para invalidação seletiva. Depende do **conteúdo**, não do caminho: dois projetos/paths com o mesmo arquivo compartilham a entrada.

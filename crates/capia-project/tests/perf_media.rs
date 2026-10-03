@@ -234,6 +234,18 @@ fn index_decode_audio_waveform_proxy_and_cache() {
         t.elapsed() / 30
     );
     let t = Instant::now();
+    let mut got = 0;
+    src.frames(9031, 30, &never, &mut |_| {
+        got += 1;
+        capia_media::Flow::Continue
+    })
+    .unwrap();
+    println!(
+        "PERF decode.range_30_frames_one_process: {:?} ({:?}/frame, {got} frames)",
+        t.elapsed(),
+        t.elapsed() / 30
+    );
+    let t = Instant::now();
     src.frame_by_index(17_990, &never).unwrap();
     println!("PERF decode.frame_near_end: {:?}", t.elapsed());
     // áudio

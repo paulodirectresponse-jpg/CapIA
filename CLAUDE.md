@@ -36,7 +36,8 @@ Estado atual e próxima missão: **leia `docs/STATUS.md` primeiro.**
 | `docs/OPEN_SOURCE_AUDIT.md` | Due diligence de projetos open-source: licenças, reuso, estratégia recomendada (M02) |
 | `docs/PROVENANCE.md` | Política obrigatória de proveniência/licenças de terceiros + registro (ADR-031) |
 | `crates/capia-store/README.md` · `crates/capia-cli/README.md` | Formato `.capia`/persistência (ADR-042..044) e CLI `capia` (M06) |
-| `crates/capia-media/README.md` · `crates/capia-assets/README.md` | Probe/ffprobe e domínio de assets (ADR-046..049, M07) |
+| `crates/capia-media/README.md` · `crates/capia-assets/README.md` | Probe/ffprobe e domínio de assets (ADR-046..049, M07); índice/decode/waveform/proxy, impressão rápida, cache v2, relink em lote (ADR-053..058, M08) |
+| `crates/capia-jobs/README.md` | Executor de jobs: prioridades sem starvation, cancelamento real, dedup (ADR-052, M08) |
 | `docs/spikes/README.md` | Resultados dos spikes S1–S7 (M03) e relatórios individuais |
 | `tests/acceptance/` | Suíte de aceitação de comportamento da timeline (critério da Fase 2, ADR-036) |
 | `tools/` | `check-architecture.mjs` (fronteiras), `check-licenses.mjs` (licenças JS), `s1-preview-spike/` (medição S1 em Windows) |
@@ -61,18 +62,24 @@ CAPIA_PROP_CASES=5000 cargo test --release -p capia-store --test properties   # 
 cargo run -p capia-cli -- create|inspect|validate|apply|undo|redo|history|dump <arq.capia> ...
 cargo run -p capia-cli -- asset import|list|inspect|verify|relink|thumbnail <arq.capia> ... ; media probe <arquivo>
 cargo test --release -p capia-project --test perf_assets -- --ignored --nocapture   # hash/probe/import, 10k assets
+cargo test --release -p capia-jobs --test perf -- --ignored --nocapture; cargo test --release -p capia-assets --test perf_hash -- --ignored --nocapture
+cargo test --release -p capia-project --test perf_media -- --ignored --nocapture --test-threads=1   # índice/decode/waveform/proxy/import assíncrono
+CAPIA_MEDIA_PROP_CASES=40 cargo test --release -p capia-project --test properties_media   # pipeline ponta a ponta (FFmpeg real)
+python3 tools/mutation-m08.py [id…]   # 13 mutações da M08 (árvore limpa; restaura o arquivo sempre)
+cargo run -p capia-cli -- job list|status|cancel <arq.capia> ... ; media index|frame|waveform|proxy ... ; asset force-relink|relink-folder ... ; cache info|clean <arq.capia>
 CAPIA_REQUIRE_FFMPEG=1 cargo test -p capia-media -p capia-assets -p capia-project -p capia-cli   # CI: sem FFmpeg FALHA
 tools/gen-media-fixtures.sh   # regenera tests/fixtures/media (versionadas)
 pnpm desktop:build        # tauri build --no-bundle  (o front precisa estar construído: pnpm --filter @capia/desktop build)
 ```
 
-Direção de dependência (verificada por `pnpm check:arch`): `capia-time → capia-model → capia-commands`; `capia-time → capia-media`; `{model, media} → capia-assets`; `{commands, assets} → capia-store → capia-project → {capia-cli, apps/desktop}`. O núcleo puro (time/model/commands) não conhece Tauri, UI, IA, providers, render, FFmpeg nem SQLite (compila para WASM); só `capia-store` fala com SQLite (`rusqlite` bundled); só `capia-media` executa FFmpeg/ffprobe (processo externo, sem shell, com timeout e teto de saída). Novo crate/pacote ⇒ atualizar a matriz em `tools/check-architecture.mjs` de propósito (ADR-038).
+Direção de dependência (verificada por `pnpm check:arch`): `capia-time → capia-model → capia-commands`; `capia-time → capia-media`; `{model, media} → capia-assets`; `capia-jobs` (solto) `→ {store, project}`; `{commands, assets, jobs} → capia-store → capia-project → {capia-cli, apps/desktop}`. O núcleo puro (time/model/commands) não conhece Tauri, UI, IA, providers, render, FFmpeg nem SQLite (compila para WASM); só `capia-store` fala com SQLite (`rusqlite` bundled); só `capia-media` executa FFmpeg/ffprobe (processo externo, sem shell, com timeout e teto de saída). Novo crate/pacote ⇒ atualizar a matriz em `tools/check-architecture.mjs` de propósito (ADR-038).
 
 ## Regras de trabalho
 
 - **Persistência (M06):** o engine persiste **antes** de publicar (`Journal`); uma única transação SQLite por commit; `synchronous=FULL`; migrations só para frente e explícitas; schema mais novo é rejeitado sem tocar o arquivo. Mudar o schema ⇒ nova migration + teste + ADR. Erros do store são sempre `StoreError` estruturado (nunca SQLite bruto).
 
 - **Assets/mídia (M07):** o arquivo de mídia é **entrada hostil** e nunca entra no `.capia`. Identidade = conteúdo (`sha256:` em streaming), nunca o caminho. O catálogo (hash/caminho/metadados/disponibilidade) vive em tabelas do `.capia` (schema 2) e **não** entra no documento nem no undo; import = documento + catálogo na MESMA transação. Relink só aceita o mesmo conteúdo. O cache (`<proj>.capia-cache/`) é descartável — nada essencial vive só nele. Todo uso do ffprobe passa pelo trait `MediaProbe`; nenhum outro crate vê JSON do FFmpeg.
+- **Jobs/derivados (M08):** o executor (`capia-jobs`) **só calcula**; documento e catálogo mudam na thread do projeto (`Project::pump`) pelo engine — workers escrevem só **cache**. Estado de jobs/tickets é operacional (schema 3, fora do undo); reabrir marca o que estava em andamento como `interrupted`, **nunca** `completed`. Impressão rápida (`fp1:`) é triagem, **nunca identidade** (só o SHA-256 decide). Derivados (índice `CIDX`, waveform `CWFM`, proxy, miniatura) vão para o cache por `CacheDir::produce` (lock por chave → temp → validar → `rename`); o **proxy nunca é fonte de verdade**. Relink em lote **nunca por nome** (tamanho → impressão → SHA-256); force relink só via `update_asset` (clips dependentes validados, sem trim silencioso). Um único processo é dono do executor (lock do SO). Falhas de crash: feature `failpoints` (só testes).
 - Não pule fases do `docs/ROADMAP.md`. Uma missão por vez; atualize `docs/STATUS.md` ao final.
 - Mudou uma decisão arquitetural? Registre um ADR novo em `docs/DECISIONS.md` (não reescreva o antigo; marque como *Superseded*).
 - Respeite as regras de dependência entre crates (`docs/ARCHITECTURE.md` §4). UI, Timeline, Render, AI, Providers, Assets e Integrations não se acoplam diretamente.
