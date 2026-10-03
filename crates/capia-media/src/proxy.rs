@@ -183,6 +183,18 @@ pub fn select_encoder(codec: ProxyCodec, available: &[String]) -> Result<ProxyEn
     }
 }
 
+/// Apaga o parcial. No Windows o handle de um processo recém-morto pode demorar alguns ms para ser
+/// liberado: tenta de novo por até ~2 s em vez de deixar o arquivo para trás.
+fn remove_with_retry(path: &Path) {
+    for _ in 0..40 {
+        match std::fs::remove_file(path) {
+            Ok(()) => return,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+            Err(_) => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ProxyReport {
     pub encoder: ProxyEncoder,
@@ -308,7 +320,7 @@ pub fn generate_proxy(
         Ok(Flow::Continue)
     });
     let cleanup = |e: MediaError| {
-        let _ = std::fs::remove_file(&abs_out);
+        remove_with_retry(&abs_out);
         e
     };
     let out = result.map_err(cleanup)?;
