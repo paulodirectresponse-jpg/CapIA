@@ -214,6 +214,32 @@ mod tests {
     }
 
     #[test]
+    fn runaway_stderr_is_capped_too() {
+        let (p, a) = sh("yes AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA >&2");
+        let t = Instant::now();
+        let e = run_bounded(&p, &a, &lim(20_000, 1024)).unwrap_err();
+        assert_eq!(e.code, MediaErrorCode::MediaProbeOutputTooLarge);
+        assert!(t.elapsed() < Duration::from_secs(10));
+    }
+
+    /// O filho é MORTO de verdade no timeout (não só abandonado): o pid deixa de existir.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_child_is_really_gone_after_a_timeout() {
+        let pidfile = std::env::temp_dir().join(format!("capia-pid-{}", std::process::id()));
+        let _ = std::fs::remove_file(&pidfile);
+        let (p, a) = sh(&format!("echo $$ > '{}'; exec sleep 30", pidfile.display()));
+        let e = run_bounded(&p, &a, &lim(600, 1024)).unwrap_err();
+        assert_eq!(e.code, MediaErrorCode::MediaProbeTimeout);
+        let pid: u32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
+        assert!(
+            !Path::new(&format!("/proc/{pid}")).exists(),
+            "process {pid} survived the timeout"
+        );
+        let _ = std::fs::remove_file(&pidfile);
+    }
+
+    #[test]
     fn missing_program_is_backend_not_found() {
         let e = run_bounded(Path::new("/nonexistent/ffprobe"), &[], &lim(1000, 10)).unwrap_err();
         assert_eq!(e.code, MediaErrorCode::MediaBackendNotFound);

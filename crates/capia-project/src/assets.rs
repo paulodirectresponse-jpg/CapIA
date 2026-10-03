@@ -311,13 +311,41 @@ impl Project {
         Ok(views.into_values().collect())
     }
 
+    /// Um asset: O(1) (leitura direta da linha do catálogo + `metadata` do arquivo), sem montar a
+    /// lista inteira.
     pub fn asset(&self, id: &AssetId) -> Result<AssetView, ProjectError> {
-        self.assets()?
-            .into_iter()
-            .find(|v| &v.asset_id == id)
-            .ok_or_else(|| {
-                ProjectError::invalid("ASSET_NOT_FOUND", format!("asset {id} does not exist"))
-            })
+        let document = self.document().asset(id).cloned();
+        let mut catalog = self.catalog().get(id)?;
+        if document.is_none() && catalog.is_none() {
+            return Err(ProjectError::invalid(
+                "ASSET_NOT_FOUND",
+                format!("asset {id} does not exist"),
+            ));
+        }
+        let mut resolved_path = None;
+        if let Some(rec) = catalog.as_mut() {
+            let (status, found) = quick_status(rec, self.project_dir().as_deref());
+            rec.status = status;
+            resolved_path = found.map(|p| p.display().to_string());
+        }
+        Ok(AssetView {
+            asset_id: id.clone(),
+            in_document: document.is_some(),
+            document,
+            catalog,
+            resolved_path,
+        })
+    }
+
+    /// Procura pelo **conteúdo** (hash) no catálogo; `None` se o projeto nunca viu esse conteúdo.
+    pub fn find_asset_by_hash(
+        &self,
+        hash: &ContentHash,
+    ) -> Result<Option<AssetView>, ProjectError> {
+        match self.catalog().find_by_hash(hash)? {
+            Some(rec) => Ok(Some(self.asset(&rec.asset_id)?)),
+            None => Ok(None),
+        }
     }
 
     fn managed(&self, id: &AssetId) -> Result<AssetRecord, ProjectError> {

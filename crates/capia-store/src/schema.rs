@@ -3,6 +3,7 @@
 //! formato. **Nunca** `CREATE TABLE IF NOT EXISTS` como substituto de migration.
 
 use crate::error::{StoreError, StoreErrorCode, StoreResult};
+use crate::failpoints::fp;
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
 
@@ -321,6 +322,8 @@ pub(crate) fn run_migrations(
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let step = (|| -> rusqlite::Result<()> {
             (m.up)(&tx)?;
+            // queda NO MEIO da migration (DDL aplicado, nada commitado): o arquivo tem de continuar na versão anterior
+            fp!("in_migration");
             tx.execute(
                 "INSERT INTO schema_migrations(version, name, applied_at_ms) VALUES (?1, ?2, ?3)",
                 rusqlite::params![m.version, m.name, now_ms],

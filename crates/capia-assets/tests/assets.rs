@@ -267,6 +267,9 @@ fn cache_keys_are_deterministic_content_addressed_and_the_cache_is_disposable() 
     assert_ne!(a, k("waveform", &[("at", "0"), ("max", "64")], "p/1"));
     // não há ambiguidade entre campos adjacentes
     assert_ne!(k("op", &[("a", "bc")], "p"), k("op", &[("ab", "c")], "p"));
+    // outro CONTEÚDO ⇒ outra chave (arquivo alterado invalida o cache); o caminho não entra na chave
+    let h2 = hash_file(&t.file("b.bin", b"y")).unwrap().hash;
+    assert_ne!(a, CacheKey::new(&h2, "thumbnail", &[("at", "0"), ("max", "64")], "p/1").unwrap());
     // nomes que virariam caminhos são rejeitados
     for bad in ["", "../x", "a/b", "A", "x y"] {
         assert!(CacheKey::new(&h, bad, &[], "p").is_err(), "{bad}");

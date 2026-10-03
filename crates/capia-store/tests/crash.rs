@@ -94,6 +94,12 @@ fn crash_child() {
             let out = e.execute(&user(), r.1, 5);
             println!("CHILD_RETURNED {}", out.is_ok());
         }
+        "migrate" => {
+            // abrir um projeto de schema 1 com este software migra para o 2 — o failpoint
+            // `in_migration` mata o processo com o DDL aplicado e NADA commitado
+            let opened = ProjectStore::open(Path::new(&path), &child_opts());
+            println!("CHILD_RETURNED {}", opened.is_ok());
+        }
         other => panic!("unknown scenario {other}"),
     }
 }
@@ -457,5 +463,75 @@ fn killing_an_import_at_every_stage_is_all_or_nothing() {
             );
             drop(store);
         }
+    }
+}
+
+/// Queda no MEIO da migration v1→v2 (DDL já executado, nada commitado): o arquivo continua um
+/// projeto v1 íntegro, com o histórico completo; a abertura seguinte migra normalmente.
+#[test]
+fn killing_the_process_in_the_middle_of_a_migration_leaves_a_sound_v1_project() {
+    for mode in ["abort", "park"] {
+        let dir = TempDir::new("crash-migrate");
+        let path = dir.file("p.capia");
+        {
+            let (store, state) = ProjectStore::create_at_schema(&path, &fast(), 1).unwrap();
+            let mut e = store
+                .into_engine(state, key(), EngineConfig::default())
+                .unwrap();
+            e.execute(&user(), setup_tx("base"), 1).unwrap();
+            e.execute(
+                &user(),
+                tx("seed", vec![insert("seed-op", "V1", 0, "seed", 10)]),
+                2,
+            )
+            .unwrap();
+        }
+        let before = ProjectStore::validate_file(&path);
+        assert!(before.ok, "{:?}", before.issues);
+        let digest = before.info.unwrap().digest;
+
+        let mut child = spawn_child(&path, "migrate", Some(("in_migration", mode)), None);
+        let status = if mode == "park" {
+            let rx = lines_of(&mut child);
+            wait_for(&rx, "FAILPOINT_REACHED");
+            child.kill().unwrap();
+            child.wait().unwrap()
+        } else {
+            child.wait().unwrap()
+        };
+        assert!(!status.success(), "{mode}: the child must die abruptly");
+
+        // ainda é schema 1, sem tabelas do catálogo, íntegro e com o mesmo documento
+        let c = rusqlite::Connection::open(&path).unwrap();
+        let v: i64 = c
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            v, 1,
+            "{mode}: the half-applied migration must not be visible"
+        );
+        let tables: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name IN ('media_assets','asset_events')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 0, "{mode}");
+        drop(c);
+        let report = ProjectStore::validate_file(&path);
+        assert!(report.ok, "{mode}: {:?}", report.issues);
+        assert_eq!(report.info.unwrap().digest, digest, "{mode}");
+
+        // a próxima abertura migra de verdade, com a história e a idempotência intactas
+        let (store, state) = ProjectStore::open(&path, &fast()).unwrap();
+        assert_eq!(store.schema_version(), capia_store::CURRENT_SCHEMA_VERSION);
+        assert_eq!(sem(&state.doc), {
+            let mut d = state.doc.clone();
+            d.revision = 0;
+            capia_commands::document_digest(&d)
+        });
+        assert!(store.has_operation_id("seed-op").unwrap());
+        assert_eq!(state.history.len(), 2);
     }
 }

@@ -50,6 +50,19 @@ fn hash_probe_and_import_costs() {
     assert!(el < Duration::from_secs(20), "hashing is unreasonably slow");
     let _ = std::fs::remove_file(&big);
 
+    // ---- hash de uma fixture pequena (custo fixo de abrir/ler/fechar) ----
+    let hashes: Vec<Duration> = (0..50)
+        .map(|_| {
+            let t = Instant::now();
+            hash_file(&fixture("video_audio.mp4")).unwrap();
+            t.elapsed()
+        })
+        .collect();
+    eprintln!(
+        "PERF hash of the 7.5 KiB fixture, median of 50: {:.3} ms",
+        ms(median(hashes))
+    );
+
     // ---- probe e import reais ----
     let Ok(tc) = MediaToolchain::locate(&MediaConfig::default()) else {
         eprintln!("PERF probe/import: SKIP (no ffprobe)");
@@ -88,6 +101,49 @@ fn hash_probe_and_import_costs() {
         "PERF import (hash + ffprobe + atomic commit, sync=FULL) median of 10: {:.1} ms",
         ms(median(imports))
     );
+    // ---- miniatura (ffmpeg real): cache frio × cache quente ----
+    if let Some(ffmpeg_tc) = MediaToolchain::locate(&MediaConfig::default())
+        .ok()
+        .filter(|t| t.ffmpeg.is_some())
+    {
+        let any = p.assets().unwrap().into_iter().next().unwrap().asset_id;
+        let cold: Vec<Duration> = (0..10)
+            .map(|_| {
+                p.cache_dir().clear().unwrap();
+                let t = Instant::now();
+                p.generate_thumbnail(
+                    &any,
+                    capia_time::Ticks(capia_time::TICKS_PER_SECOND / 2),
+                    128,
+                    &ffmpeg_tc,
+                )
+                .unwrap();
+                t.elapsed()
+            })
+            .collect();
+        eprintln!(
+            "PERF thumbnail (cold cache: hash + ffmpeg + atomic write), median of 10: {:.1} ms",
+            ms(median(cold))
+        );
+        let hot: Vec<Duration> = (0..20)
+            .map(|_| {
+                let t = Instant::now();
+                p.generate_thumbnail(
+                    &any,
+                    capia_time::Ticks(capia_time::TICKS_PER_SECOND / 2),
+                    128,
+                    &ffmpeg_tc,
+                )
+                .unwrap();
+                t.elapsed()
+            })
+            .collect();
+        eprintln!(
+            "PERF thumbnail (warm cache), median of 20: {:.2} ms",
+            ms(median(hot))
+        );
+        let _ = p.cache_dir().clear();
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -206,9 +262,32 @@ fn ten_thousand_assets_open_list_and_import() {
     assert!(list < Duration::from_secs(2), "listing must stay under 2 s");
 
     let t = Instant::now();
-    p.asset(&records[N / 2].asset_id).unwrap();
+    for i in (0..N).step_by(N / 100) {
+        p.asset(&records[i].asset_id).unwrap();
+    }
     eprintln!(
-        "PERF single asset lookup (scans the view): {:.0} ms",
+        "PERF lookup by AssetId (O(1): row + metadata), mean of 100 in a 10k project: {:.3} ms",
+        ms(t.elapsed()) / 100.0
+    );
+    let t = Instant::now();
+    for i in (0..N).step_by(N / 100) {
+        assert!(
+            p.find_asset_by_hash(&records[i].content_hash)
+                .unwrap()
+                .is_some()
+        );
+    }
+    eprintln!(
+        "PERF lookup by content hash (unique index), mean of 100 in a 10k project: {:.3} ms",
+        ms(t.elapsed()) / 100.0
+    );
+    // verify individual (recalcula o hash): o conteúdo sintético não bate com o hash fabricado ⇒
+    // `modified`; mede-se o caminho completo (stat + hash + evento transacional)
+    let t = Instant::now();
+    let v = p.verify_asset(&records[N / 2].asset_id).unwrap();
+    eprintln!(
+        "PERF verify of one asset ({}): {:.2} ms",
+        v.status.as_str(),
         ms(t.elapsed())
     );
 

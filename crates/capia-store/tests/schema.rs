@@ -121,7 +121,31 @@ fn an_older_project_is_migrated_forward_with_a_backup_and_keeps_its_history() {
         state.cursor < state.history.len(),
         "the redo branch survives too"
     );
+    // operation_ids intactos (a idempotência durável atravessa a migration)
+    for op in ["a-seq", "a-V1", "a-V2", "c1", "c2"] {
+        assert!(
+            store.has_operation_id(op).unwrap(),
+            "{op} lost in the migration"
+        );
+    }
     store.close().unwrap();
+    // e a pilha de undo/redo continua funcionando depois de migrar (1 aplicada + 1 ramo de redo)
+    {
+        let (store, state) = ProjectStore::open_with_migrations(&path, &fast(), &list, 3).unwrap();
+        let mut e = store
+            .into_engine(state, key(), capia_commands::EngineConfig::default())
+            .unwrap();
+        assert_eq!(
+            e.applied_history().len(),
+            1,
+            "history survived the migration"
+        );
+        e.redo(&user(), 9).unwrap();
+        assert_eq!(e.applied_history().len(), 2);
+        e.undo(&user(), 9).unwrap();
+        e.undo(&user(), 9).unwrap();
+        assert_eq!(e.applied_history().len(), 0);
+    }
 
     let c = Connection::open(&path).unwrap();
     let v: i64 = c
@@ -136,11 +160,41 @@ fn an_older_project_is_migrated_forward_with_a_backup_and_keeps_its_history() {
         .map(Result::unwrap)
         .collect();
     assert_eq!(versions, [1, 2, 3]);
-    // a migration real criou o catálogo (vazio: nada do projeto v1 foi tocado)
+    // a migration real criou o catálogo COMPLETO (vazio: nada do projeto v1 foi tocado)
     let media: i64 = c
         .query_row("SELECT COUNT(*) FROM media_assets", [], |r| r.get(0))
         .unwrap();
     assert_eq!(media, 0);
+    let objects: Vec<String> = c
+        .prepare("SELECT name FROM sqlite_master WHERE name IN ('media_assets','asset_events','media_assets_content_hash','asset_events_asset','asset_events_no_update','asset_events_no_delete') ORDER BY name")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(
+        objects.len(),
+        6,
+        "table, index and append-only triggers: {objects:?}"
+    );
+    // o catálogo nasce com as proteções: hash único e trilha de eventos append-only
+    c.execute("INSERT INTO media_assets VALUES ('a','video','sha256:0000000000000000000000000000000000000000000000000000000000000000',1,'n','{}','[]','{}','online',0,0)", []).unwrap();
+    assert!(c.execute("INSERT INTO media_assets VALUES ('b','video','sha256:0000000000000000000000000000000000000000000000000000000000000000',1,'n','{}','[]','{}','online',0,0)", []).is_err(), "unique content hash");
+    c.execute(
+        "INSERT INTO asset_events(asset_id,kind,detail_json,at_ms) VALUES ('a','import','{}',0)",
+        [],
+    )
+    .unwrap();
+    assert!(
+        c.execute("UPDATE asset_events SET kind='verify'", [])
+            .is_err(),
+        "append-only"
+    );
+    assert!(
+        c.execute("DELETE FROM asset_events", []).is_err(),
+        "append-only"
+    );
+    c.execute("DELETE FROM media_assets", []).ok();
     let marker: String = c
         .query_row("SELECT value FROM meta WHERE key='m2'", [], |r| r.get(0))
         .unwrap();

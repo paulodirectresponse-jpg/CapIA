@@ -92,6 +92,26 @@ fn video_with_audio() {
 }
 
 #[test]
+fn multiple_streams_have_an_explicit_deterministic_default() {
+    let t = need!();
+    let m = probe(&t, "multi_stream.mp4").unwrap();
+    assert_eq!(m.container.stream_count, 3);
+    assert_eq!(
+        m.streams.iter().map(capia_media::StreamInfo::index).collect::<Vec<_>>(),
+        [0, 1, 2]
+    );
+    // o PRIMEIRO áudio é o padrão, mesmo havendo outro com sample rate diferente
+    assert_eq!((m.default_video, m.default_audio), (Some(0), Some(1)));
+    assert_eq!(m.audio().unwrap().sample_rate, 48000);
+    let second = m.streams.iter().find_map(|s| match s {
+        capia_media::StreamInfo::Audio(a) if a.index == 2 => Some(a),
+        _ => None,
+    });
+    assert_eq!(second.unwrap().sample_rate, 44100);
+    golden("multi_stream", &m);
+}
+
+#[test]
 fn video_without_audio() {
     let t = need!();
     let m = probe(&t, "video_only.mp4").unwrap();
