@@ -109,3 +109,7 @@ Bibliotecas prontas de timeline web (ex.: componentes React de "timeline editor"
 ## 8. Acessibilidade e internacionalização
 
 Contraste AA, foco visível, atalhos em todas as ações principais, UI em pt-BR e en desde o início (strings externalizadas).
+
+## Estado de implementação e medição (Fase 3)
+
+Implementado: renderer em canvas virtualizado (sem DOM por clip), ghost/snap/grupo/colocação pelo WASM do core, seleção/marquee/move/reordenar/trim/blade/split/delete/ripple/copiar-colar/duplicar/grupos, faixas, nested, zoom/fit, marcadores, miniaturas e waveform. As metas de §6 foram **medidas** (5.000 clips; Chromium headless sem GPU + engine release) em `docs/STATUS.md` ("Metas de UX medidas") e em `target/perf/phase3-ui-perf.json`: pintura e arrasto passam com folga; commit/undo passam no engine e ficam **na margem** quando medidos pela UI neste ambiente — o benchmark estrito em hardware de referência é `CAPIA_PERF_STRICT=1` (pacote de aceitação).

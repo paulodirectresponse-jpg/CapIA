@@ -213,3 +213,19 @@ capia-time → capia-media             (probe, índices CIDX/CAIX, decode, Frame
 ```
 
 `capia-render` recebe a mídia por um trait (`MediaSource`) e nunca faz IO. `capia-project` fornece o adaptador (`ProjectSource`): índice de quadros e de áudio vindos do cache derivado, decode pelo `DecodeService` e PCM pelo `PcmCache`, **sempre do arquivo original** (o proxy nunca é fonte de decode nem de export). `Project::render_frame/render_range/render_audio_range` e `export_intermediate/export_mp4` são a fachada que a CLI usa. `capia-preview` não conhece projeto: opera sobre `Arc<RenderGraph>` + `Arc<dyn MediaSource>` e é testado contra o export. Matriz em `tools/check-architecture.mjs` (novos crates: `capia-render`, `capia-decode`, `capia-preview`).
+
+## Editor (Fase 3)
+
+**Pacotes JS** (matriz verificada por `pnpm check:arch`): `engine-bindings` (contrato tipado, read-model por patches) · `ui-kit` (design system) · `ui-timeline` (canvas + ponte WASM) · `editor-ui` (store/controlador, painéis, i18n, keymap) · `apps/desktop` (adaptadores: Tauri IPC, diálogos, SharedBuffer) · `e2e` (Playwright, sem importar código do produto).
+**Crates novas:** `capia-editor-api` (fachada JSON `Session::call/begin`) · `capia-devserver` (HTTP local só dev/E2E) · `capia-timeline-wasm` (snap/grupo/colocação do core em WASM; ADR-070) · `capia-webview-surface` (SharedBuffer do WebView2; `unsafe` isolado; ADR-074).
+
+```
+UI (React) ──▶ EditorController (única porta de escrita da UI)
+                 │  execute / undo / redo  ──▶ EditorClient ──▶ transporte ─┬─ Tauri IPC (editor_call / editor_call_binary)
+                 │  réplica imutável ◀── patches (ChangeSet)               └─ HTTP 127.0.0.1 (devserver: dev/E2E)
+                 │                                                              │
+                 └─ ghost/snap: ui-timeline ──▶ WASM (capia-timeline-wasm)     capia-editor-api::Session ──▶ capia-project ──▶ Command Engine
+Preview: render.frame ─ preparado sob o lock, renderizado fora (Job) ─▶ SharedBuffer (WebView2) | bytes por IPC ─▶ WebGL canvas
+Áudio: render.audio (mixer do export) ─▶ WebAudio; relógio de áudio mestre a 1×
+```
+Regras: a UI nunca escreve fora do Command Engine (teste de fronteira); preferências de UI (`localStorage`, validadas campo a campo) são separadas do projeto; eventos do engine (`events.poll`) e inscrições são liberados no `dispose`; sem IPC por quadro de interação (arrasto = WASM local, IPC só no drop); outros clientes são notificados por `revision_changed` (ADR-072). Decisões: ADR-070..077.

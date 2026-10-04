@@ -119,3 +119,13 @@ Proxies são gerados em background após import (prioridade a clips já na timel
 - **Entregue (headless):** render graph e compositor CPU **de referência** determinístico (`capia-render`, ADR-063..065), decode persistente + cache de quadros (ADR-059/060), seek de áudio por índice + cache de PCM (ADR-061/062), preview headless (scheduler, `FrameSink`, playhead, cadência por relógio injetável, descarte de quadros obsoletos — ADR-066), export intermediário atômico e MP4 por `EncoderCapability` aprovado (ADR-067/068).
 - **Equivalência preview ↔ export:** o preview chama o **mesmo** `render_frame`; testes comparam digests SHA-256 quadro a quadro (tocando e em scrub), depois de reabrir, com cache frio/quente/minúsculo e com proxy presente — todos idênticos.
 - **Não entregue (de propósito):** compositor wgpu/RGBA16F (Fase 3; a referência CPU é o oráculo dele), texto, transições, efeitos, máscaras, rotação arbitrária, apresentação na janela (OD-1 aberta), H.264 de produção (`OUTPUT-H264` aberta).
+
+## Preview no editor (Fase 3 — ADR-073/074/077)
+
+- **Apresentador P2:** `render.frame` renderiza **dentro** do SharedBuffer do WebView2 (Windows) e o JS sobe a textura WebGL sem cópia por IPC; fora do WebView2/em falha, o **mesmo** apresentador recebe bytes por IPC binário (`data-transport` no canvas; o CI Windows exige `shared-buffer`). Sem janela nativa irmã ⇒ sem airspace.
+- **Render único:** o preview chama o mesmo `render_frame` do export; `design_size` faz 540p/720p comporem como o export; texto/transições/fades estão no render (testes `editor_render.rs`).
+- **Concorrência:** preparação sob o lock da sessão, compositor/decode fora (`Session::begin` → `Job`); grafo compilado em cache por `document.revision`.
+- **Agendamento:** *latest-wins* (um pedido em voo + um pendente; o substituído conta como *dropped slot*); qualidade 540p/720p/Auto com histerese; "proxy" = resolução reduzida (modo de desempenho — o proxy de mídia **nunca** é fonte de decode, ADR-063).
+- **Overlays (só UI, nunca na saída):** safe areas, caixa de transformação com mover/escalar (uma transação), seleção.
+- **Áudio:** `render.audio` (mixer do export) em blocos de 0,5 s; relógio de áudio mestre a 1×.
+- **Medido (CI/sandbox sem GPU, 5.000 clips sólidos, 404×720):** latência de quadro ≈ 14–36 ms p95 25–80; **CPU/pacing em GPU real = residual humano** (`tools/phase3-acceptance/gpu-residual.ps1`).

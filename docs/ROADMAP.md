@@ -76,11 +76,15 @@ Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, 
 
 Escopo: shell UI + design system, `ui-timeline` (canvas), painel Project (árvore) + abas de sequence + `+`, biblioteca (projeto/global), drag-and-drop, trim/split/snapping/zoom/ripple/grupos/copy-paste, tracks (lock/mute/solo/hide/magnetic), nested (abrir, make unique, flatten, follow length), inspector, keyframes, texto, legendas manuais + estilos, transições, áudio (volume/fades/detach), preview com proxies, export de deliverables em lote, histórico visível, relink UI, atalhos configuráveis, pt-BR/en.
 
+**Estado da Fase 3: `ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING`** (branch `claude/phase3-editor`; ver `docs/STATUS.md`). Fase 4 **não** iniciada.
+
 **Critérios de conclusão:**
-- [ ] Editor experiente produz um UGC ad de 30–45 s (talking head + B-roll + texto + legendas + música + SFX) em ≤ 15 min, sem bugs bloqueantes (teste com ≥ 3 usuários).
-- [ ] Metas de `TIMELINE_UX.md` §6 atendidas em hardware de referência (definido em OD-3).
-- [ ] Todas as interações da UI produzem comandos (verificado: nenhuma escrita fora do Command Engine).
-- [ ] Testes E2E dos fluxos principais verdes no CI Windows.
+- [ ] Editor experiente produz um UGC ad de 30–45 s (talking head + B-roll + texto + legendas + música + SFX) em ≤ 15 min, sem bugs bloqueantes (teste com ≥ 3 usuários). **PENDENTE — exige pessoas reais; pacote pronto em `tools/phase3-acceptance/` (nenhum resultado foi fabricado).**
+- [ ] Metas de `TIMELINE_UX.md` §6 atendidas em hardware de referência (definido em OD-3). **Parcial:** medidas em CI/sandbox sem GPU (pintura, arrasto, scrub ✅; commit/undo ✅ no engine, na margem pela UI); benchmark estrito em hardware de referência pendente (`CAPIA_PERF_STRICT=1`).
+- [x] Todas as interações da UI produzem comandos (verificado: nenhuma escrita fora do Command Engine). *(`packages/editor-ui/src/architecture.test.ts` varre o fonte; `controller.test.ts` confere que as ações só chamam `execute/undo/redo`.)*
+- [x] Testes E2E dos fluxos principais verdes no CI Windows. *(job `e2e-windows`: app Tauri real por WebView2/CDP, 17 fluxos + edição + visual, H.264 real via `h264_mf`, preview por SharedBuffer — ver `docs/STATUS.md` para o commit verde.)*
+- [ ] Residual ADR-069 em GPU real (CPU/pacing do P2 a 720p). **PENDENTE — hardware:** `tools/phase3-acceptance/gpu-residual.ps1`.
+- [x] `OUTPUT-H264` — **engenharia** integrada (UI + export atômico + ffprobe + CI Windows); a decisão **jurídica/de produto** (patentes H.264/AAC, OpenH264, qualidade de produção) **continua pendente e não é declarada resolvida** (ADR-075).
 
 ---
 

@@ -144,3 +144,11 @@ Regressões > 10% falham o CI de benchmark (rodado em máquina dedicada, não em
 | Aceitação | `capia-cli/tests/phase2_e2e.rs`: `HOOK_A`, `HOOK_B`, `BODY_MASTER` (nested) pelo binário real |
 | Mutação | `tools/mutation-phase2.py` — 16 mutações, 16/16 detectadas |
 | Desempenho | `capia-render/tests/perf.rs`, `capia-decode/tests/perf.rs`, `capia-project/tests/perf_render.rs` (`--ignored`; só medem) |
+
+
+## Editor (Fase 3) — ADR-076
+
+- **E2E (Playwright, `packages/e2e`):** UI compilada × **engine e FFmpeg reais**. Devserver no Linux; **app Tauri real no Windows** por CDP/WebView2 (`CAPIA_E2E_TARGET=tauri`). Suites: `flows` (17 fluxos críticos com conferência da verdade persistida via `sequence.get`), `editing` (seleção, marquee, grupo, copiar/colar, ripple, faixas, keyframes, legendas, idioma, atalhos, playback), `crash` (kill -9 após edições, kill no meio do export sem arquivo parcial, preferências corrompidas), `visual` (capturas + sondas de pixel; sem goldens frágeis), `perf` (metas §6 com 5.000 clips; *smoke* no CI, estrito com `CAPIA_PERF_STRICT=1`).
+- **Unitários só com lógica:** kit de componentes, comandos de edição puros, agendador do preview, áudio, teclas, preferências, ponte WASM, transporte; **fronteira UI→engine** por varredura de fonte (`architecture.test.ts`) e controlador com cliente falso.
+- **Rust:** `capia-commands/tests/editor.rs`, `capia-render/tests/editor_render.rs` (inclui `design_size`), cache de grafo (`render_project.rs`), `capia-editor-api/tests/session.rs` (inclui `Job` fora do lock, `revision_changed`, `render.audio`), `capia-webview-surface` (região de frame), `capia-desktop` (IPC fixo).
+- **Humano/hardware (não automatizável):** `tools/phase3-acceptance/`.

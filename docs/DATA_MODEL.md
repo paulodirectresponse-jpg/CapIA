@@ -170,3 +170,12 @@ Migration v1→v2 (aditiva, com backup): `media_assets(asset_id PK, kind, conten
 ## Render e export (Fase 2 — conclusão): sem mudança de schema
 
 O schema permanece **3**. Novidades **fora do documento e do undo**: (a) derivado `aix` (índice de frames de áudio `CAIX` v1: cabeçalho 64 B com taxa, canais, *time base*, total de amostras, stream e o flag `fast_seek`; entradas de 24 B `(pts, amostra inicial, nº de amostras)`; rodapé SHA-256) no cache v2, chave `(hash, "audio-index", stream, produtor+ffprobe)`; (b) `JobKind::AudioIndex` (`audio_index`) na tabela de jobs (texto livre, sem migration); (c) saída `capia-intermediate-v1` (`video.rgba`, `audio.wav` float32, `manifest.json` com digests por quadro) — **artefato do usuário, nunca guardado no `.capia`**. O render lê o documento e o catálogo e **não escreve em nenhum dos dois**.
+
+## Extensões da Fase 3 (ADR-071)
+
+- `Sequence.header.width/height` (padrão 1920×1080; só serializados se diferentes ⇒ digests antigos intactos). Pixels de `position_x/y` são **da sequence** (`RenderSettings.design_size` escala para a saída).
+- **Texto/legenda:** `ClipContent::Text { text, style }`; `TextStyle` (família `sans`, tamanho em ‰ da altura do quadro, peso, alinhamento, cor, fundo, contorno). Legenda = clip de texto em trilha de função `Captions`.
+- **Transição:** `Clip.transition_in { kind: dissolve|fade|slide_in, duration }` na **entrada** do clip; dissolve exige handles de fonte (metade da duração de cada lado); validada por `validate`.
+- **Grupo:** `Clip.group` (rótulo); move junto, desagrupa por comando.
+- **Pastas e deliverables:** `Document.folders` (árvore de sequences) e `Document.deliverables` (sequence + preset + destino + tamanho) — persistidos no `.capia` e **desfazíveis**; preferências de UI **não** entram no projeto.
+- Propriedades `fade_in/fade_out` (s), `volume_db` (existente). Ids de entidades novas: `folder_*`, `deliv_*`.
