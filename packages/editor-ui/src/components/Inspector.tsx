@@ -545,12 +545,28 @@ function AnimationTab({ clip, playhead }: { clip: Clip; playhead: number }) {
                   <li key={k.at} className={here === k ? "is-here" : undefined}>
                     <button
                       className="ed-kf-time"
+                      title={formatTimecode(k.at, rate)}
                       onClick={() => {
                         c.seek(k.at);
                       }}
                     >
                       {formatTimecode(k.at, rate)}
                     </button>
+                    <NumberField
+                      label={`${t("inspector.keyframeFrame")} @${String(i + 1)}`}
+                      value={Math.round((k.at - clip.start) / frameTicks(rate))}
+                      min={0}
+                      max={Math.round(clip.duration / frameTicks(rate))}
+                      onCommit={(v) => {
+                        void c.moveKeyframes(clip.id, [
+                          {
+                            prop: spec.name,
+                            from: k.at,
+                            to: clip.start + Math.round(v) * frameTicks(rate),
+                          },
+                        ]);
+                      }}
+                    />
                     <NumberField
                       label={`${t(PROP_LABEL[spec.name] ?? "inspector.position")} @${String(i + 1)}`}
                       value={k.value}

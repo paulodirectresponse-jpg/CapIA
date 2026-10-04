@@ -58,7 +58,8 @@ export interface TimelineCallbacks {
   onDropAsset(asset: string, target: DropTarget): void;
   onDropSequence(sequence: string, target: DropTarget): void;
   onViewport(v: { pps: number; origin: Ticks; scrollY: number }): void;
-  onKeyframeMove?(clip: string, prop: string, from: Ticks, to: Ticks): void;
+  /** Diamantes arrastados: todos os que estavam no mesmo instante vão juntos (uma transação). */
+  onKeyframesMove?(clip: string, moves: { prop: string; from: Ticks; to: Ticks }[]): void;
   onBladeCut?(clip: string, at: Ticks): void;
 }
 
@@ -113,6 +114,15 @@ type Gesture =
       destTrack: string | null;
       reorderBefore: string | null | undefined;
       snapAt: Ticks | null;
+    }
+  | {
+      type: "keyframe";
+      clip: string;
+      items: { prop: string; from: Ticks }[];
+      from: Ticks;
+      to: Ticks;
+      x0: number;
+      moved: boolean;
     }
   | {
       type: "trim";
@@ -477,6 +487,31 @@ export class TimelineView {
     ctx.stroke();
   }
 
+  /** Diamante sob o ponteiro (só do clip em foco): todas as propriedades naquele instante. */
+  private hitKeyframe(p: { x: number; y: number }): Extract<Gesture, { type: "keyframe" }> | null {
+    const id = this.state.focusClip;
+    const c = id ? this.data?.seq.clips[id] : undefined;
+    const r = id ? this.clipRect(id) : null;
+    if (!c || !r) return null;
+    const y = r.y + r.h - 9;
+    if (Math.abs(p.y - y) > 7) return null;
+    const items: { prop: string; from: Ticks }[] = [];
+    let at: Ticks | null = null;
+    for (const [prop, a] of Object.entries(c.properties)) {
+      if (!("animated" in a)) continue;
+      for (const k of a.animated) {
+        const t = Math.round(c.start + (k.time - c.source_in) / (parseSpeed(c.speed) || 1));
+        if (Math.abs(this.tx(t) - p.x) <= 6 && (at === null || t === at)) {
+          at = t;
+          items.push({ prop, from: t });
+        }
+      }
+    }
+    return at === null
+      ? null
+      : { type: "keyframe", clip: c.id, items, from: at, to: at, x0: p.x, moved: false };
+  }
+
   private paintKeyframes(c: Clip, y: number) {
     const { ctx } = this;
     ctx.fillStyle = "#ffd166";
@@ -497,6 +532,20 @@ export class TimelineView {
         ctx.closePath();
         ctx.fill();
       }
+    }
+    const g = this.gesture;
+    if (g?.type === "keyframe" && g.clip === c.id && g.moved) {
+      // fantasma do destino (contorno), já alinhado ao quadro
+      const x = this.tx(g.to);
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x + 5, y);
+      ctx.lineTo(x, y + 5);
+      ctx.lineTo(x - 5, y);
+      ctx.closePath();
+      ctx.stroke();
     }
   }
 
@@ -818,6 +867,11 @@ export class TimelineView {
       this.scrubTo(p.x);
       return;
     }
+    const kf = this.hitKeyframe(p);
+    if (kf) {
+      this.gesture = kf;
+      return;
+    }
     const hit = this.hitClip(p);
     if (!hit) {
       this.gesture = { type: "marquee", x0: p.x, y0: p.y, x1: p.x, y1: p.y, additive: e.shiftKey };
@@ -918,12 +972,34 @@ export class TimelineView {
       g.y1 = p.y;
       this.invalidate();
     } else if (g.type === "trim") this.trimMove(g, p.x);
+    else if (g.type === "keyframe") this.keyframeMove(g, p.x);
     else this.moveMove(g, p, e.altKey);
+  }
+
+  private keyframeMove(g: Extract<Gesture, { type: "keyframe" }>, x: number) {
+    const d = this.data;
+    const c = d?.seq.clips[g.clip];
+    if (!d || !c) return;
+    if (!g.moved && Math.abs(x - g.x0) < DRAG_THRESHOLD_PX) return;
+    g.moved = true;
+    const frame = d.seq.frame_ticks;
+    const raw = pxToTicks(x, this.state.pps, this.state.origin);
+    // alinha ao quadro e limita ao trecho do clip
+    const aligned = Math.round(raw / frame) * frame;
+    g.to = Math.min(c.start + c.duration, Math.max(c.start, aligned));
+    this.invalidate();
   }
 
   private updateHover(p: { x: number; y: number }) {
     let cursor = "default";
     if (p.y >= RULER_H) {
+      if (this.hitKeyframe(p)) {
+        if (cursor !== this.hoverCursor) {
+          this.hoverCursor = "ew-resize";
+          this.canvas.style.cursor = "ew-resize";
+        }
+        return;
+      }
       const hit = this.hitClip(p);
       if (hit?.edge) cursor = "ew-resize";
       else if (hit) cursor = this.state.tool === "blade" ? "crosshair" : "grab";
@@ -1108,6 +1184,13 @@ export class TimelineView {
           for (const c of visibleClips(d.byTrack.get(row.track.id) ?? [], from, to)) ids.push(c.id);
         }
         this.cb.onSelect(ids, g.additive ? "add" : "replace");
+      }
+    } else if (g.type === "keyframe" && g.moved) {
+      if (g.to !== g.from) {
+        this.cb.onKeyframesMove?.(
+          g.clip,
+          g.items.map((i) => ({ prop: i.prop, from: i.from, to: g.to })),
+        );
       }
     } else if (g.type === "trim" && g.moved) {
       const c = d?.seq.clips[g.clip];

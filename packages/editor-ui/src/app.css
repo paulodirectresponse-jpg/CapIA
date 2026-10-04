@@ -540,7 +540,7 @@
 }
 .ed-kf-list li {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 64px 1fr auto auto;
   gap: var(--sp-2);
   align-items: center;
   margin-bottom: var(--sp-2);

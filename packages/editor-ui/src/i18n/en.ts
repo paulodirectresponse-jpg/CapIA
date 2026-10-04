@@ -247,6 +247,7 @@ export const en = {
   "inspector.addKeyframe": "Add keyframe",
   "inspector.removeKeyframe": "Remove keyframe",
   "inspector.keyframes": "Keyframes",
+  "inspector.keyframeFrame": "Keyframe frame",
   "inspector.interp": "Interpolation",
   "inspector.interp.linear": "Linear",
   "inspector.interp.hold": "Hold",

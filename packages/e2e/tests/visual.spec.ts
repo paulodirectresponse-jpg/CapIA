@@ -127,3 +127,85 @@ test("visual smoke: shell, timeline with clips, preview, offline, inspector, exp
   await shot(page, "5-export-dialog");
   expect(r).toBeGreaterThan(200);
 });
+
+test("visual smoke: thumbnails and waveform are painted on media clips", async ({
+  editor,
+  page,
+}) => {
+  await editor.goto();
+  await editor.createProject();
+  await editor.importMedia("video_audio.mp4", "tone_44k.wav");
+  await expect.poll(async () => (await editor.snapshot()).assets.length).toBe(2);
+  const video = await editor.assetIdByName("video_audio.mp4");
+  const tone = await editor.assetIdByName("tone_44k.wav");
+  const seq = await editor.sequence();
+  const main = seq.tracks.find((t) => t.role === "main");
+  const voice = seq.tracks.find((t) => t.role === "voice");
+  if (!main || !voice) throw new Error("faixas");
+  const F = 23_520_000;
+  await editor.api("command.execute", {
+    label: "media",
+    commands: [
+      {
+        operation_id: "mv",
+        type: "insert_clip",
+        track: main.id,
+        start: 0,
+        clip: {
+          name: "video",
+          duration: 30 * F,
+          content: { type: "media", asset: video, has_video: true, has_audio: false },
+          source_in: 0,
+          speed: "1",
+          reversed: false,
+          properties: {},
+        },
+      },
+      {
+        operation_id: "ma",
+        type: "insert_clip",
+        track: voice.id,
+        start: 0,
+        clip: {
+          name: "tone",
+          duration: 30 * F,
+          content: { type: "media", asset: tone, has_video: false, has_audio: true },
+          source_in: 0,
+          speed: "1",
+          reversed: false,
+          properties: {},
+        },
+      },
+    ],
+  });
+  const clips = await editor.clips();
+  const v = clips.find((c) => c.name === "video");
+  const a = clips.find((c) => c.name === "tone");
+  if (!v || !a) throw new Error("clips");
+  await editor.clipPoint(v.id);
+  // dá tempo às miniaturas/peaks (carregados sob demanda) e conta cores só dentro do retângulo do clip
+  const colorsIn = (id: string) =>
+    page.evaluate((clip) => {
+      const hook = window.__capiaTimeline;
+      const r = hook?.clipRect(clip);
+      const cv = document.querySelector<HTMLCanvasElement>('[data-testid="timeline-canvas"]');
+      if (!r || !cv) return 0;
+      const dpr = cv.width / cv.getBoundingClientRect().width;
+      const ctx = cv.getContext("2d");
+      if (!ctx) return 0;
+      const d = ctx.getImageData(
+        Math.max(0, Math.floor(r.x * dpr)),
+        Math.floor(r.y * dpr),
+        Math.max(1, Math.floor(Math.min(r.w, cv.getBoundingClientRect().width - r.x) * dpr)),
+        Math.floor(r.h * dpr),
+      ).data;
+      const seen = new Set<number>();
+      for (let i = 0; i < d.length; i += 4 * 3)
+        seen.add(((d[i] ?? 0) << 16) | ((d[i + 1] ?? 0) << 8) | (d[i + 2] ?? 0));
+      return seen.size;
+    }, id);
+  await expect.poll(() => colorsIn(v.id), { timeout: 15_000 }).toBeGreaterThan(8); // miniatura do vídeo
+  await expect.poll(() => colorsIn(a.id), { timeout: 15_000 }).toBeGreaterThan(3); // forma de onda
+  mkdirSync(OUT, { recursive: true });
+  await page.screenshot({ path: join(OUT, "6-thumbnails-waveform.png") });
+});

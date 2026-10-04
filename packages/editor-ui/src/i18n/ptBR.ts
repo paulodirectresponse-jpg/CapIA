@@ -249,6 +249,7 @@ export const ptBR: Record<MessageKey, string> = {
   "inspector.addKeyframe": "Adicionar keyframe",
   "inspector.removeKeyframe": "Remover keyframe",
   "inspector.keyframes": "Keyframes",
+  "inspector.keyframeFrame": "Quadro do keyframe",
   "inspector.interp": "Interpolação",
   "inspector.interp.linear": "Linear",
   "inspector.interp.hold": "Manter",

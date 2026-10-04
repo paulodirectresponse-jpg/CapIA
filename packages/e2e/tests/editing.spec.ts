@@ -426,3 +426,50 @@ test("undo after a long run of UI edits restores the exact original document", a
   for (let i = 0; i < count; i++) await page.getByTestId("redo").click();
   await expect.poll(async () => norm(await editor.clips())).toBe(changed);
 });
+
+test("keyframes can be moved in time from the inspector and by dragging the diamond", async ({
+  editor,
+  page,
+}) => {
+  const { overlay } = await setup(editor);
+  await seedSolids(editor, [{ track: overlay, start: 0, duration: 6 * SEC, name: "KM" }]);
+  const clip = byName(await editor.clips(), "KM");
+  const p = await editor.clipPoint(clip.id);
+  await page.mouse.click(p.x, p.y);
+  const inspector = page.getByTestId("inspector");
+  await inspector.getByRole("tab", { name: "Animation" }).click();
+  await page.getByTestId("step-forward").click({ clickCount: 30 }); // 1 s
+  await page.getByTestId("kf-add-opacity").click();
+  await expect(page.getByTestId("kf-list-opacity").locator("li")).toHaveCount(1);
+  const times = async () => {
+    const props = (await editor.clips()).find((c) => c.id === clip.id)?.properties as Record<
+      string,
+      { animated?: { time: number }[] }
+    >;
+    return (props.opacity?.animated ?? []).map((k) => k.time);
+  };
+  const t0 = (await times())[0] ?? 0;
+
+  // 1) pelo inspector: quadro 60 (2 s)
+  const frameBox = page.getByRole("textbox", { name: "Keyframe frame @1" });
+  await frameBox.fill("60");
+  await frameBox.press("Enter");
+  await expect.poll(async () => (await times())[0]).toBe(2 * SEC);
+  expect(t0).toBe(SEC);
+
+  // 2) arrastando o diamante na timeline (+1 s)
+  const o = await page.evaluate(() => window.__capiaTimeline?.canvasOrigin());
+  const view = await page.evaluate(() => window.__capiaTimeline?.viewState());
+  const rect = await page.evaluate((id) => window.__capiaTimeline?.clipRect(id), clip.id);
+  if (!o || !view || !rect) throw new Error("sem hooks");
+  const x0 = o.x + (2 * view.pps - (view.origin / 705_600_000) * view.pps);
+  const y = o.y + rect.y + rect.h - 9;
+  await page.mouse.move(x0, y);
+  await page.mouse.down();
+  await page.mouse.move(x0 + view.pps, y, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await times())[0]).toBe(3 * SEC);
+  // um único passo de undo devolve o instante anterior
+  await page.getByTestId("undo").click();
+  await expect.poll(async () => (await times())[0]).toBe(2 * SEC);
+});

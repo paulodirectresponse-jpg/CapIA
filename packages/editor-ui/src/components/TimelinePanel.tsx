@@ -119,6 +119,9 @@ export function TimelinePanel() {
         onMove: (plan: MovePlan) => {
           void c.moveClips(plan);
         },
+        onKeyframesMove: (clip, moves) => {
+          void c.moveKeyframes(clip, moves);
+        },
         onTrim: (clip, edge, to) => {
           void c.trimClip(clip, edge, to);
         },

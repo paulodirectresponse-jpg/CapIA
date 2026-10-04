@@ -1152,6 +1152,17 @@ export class EditorController {
     return this.exec("keyframe", [{ type: "move_keyframe", clip, prop, from, to }]);
   }
 
+  /** Vários diamantes de uma vez (mesmo instante) numa única transação. */
+  moveKeyframes(
+    clip: string,
+    moves: { prop: string; from: Ticks; to: Ticks }[],
+  ): Promise<ChangeSet | null> {
+    return this.exec(
+      "keyframe",
+      moves.map((m) => ({ type: "move_keyframe", clip, prop: m.prop, from: m.from, to: m.to })),
+    );
+  }
+
   setKeyframeInterp(
     clip: string,
     prop: string,
