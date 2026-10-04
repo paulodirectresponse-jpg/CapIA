@@ -70,9 +70,9 @@ describe("TimelineCore (real WASM build of the engine's UX functions)", () => {
     const moved: Clip = { ...clip("c1", 5, 10) };
     c.applyPatches([{ op: "clip", sequence: "s", id: "c1", old: clip("c1", 0, 10), new: moved }]);
     expect(c.snapPoint(5 * F + 1, 100, ["c2"], null)?.t).toBe(5 * F);
-    expect(() =>
-      c.applyPatches([{ op: "clip", sequence: "s", id: "c1", old: clip("c1", 0, 10), new: null }]),
-    ).toThrowError(CoreError);
+    expect(() => {
+      c.applyPatches([{ op: "clip", sequence: "s", id: "c1", old: clip("c1", 0, 10), new: null }]);
+    }).toThrow(CoreError);
     try {
       c.applyPatches([{ op: "clip", sequence: "s", id: "c1", old: clip("c1", 0, 10), new: null }]);
     } catch (e) {
@@ -94,8 +94,8 @@ describe("TimelineCore (real WASM build of the engine's UX functions)", () => {
 
   it("reports structured errors (not loaded / invalid input) instead of throwing opaque ones", async () => {
     const empty = await TimelineCore.load(readFileSync(wasmPath));
-    expect(() => empty.snapPoint(0, 1, [], null)).toThrowError(/no sequence is loaded/);
+    expect(() => empty.snapPoint(0, 1, [], null)).toThrow(/no sequence is loaded/);
     const c = await core();
-    expect(() => c.groupMove([], 0, 0, null)).toThrowError(CoreError);
+    expect(() => c.groupMove([], 0, 0, null)).toThrow(CoreError);
   });
 });

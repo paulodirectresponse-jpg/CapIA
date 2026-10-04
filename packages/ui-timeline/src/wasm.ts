@@ -77,6 +77,7 @@ export class TimelineCore {
     return new TimelineCore(instance.exports as unknown as Exports);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- o chamador declara o formato da resposta
   private call<T>(op: number, input: unknown): T {
     const x = this.x;
     const bytes = new TextEncoder().encode(JSON.stringify(input));

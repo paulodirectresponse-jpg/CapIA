@@ -106,7 +106,7 @@ export function sanitizePrefs(raw: unknown): Prefs {
 /** Lê as preferências; qualquer falha de leitura/parse devolve o padrão (e sinaliza `recovered`). */
 export function loadPrefs(storage: KeyValueStorage | null): { prefs: Prefs; recovered: boolean } {
   if (!storage) return { prefs: structuredClone(DEFAULT_PREFS), recovered: false };
-  let text: string | null = null;
+  let text: string | null;
   try {
     text = storage.getItem(KEY);
   } catch {
