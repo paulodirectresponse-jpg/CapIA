@@ -74,13 +74,13 @@ export const test = base.extend<{ server: Server; editor: Editor }, object>({
   server: async ({}, use) => {
     const dir = mkdtempSync(join(tmpdir(), "capia-e2e-"));
     if (TAURI) {
-      const port = await freePort();
+      // porta fixa de `tauri.e2e.conf.json` (additionalBrowserArgs; o env do WebView2 é ignorado pelo wry)
+      const port = 9222;
       const child: ChildProcess = spawn(tauriBinary(), [], {
         stdio: "ignore",
         cwd: ROOT,
         env: {
           ...process.env,
-          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${String(port)}`,
           WEBVIEW2_USER_DATA_FOLDER: join(dir, "webview2"),
         },
       });

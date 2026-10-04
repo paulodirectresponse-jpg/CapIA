@@ -92,8 +92,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node tools/build-wasm.mjs
       - run: pnpm --filter @capia/desktop build
-      - name: Build do aplicativo desktop (sem instalador)
-        run: pnpm desktop:build
+      # Build SÓ para E2E: mesma app, mais a porta CDP do WebView2 (config extra; o produto não a tem)
+      - name: Build do aplicativo desktop para E2E (sem instalador)
+        run: pnpm --filter @capia/desktop tauri build --no-bundle --config src-tauri/tauri.e2e.conf.json
       - name: E2E do aplicativo (fluxos críticos, H.264 real, SharedBuffer)
         shell: pwsh
         run: pnpm --filter @capia/e2e e2e --workers=1 --grep-invert "targets with 5k clips"

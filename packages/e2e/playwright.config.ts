@@ -19,7 +19,11 @@ export default defineConfig({
     viewport: { width: 1600, height: 900 },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    launchOptions: chromium ? { executablePath: chromium } : {},
+    launchOptions: {
+      ...(chromium ? { executablePath: chromium } : {}),
+      // medição de heap (teste de vazamentos)
+      args: ["--enable-precise-memory-info", "--js-flags=--expose-gc"],
+    },
   },
   outputDir: "../../target/e2e-results",
 });
