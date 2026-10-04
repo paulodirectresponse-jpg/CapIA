@@ -102,7 +102,21 @@ fn make_av(d: &Dir, name: &str, pattern: &str, secs: u32, tone: u32) -> PathBuf 
         .arg(format!(
             "aevalsrc=0.6*sin(2*PI*t*{tone})|0.6*sin(2*PI*t*({tone}+100)):s=48000:c=stereo"
         ))
-        .args(["-t", &secs.to_string(), "-c:v", "mpeg4", "-g", "12", "-qscale:v", "3", "-c:a", "aac", "-b:a", "128k", "-shortest"])
+        .args([
+            "-t",
+            &secs.to_string(),
+            "-c:v",
+            "mpeg4",
+            "-g",
+            "12",
+            "-qscale:v",
+            "3",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-shortest",
+        ])
         .arg(&out)
         .status()
         .unwrap();
@@ -138,19 +152,39 @@ fn secs(v: &Value) -> f64 {
 /// Valida um MP4 exportado: contêiner, codec, tamanho, fps, nº de quadros, áudio e sincronismo.
 fn check_mp4(file: &Path, codec: &str, frames: u64) {
     let v = ffprobe(file);
-    assert!(v["format"]["format_name"].as_str().unwrap().contains("mp4"), "{v}");
+    assert!(
+        v["format"]["format_name"].as_str().unwrap().contains("mp4"),
+        "{v}"
+    );
     let vs = stream(&v, "video");
     assert_eq!(vs["codec_name"], codec);
-    assert_eq!((vs["width"].as_u64(), vs["height"].as_u64()), (Some(64), Some(48)));
+    assert_eq!(
+        (vs["width"].as_u64(), vs["height"].as_u64()),
+        (Some(64), Some(48))
+    );
     assert_eq!(vs["avg_frame_rate"], "30/1");
-    assert_eq!(vs["nb_read_packets"].as_str().unwrap().parse::<u64>().unwrap(), frames);
+    assert_eq!(
+        vs["nb_read_packets"]
+            .as_str()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap(),
+        frames
+    );
     let as_ = stream(&v, "audio");
     assert_eq!(as_["sample_rate"], "48000");
     assert_eq!(as_["channels"].as_u64(), Some(2));
     let (vd, ad) = (secs(&vs["duration"]), secs(&as_["duration"]));
     let want = frames as f64 / 30.0;
-    assert!((vd - want).abs() <= 1.0 / 30.0, "video duration {vd} vs {want}");
-    assert!((vd - ad).abs() <= 1.0 / 30.0, "A/V drift {} s", (vd - ad).abs());
+    assert!(
+        (vd - want).abs() <= 1.0 / 30.0,
+        "video duration {vd} vs {want}"
+    );
+    assert!(
+        (vd - ad).abs() <= 1.0 / 30.0,
+        "A/V drift {} s",
+        (vd - ad).abs()
+    );
 }
 
 const FRAME: i64 = 23_520_000;
@@ -243,11 +277,40 @@ fn phase2_acceptance_cli_end_to_end() {
     assert_eq!(dump(&p), after, "redo reapplies it");
 
     // 5. render: um quadro do BODY_MASTER == o mesmo quadro no export intermediário (manifesto)
-    let f5 = ok_json(&["render", "frame", s(&p), "--sequence", "BODY_MASTER", "--frame", "5", "--width", "64", "--height", "48", "--json"]);
+    let f5 = ok_json(&[
+        "render",
+        "frame",
+        s(&p),
+        "--sequence",
+        "BODY_MASTER",
+        "--frame",
+        "5",
+        "--width",
+        "64",
+        "--height",
+        "48",
+        "--json",
+    ]);
     let inter = d.file("inter");
-    let rep = ok_json(&["export", "intermediate", s(&p), "--sequence", "BODY_MASTER", "--out", s(&inter), "--width", "64", "--height", "48", "--json"]);
+    let rep = ok_json(&[
+        "export",
+        "intermediate",
+        s(&p),
+        "--sequence",
+        "BODY_MASTER",
+        "--out",
+        s(&inter),
+        "--width",
+        "64",
+        "--height",
+        "48",
+        "--json",
+    ]);
     assert_eq!(rep["frames"], 90);
-    assert_eq!(rep["frame_digests"][5], f5["digest"], "render and export agree");
+    assert_eq!(
+        rep["frame_digests"][5], f5["digest"],
+        "render and export agree"
+    );
     assert!(inter.join("manifest.json").exists() && inter.join("audio.wav").exists());
 
     // 6. encoders detectados e a política
@@ -258,37 +321,110 @@ fn phase2_acceptance_cli_end_to_end() {
             assert_eq!(x["available"], false, "GPL encoder must never be available");
         }
     }
-    let h264_ok = list.iter().any(|x| x["codec"] == "h264" && x["available"] == true);
+    let h264_ok = list
+        .iter()
+        .any(|x| x["codec"] == "h264" && x["available"] == true);
     eprintln!("H.264 approved encoder available on this host: {h264_ok}");
 
     // 7. MP4(s)
     let mp4 = d.file("body_master.mp4");
     if h264_ok {
-        let r = ok_json(&["export", "mp4", s(&p), "--sequence", "BODY_MASTER", "--out", s(&mp4), "--width", "64", "--height", "48", "--json"]);
+        let r = ok_json(&[
+            "export",
+            "mp4",
+            s(&p),
+            "--sequence",
+            "BODY_MASTER",
+            "--out",
+            s(&mp4),
+            "--width",
+            "64",
+            "--height",
+            "48",
+            "--json",
+        ]);
         assert_eq!(r["codec"], "h264");
         check_mp4(&mp4, "h264", 90);
     } else {
         // sem encoder aprovado: erro estruturado, nada publicado, SEM fallback silencioso
-        let o = capia(&["export", "mp4", s(&p), "--sequence", "BODY_MASTER", "--out", s(&mp4), "--width", "64", "--height", "48", "--json"]);
+        let o = capia(&[
+            "export",
+            "mp4",
+            s(&p),
+            "--sequence",
+            "BODY_MASTER",
+            "--out",
+            s(&mp4),
+            "--width",
+            "64",
+            "--height",
+            "48",
+            "--json",
+        ]);
         assert_eq!(o.code, 1, "{}", o.stdout);
         let e: Value = serde_json::from_str(o.stderr.trim()).unwrap();
         assert_eq!(e["error"]["code"], "MEDIA_ENCODER_UNAVAILABLE", "{e}");
         assert!(!mp4.exists());
         // referência explícita (MPEG-4 parte 2, não H.264): prova mux, quadros e sincronismo
-        let r = ok_json(&["export", "mp4", s(&p), "--sequence", "BODY_MASTER", "--out", s(&mp4), "--width", "64", "--height", "48", "--codec", "mpeg4-reference", "--json"]);
+        let r = ok_json(&[
+            "export",
+            "mp4",
+            s(&p),
+            "--sequence",
+            "BODY_MASTER",
+            "--out",
+            s(&mp4),
+            "--width",
+            "64",
+            "--height",
+            "48",
+            "--codec",
+            "mpeg4-reference",
+            "--json",
+        ]);
         assert_eq!(r["codec"], "mpeg4");
         check_mp4(&mp4, "mpeg4", 90);
     }
     // GPL por nome: recusado, nada publicado
     let gpl = d.file("gpl.mp4");
-    let o = capia(&["export", "mp4", s(&p), "--sequence", "BODY_MASTER", "--out", s(&gpl), "--encoder", "libx264", "--json"]);
+    let o = capia(&[
+        "export",
+        "mp4",
+        s(&p),
+        "--sequence",
+        "BODY_MASTER",
+        "--out",
+        s(&gpl),
+        "--encoder",
+        "libx264",
+        "--json",
+    ]);
     assert_eq!(o.code, 1);
-    assert!(o.stderr.contains("MEDIA_ENCODER_PROHIBITED"), "{}", o.stderr);
+    assert!(
+        o.stderr.contains("MEDIA_ENCODER_PROHIBITED"),
+        "{}",
+        o.stderr
+    );
     assert!(!gpl.exists());
     // segundo MP4: o HOOK_B sozinho (1 s)
     let hb = d.file("hook_b_export.mp4");
     let codec = if h264_ok { "h264" } else { "mpeg4-reference" };
-    ok_json(&["export", "mp4", s(&p), "--sequence", "HOOK_B", "--out", s(&hb), "--width", "64", "--height", "48", "--codec", codec, "--json"]);
+    ok_json(&[
+        "export",
+        "mp4",
+        s(&p),
+        "--sequence",
+        "HOOK_B",
+        "--out",
+        s(&hb),
+        "--width",
+        "64",
+        "--height",
+        "48",
+        "--codec",
+        codec,
+        "--json",
+    ]);
     check_mp4(&hb, if h264_ok { "h264" } else { "mpeg4" }, 30);
 
     // 8. reabre (processos novos) e valida o projeto + os assets continuam online
