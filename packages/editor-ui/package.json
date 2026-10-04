@@ -15,7 +15,8 @@
     "@capia/engine-bindings": "workspace:*",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "@capia/ui-kit": "workspace:*"
+    "@capia/ui-kit": "workspace:*",
+    "@capia/ui-timeline": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",

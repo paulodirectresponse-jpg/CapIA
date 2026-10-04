@@ -84,6 +84,9 @@ importers:
       '@capia/ui-kit':
         specifier: workspace:*
         version: link:../ui-kit
+      '@capia/ui-timeline':
+        specifier: workspace:*
+        version: link:../ui-timeline
       react:
         specifier: ^19.3.0
         version: 19.3.0

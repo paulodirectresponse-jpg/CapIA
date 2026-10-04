@@ -55,3 +55,20 @@ export function ticksToSeconds(t: Ticks): number {
 export function snapToFrame(t: Ticks, frame: Ticks): Ticks {
   return Math.floor((t + frame / 2) / frame) * frame;
 }
+
+/** Taxa para exibição: `30`, `29.97`, `23.976`. */
+export function formatFps(rateText: string): string {
+  const { num, den } = parseRate(rateText);
+  const v = num / den;
+  return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(3)));
+}
+
+/** `m:ss` / `h:mm:ss` para durações na biblioteca. */
+export function formatDuration(t: Ticks): string {
+  const total = Math.max(0, Math.round(t / TICKS_PER_SECOND));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor(total / 60) % 60;
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${String(m)}:${pad(s)}`;
+}
