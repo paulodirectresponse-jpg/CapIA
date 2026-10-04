@@ -105,7 +105,7 @@ O compositor CPU é a **referência determinística**, não o caminho de tempo r
 
 ## Próxima missão (proposta; **não iniciada**)
 
-Spike S1 em Windows 11 + GPU (`tools/s1-preview-spike`, `.\run.ps1`) → fecha OD-1 → ADR do presenter → só então Fase 3. Em paralelo (não bloqueia): decisão de produto sobre `OUTPUT-H264`.
+Spike S1 em Windows 11 + GPU (`tools/s1-preview-spike`, `powershell -ExecutionPolicy Bypass -File .\run.ps1`; harness corrigido e validado no CI Windows/WARP, ver `docs/spikes/S1-preview-surface.md` §0) → fecha OD-1 → ADR do presenter → só então Fase 3. Em paralelo (não bloqueia): decisão de produto sobre `OUTPUT-H264`.
 
 ## O que existe (M08)
 

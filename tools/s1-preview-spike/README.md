@@ -55,15 +55,29 @@ Latência fóton-a-fóton · mudança de DPI/monitor durante a execução (repit
 
 Lê a **tela já composta pelo DWM** via `BitBlt`. Inclui o atraso de composição, mas **não** o do monitor; a resolução depende da taxa de captura (`capture_rate_hz` no relatório) e da programação das threads. É adequada para **comparar P1 × P2**, não para citar milissegundos absolutos de ponta a ponta.
 
+## Como ler o resultado (por modo)
+
+O `run.ps1` imprime ao final **"RESULTADO POR MODO"** e o mesmo vai em `summary` no JSON/MD:
+
+| Status | Significado |
+|---|---|
+| `MEASURED` | todas as fases do modo rodaram e produziram amostras válidas |
+| `PARTIAL` | o modo rodou, mas alguma fase/métrica ficou sem dados (ex.: latência com 0 amostras válidas, fase abortada) — o motivo vem em `failure_reasons` |
+| `FAILED` | o modo não chegou a medir (ex.: SharedBuffer não recebido em 10 s, GPU não inicializou) — `setup_error` diz por quê |
+| `NAO EXECUTADO` | modo fora de `-Modes` |
+
+`pattern_visible=false` no P1 **não é falha do harness**: é o resultado da medição (o WebView2 transparente não deixa ver a janela-irmã abaixo — "airspace"). O harness só garante que a sonda foi lida com a janela posicionada e após espera/polling (`ms_until_pattern_visible`). Os critérios de decisão do S1 **não** foram alterados.
+
+Diagnóstico: `reports\*.events.jsonl` (eventos estruturados: fases, handshakes, erros da página, criação do HWND filho, readback), `runtime.window_tree` (árvore de janelas Win32), `first_invalid_samples` (faixa de código de latência não decodificável). Um watchdog grava relatório parcial e encerra o processo se uma fase travar.
+
+`-Quick` (3 s por fase, sem perguntas manuais nem contadores de GPU) serve para smoke test; não use para decidir.
+
 ## Status de validação deste pacote (honestidade)
 
-Criado numa sessão de nuvem **sem Windows**. Foi verificado apenas:
-
-- compila e **linka** para `x86_64-pc-windows-gnu` (cross, MinGW) sem erros e passa no `clippy` sem avisos — **não** foi compilado com MSVC;
-- `run.ps1` passa no **parser real do PowerShell** (7.6) e a lógica de correlação de GPU passa no `selftest.ps1` (`.\selftest.ps1`);
-- **nenhuma execução** do harness em Windows. Se uma fase falhar, o relatório registra `status: "error"` com a mensagem; o processo sempre grava o JSON (parcial) em vez de sumir. Um relatório com erros é **resultado válido** para análise.
-
-Riscos conhecidos do próprio harness (podem aparecer como erros/anomalias): `SendInput` exige sessão interativa desbloqueada; alguns drivers/políticas devolvem preto em `BitBlt` (`invalid_samples` alto); `SetForegroundWindow` pode ser negado; contadores "GPU Engine" podem não existir em GPUs/drivers antigos.
+- O fluxo `run.ps1` (Windows PowerShell 5.1) → build → execução → ZIP é exercitado no CI (`.github/workflows/s1-harness.yml`, runner `windows-latest`: WebView2, DWM e desktop reais, **sem GPU física** — adaptador WARP). Isso valida encoding/PS 5.1, build MSVC, handshake de layout, SharedBuffer, HWND filho, sondas e coleta de métricas.
+- **Não** decide OD-1: fps/latência/CPU/GPU, escalas de DPI, múltiplos monitores e as observações manuais (flicker, resize) só valem no PC real do usuário.
+- Bugs do harness corrigidos nesta revisão: `.ps1` com não-ASCII (PS 5.1 lia como ANSI), stderr do cargo virando erro terminante, HWND filho criado em thread sem message loop (travava a UI), `Mutex` travado duas vezes na mesma expressão (deadlock no resize), readback sem timeout, ausência de logs/watchdog, e sonda lida antes do primeiro quadro do P2.
+- Riscos remanescentes: `SendInput` exige sessão interativa desbloqueada; alguns drivers/políticas devolvem preto em `BitBlt` (`invalid_samples` alto); contadores "GPU Engine" podem não existir em drivers antigos.
 
 ## Arquivos
 

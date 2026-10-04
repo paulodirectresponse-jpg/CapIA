@@ -4,6 +4,12 @@
 
 **Resultado: NÃO MEDIDO. OD-1 permanece ABERTA.** O ambiente da sessão (container Linux, sem GPU, sem Windows, sem WebView2) não consegue executar o experimento. Nenhum número de latência, DPI, resize, fullscreen, input ou overlay foi obtido, e nenhum foi estimado. Esta página registra o que *foi* verificado, o que isso muda, e o protocolo para executar S1 em Windows.
 
+## 0. Status do harness (revisão pós-primeiro teste em Windows 11)
+
+O primeiro teste real em Windows 11 **não completou a medição** por defeitos do **harness**, não por resultado do experimento: `.ps1` com não-ASCII quebrava no PowerShell 5.1; o HWND filho do P1 era criado numa thread sem message loop (UI "não respondeu ao layout"); o P2 não recebia o SharedBuffer sem diagnóstico; havia `Mutex` travado duas vezes no resize, readback sem timeout e nenhum log estruturado. Tudo isso foi corrigido (ver `tools/s1-preview-spike/README.md`), com eventos JSONL, watchdog com relatório parcial e um resumo por modo (`MEASURED` / `PARTIAL` / `FAILED`).
+
+O fluxo (`run.ps1` → build → execução → ZIP) é reproduzido no CI (`.github/workflows/s1-harness.yml`) num runner Windows com WebView2/DWM reais e **adaptador WARP (sem GPU física)**. Essa execução valida o harness, **não** o presenter: observações do runner (p. ex. P1 com o filho abaixo do WebView2 transparente não mostrar o padrão, enquanto o controle com o filho acima mostra) são **indícios**, não decisão. **Critérios de decisão inalterados; OD-1 permanece ABERTA** até uma execução em PC com GPU real (DPI 100%/150%, multi-monitor, observações manuais).
+
 ## 1. Evidências obtidas (e seu grau de confiança)
 
 | Fato | Fonte | Confiança |
