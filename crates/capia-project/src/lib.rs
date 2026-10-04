@@ -10,6 +10,8 @@ use serde::Serialize;
 mod assets;
 mod derive;
 mod error;
+mod export;
+mod failpoints;
 mod force_relink;
 mod pipeline;
 mod project;
@@ -20,6 +22,10 @@ pub use assets::{
 };
 pub use derive::FrameSource;
 pub use error::ProjectError;
+pub use export::{
+    ExportOptions, INTERMEDIATE_FORMAT, IntermediateReport, Mp4Options, Mp4Report,
+    clean_stale_partials, ticks_to_seconds_text, write_wav_f32,
+};
 pub use force_relink::{DependentClip, ForceRelinkResult};
 pub use pipeline::{ImportTicket, PipelineOptions, PumpEvent};
 pub use project::{ParseError, Project, parse_transaction};

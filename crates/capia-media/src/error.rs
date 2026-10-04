@@ -18,6 +18,8 @@ pub enum MediaErrorCode {
     MediaIndexInvalid,
     MediaFrameNotFound,
     MediaEncoderUnavailable,
+    /// Encoder fora da política (GPL/não aprovado): nunca é aceito nem substituído em silêncio.
+    MediaEncoderProhibited,
     MediaLimitExceeded,
     MediaDecodeFailed,
     MediaEncodeFailed,
@@ -39,6 +41,7 @@ impl MediaErrorCode {
             Self::MediaIndexInvalid => "MEDIA_INDEX_INVALID",
             Self::MediaFrameNotFound => "MEDIA_FRAME_NOT_FOUND",
             Self::MediaEncoderUnavailable => "MEDIA_ENCODER_UNAVAILABLE",
+            Self::MediaEncoderProhibited => "MEDIA_ENCODER_PROHIBITED",
             Self::MediaLimitExceeded => "MEDIA_LIMIT_EXCEEDED",
             Self::MediaDecodeFailed => "MEDIA_DECODE_FAILED",
             Self::MediaEncodeFailed => "MEDIA_ENCODE_FAILED",
