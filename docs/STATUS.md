@@ -1,15 +1,15 @@
 # STATUS
 
-**Última atualização:** 2026-10-03 · **Fase atual:** FASE 2 — Motor (headless) · **Missão corrente:** M08 concluída (Jobs + pipeline de mídia derivada) · **Próxima:** M09 (proposta em "Próxima missão"; **não iniciada**)
+**Última atualização:** 2026-10-04 · **Fase atual:** FASE 2 — Motor (headless) **CONCLUÍDA** · **Fase 3: BLOQUEADA por OD-1** · **Próximo passo permitido:** executar o spike S1 em Windows 11 + GPU (`tools/s1-preview-spike`) para fechar OD-1; só depois a Fase 3.
+
+> **Fase 2 completa; Fase 3 bloqueada por OD-1.** A Fase 2 está fechada segundo `docs/ROADMAP.md` (todos os critérios marcados; CI Linux + Windows + TypeScript + políticas verde num único commit). O S1 (apresentação do preview na janela Tauri/WebView2) **não foi medido** — exige Windows 11 + GPU reais — e **não foi fabricado**. `OUTPUT-H264`: **capacidade de engenharia provada** (MP4 H.264 real via `h264_mf` no CI Windows, validado por ffprobe); **decisão de produção/jurídica pendente** (patentes H.264/AAC, qualidade do encoder de software, OpenH264).
 
 ## Gates de fase (decisão do Product Owner, ADR-037)
 
 ```
-Fase 2 — Motor (headless)     EM ANDAMENTO (OD-1 aberto não bloqueia).
+Fase 2 — Motor (headless)     CONCLUÍDA.
 Fase 3 — Editor / Preview     NÃO pode iniciar sem OD-1 fechado (S1 medido em Windows).
 ```
-
-OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto: `tools/s1-preview-spike/` (`.\run.ps1`). **Fora do escopo da Fase 2:** preview embutido na janela e UI de editor.
 
 ## Estado
 
@@ -33,10 +33,79 @@ OD-1 = presenter do preview na janela Tauri/WebView2. Pacote de medição pronto
 | Cache derivado v2 | ✅ M08: produção atômica, lock por chave (em-processo + SO), validação, GC — ADR-057 |
 | Force relink / relink em lote | ✅ M08: `update_asset` (clips dependentes validados, sem trim), relink por pasta (tamanho → impressão → SHA-256, nunca por nome) — ADR-058 |
 | Schema | ✅ M08: schema 3 (`jobs`, `import_tickets`, `media_assets.fingerprint`), migration real v2→v3 |
-| Render, preview, export | ❌ ainda não (restante da Fase 2) |
-| CI | ✅ executa em runner real desde a M05 (ver "Validação"); jobs Linux verdes incl. perf e paridade WASM |
-| Decisões abertas | **OD-1** (gate da Fase 3) · **OUTPUT-H264** (antes da entrega do Editor). **As 8 decisões S7 estão definitivas** (ADR-039) |
-| Git | `main` = M01–M04; M05 em `claude/m05-core-engine`; M06 em `claude/m06-persistence-cli`; M07 em `claude/m07-assets-media`; **M08 em `claude/m08-media-pipeline`** (sem PR aberto: não solicitado) |
+| Render (`capia-render`) | ✅ grafo + compositor CPU de referência + mixer, puro/WASM; 10 goldens de vídeo, 8 de áudio (ADR-063..065) |
+| Decode persistente (`capia-decode`) | ✅ pool de sessões, cache de quadros por bytes, prefetch, supersession, métricas (ADR-059/060) |
+| Áudio: índice + seek + cache PCM | ✅ `CAIX`, seek com pouso verificado, custo independente do início, `PcmCache` (ADR-061/062) |
+| Preview headless (`capia-preview`) | ✅ scheduler, `FrameSink`, playhead, cadência, descarte de obsoletos; paridade com o export (ADR-066) |
+| Export | ✅ intermediário atômico, MP4 por `EncoderCapability` aprovado, validação ffprobe, CLI `render`/`export`/`media encoders` (ADR-067/068) |
+| CI | ✅ Linux (fmt, clippy, testes, propriedades pesadas, render ampliado, perf, WASM + paridade), Windows (fmt, clippy, workspace, encoders, E2E, goldens, desktop build), TypeScript, políticas — verde no commit final |
+| Decisões abertas | **OD-1** (gate da Fase 3; aberta) · **OUTPUT-H264** (engenharia provada, decisão de produção/jurídica pendente). **As 8 decisões S7 estão definitivas** (ADR-039) |
+| Git | `main` = M01–M04; M05 em `claude/m05-core-engine`; M06 em `claude/m06-persistence-cli`; M07 em `claude/m07-assets-media`; M08 em `claude/m08-media-pipeline`; **conclusão da Fase 2 em `claude/phase2-completion`** (a partir de `98b7117`; sem PR: não solicitado) |
+
+## O que existe (conclusão da Fase 2)
+
+**Render (ADR-063..065):** `capia-render` (puro, WASM): `RenderGraph`, `render_frame`/`render_video_range`/`mix_audio_range`; RGBA8 alfa reto, base preto opaco, *source-over* inteiro, opacidade, scale/position, rotação ×90°, nested, retime, mixer f32 com hard clip; texto ⇒ aviso. `Project::render_frame/render_range/render_audio_range` (fonte = original; nunca escreve no documento).
+**Decode (ADR-059/060):** `FrameStream` (sessão persistente) + `DecodeService` (pool, prioridade, supersession por `Lane`, métricas) + `ByteLru` (chave `namespace+conteúdo+stream+PTS+formato+versão`).
+**Áudio (ADR-061/062):** `AudioIndex`/`CAIX` + `decode_audio_indexed` (pouso verificado por `ashowinfo`, fallback do início) + `PcmCache` (blocos, read-ahead). Job `audio_index`. `AudioStream.time_base` no probe.
+**Preview (ADR-066):** `PreviewScheduler`, `Clock` (`SystemClock`/`ManualClock`), `HeadlessSink`.
+**Export (ADR-067/068):** `EncoderCapability` (detecção real), `export_intermediate` (`capia-intermediate-v1`), `export_mp4` (pipe → ffmpeg, ffprobe, `rename`), staging órfão limpo. **CLI:** `media encoders`, `render frame|audio`, `export intermediate|mp4`.
+
+## Matriz de requisitos da conclusão da Fase 2
+
+| Requisito | Estado | Teste que prova |
+|---|---|---|
+| Decode persistente (pool, reuso, ociosidade, prioridade, cancelamento, supersession, métricas) | ✅ | `capia-decode/tests/service.rs` (13) |
+| Cache de quadros por bytes (LRU, orçamento, hit, conteúdo trocado, multi-stream, concorrência, sem contaminação) | ✅ | idem + `cache::tests` (4) |
+| Prefetch (frente, limitado para trás, salto), interativo > background, scrub t1→t4 | ✅ | `prefetch_fills…`, `interactive_requests_outrank…`, `rapid_scrub_supersedes…` |
+| Índice de áudio + seek rápido (44,1/48 kHz, AAC e PCM, fronteiras, início ≠ 0, curto, além do fim, blocos adjacentes) | ✅ | `capia-media/tests/audio_seek.rs` (5), `capia-decode/tests/audio.rs` (5) |
+| 1 s em t = 300 s não escala com o início | ✅ | `seek_cost_does_not_scale_with_the_start` (janela decodificada ≈ 5,3 s em t = 0/60/300) |
+| Cache de PCM por bytes | ✅ | `byte_budget_is_respected…`, `repeated_reads_hit_the_cache…` |
+| `capia-render`: grafo, compositor, mixer, APIs, aritmética *checked* | ✅ | `capia-render` (unidade + goldens) |
+| Goldens: ≥ 10 de vídeo e 8 de áudio | ✅ | `golden_video.rs` (10), `golden_audio.rs` (8, tolerância 1e-4) |
+| Determinismo: mesma execução, reabrir, cache frio×quente, proxy presente×ausente, ordem | ✅ | `parity.rs` (3), `properties_render.rs` |
+| Export intermediário atômico (temp → validar → publicar; kill nunca publica parcial) | ✅ | `export.rs` (7), `crash_phase2.rs` |
+| `EncoderCapability` + `capia media encoders` (NVENC/QSV/AMF/`h264_mf`/OpenH264) | ✅ | `encoder::tests`, `encoder_detection_reports_every_backend…`, CI Windows |
+| MP4/H.264 válido por encoder aprovado, ffprobe (contêiner, codec, duração, fps, quadros, tamanho, áudio, sync) | ✅ **Windows** (`h264_mf`) · Linux: contrato (falha estruturada, sem publicar) + `mpeg4-reference` | `phase2_e2e` no CI Windows (`H.264 approved encoder available on this host: true`) |
+| Nunca libx264/libx265/GPL; sem fallback silencioso | ✅ | `gpl_encoders_are_refused…`, `there_is_no_silent_fallback…`, mutação #15 |
+| Preview headless (scheduler, sink, playhead, cadência, descarte) + paridade com hashes exatos | ✅ | `capia-preview/tests/scheduler.rs` (6), `parity.rs` |
+| Corpus A/V (VFR, 23,976, 29,97, 59,94, 44,1/48 kHz, 10 min) com drift ≤ 1 quadro | ✅ | `av_drift.rs` (3) |
+| CLI E2E (3 sequences + nested, undo/redo, reabrir, export MP4, ffprobe, validar) | ✅ | `capia-cli/tests/phase2_e2e.rs` |
+| Crash real (decode ativo, render range, índice de áudio, export intermediário ×2, MP4 ×2) | ✅ | `crash_phase2.rs` (7) |
+| Propriedade de render × oráculo (posição, trim, velocidade, ordem, opacidade, transform, nested, reabrir, frio/quente/minúsculo) | ✅ | `properties_render.rs` (6 casos local; **80 no Linux release do CI**; 2 smoke no Windows) |
+| Mutação (16) | ✅ **16/16 detectadas** | `tools/mutation-phase2.py` |
+| Medições de desempenho | ✅ | tabela abaixo |
+| WASM / fronteiras / licenças | ✅ | `cargo check wasm32` inclui `capia-render`, paridade 150 sequências, `check:arch`, `cargo deny` |
+
+### Desempenho da conclusão (release, Linux VM; só medições — nenhuma meta inventada)
+
+| Medida | Resultado |
+|---|---|
+| Decode 1080p mpeg4 GOP 30: 1º quadro frio (abre sessão + GOP) · quadro repetido (cache) | 135 ms · **0,3 ms** |
+| Decode sequencial 120 quadros 1080p | 28,9 ms/quadro (**34,7 fps**), **1 sessão aberta, 119 reaproveitadas, taxa 0,99** |
+| Decode seek aleatório sem cache (24 pedidos) | 166 ms/seek (21 sessões novas, 3 reaproveitadas) |
+| Decode VFR (fixture 64×48, 25 quadros) | 92 ms total |
+| Áudio 1 s em t = 0 / 60 / 300 s (WAV 44,1 kHz, frio) | 65 / 77 / 76 ms (janela decodificada igual nos três) |
+| Áudio 30 blocos sequenciais de 1 s · *hit* quente | **26 ms/bloco** (10 chamadas ao decoder) · 0,02 ms |
+| Compositor 1080p, Synth: 1 clip · 2 layers 50% · 2 layers + scale/pos/opacidade · rotação 90° · nested | 26 · 67 · 65 · 44 · 94 ms/quadro (38 · 15 · 15 · 22 · 11 fps) |
+| Timeline de 10 s (300 quadros), 2 layers com keyframes | 65 ms/quadro (15,4 fps) |
+| Projeto real 1080p, 2 layers (decode + composição), 90 quadros: frio · quente | 57,5 · 58,5 ms/quadro (17 fps); cache de quadros 253 MiB (32 entradas) |
+| `render_audio_range` 3 s estéreo 48 kHz | 173 ms |
+| `export_intermediate` 1080p, 90 quadros (712 MiB crus) · `export_mp4` (mpeg4) 1080p | 5,1 fps · 12,3 fps (arquivo 6,3 MiB) |
+
+O compositor CPU é a **referência determinística**, não o caminho de tempo real (esse é o wgpu da Fase 3).
+
+### Limitações restantes
+
+- **OD-1 aberta:** nenhuma apresentação de preview na janela; **sem** medição de GPU/WebView2. A Fase 3 não começa.
+- **OUTPUT-H264 (decisão pendente):** `h264_mf` provado só no runner Windows (software, sem NVENC/QSV/AMF lá); falta decisão de produto/jurídica (patentes, OpenH264) e qualidade/bitrate de produção. Na VM Linux nenhum H.264 aprovado está disponível (x264/x265 presentes e proibidos).
+- Não implementados (escopo): compositor wgpu/RGBA16F, texto (`TEXT_NOT_RENDERED`), transições, efeitos, máscaras, rotação arbitrária, VA-API (declarado indisponível), gerência de cor da **fonte** além do padrão do ffmpeg (ADR-065), rotação de exibição do vídeo (metadado ignorado), EXIF em imagens.
+- Seek de áudio em mp4 com vídeo de GOP > 4 s cai no *fallback* do início (correto, mais lento); AAC é exato em posição e igual em valor até ~3·10⁻³ no ponto de seek.
+- Mutação e perf não rodam no CI (manuais: `tools/mutation-phase2.py`, testes `--ignored`; só o perf roda como medição no job Linux).
+- Sessões de decode só otimizam acesso para frente; scrub para trás longo reabre sessão (prefetch limitado).
+
+## Próxima missão (proposta; **não iniciada**)
+
+Spike S1 em Windows 11 + GPU (`tools/s1-preview-spike`, `.\run.ps1`) → fecha OD-1 → ADR do presenter → só então Fase 3. Em paralelo (não bloqueia): decisão de produto sobre `OUTPUT-H264`.
 
 ## O que existe (M08)
 
@@ -321,7 +390,7 @@ Antes da **entrega do Editor** (saída da Fase 3) é preciso um caminho **confi�
 *Desconhecido:* qualidade/velocidade em vídeo real; disponibilidade de encoder de hardware na máquina mínima (iGPU); comportamento do Media Foundation; política de download/licença do binário OpenH264; patentes H.264/HEVC/AAC (decisão jurídica/comercial).
 *Responsável:* Product Owner (com apoio jurídico para patentes). *Sugestão:* spike dedicado em Windows (mesma sessão do S1). *Estado:* **ABERTO**.
 
-## Próxima missão (proposta — NÃO iniciada)
+## Próxima missão da M08 (histórico; superada pela conclusão da Fase 2)
 
 **M09 — Serviço de decode e fundação do render (headless):** (1) **serviço de decode** sobre `FrameSource`: pool de processos/decoder persistente, cache de quadros (LRU) e *prefetch* por intervalo (`decode_frame_range`), metas de latência de scrub; (2) **áudio com seek** (índice de pacotes de áudio, seek com margem e conferência de alinhamento) para tirar o custo O(início); (3) `capia-render` mínimo: *render graph* a partir da timeline (clips de mídia/imagem/texto/sólido), compositor **CPU de referência** headless e *golden frames* (base para o wgpu da Fase 3); (4) **OUTPUT-H264**: spike do caminho de export (encoders de hardware + OpenH264) atrás da abstração, medindo em Windows. Não iniciar a Fase 3 antes de OD-1.
 
