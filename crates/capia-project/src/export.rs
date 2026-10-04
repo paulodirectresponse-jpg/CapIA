@@ -277,6 +277,7 @@ fn plan(
 
 impl Project {
     /// Export intermediário atômico: `<out>/{video.rgba, audio.wav, manifest.json}`.
+    #[allow(clippy::too_many_arguments)]
     pub fn export_intermediate(
         &self,
         services: &Arc<RenderServices>,
@@ -437,7 +438,7 @@ impl Project {
         cancel: &dyn Fn() -> bool,
     ) -> Result<Mp4Report, ProjectError> {
         settings.validate().map_err(|e| inv(e.code, e.message))?;
-        if settings.width % 2 != 0 || settings.height % 2 != 0 {
+        if !settings.width.is_multiple_of(2) || !settings.height.is_multiple_of(2) {
             return Err(inv("EXPORT_SIZE", "MP4 export needs even width and height"));
         }
         let p = plan(self, seq, range, settings)?;
