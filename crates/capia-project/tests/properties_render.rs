@@ -265,7 +265,6 @@ fn build_case(lab: &mut Lab, seed: u64, assets: &[Arc<Asset>]) -> i64 {
 }
 
 fn digests(
-    lab: &Lab,
     graph: &RenderGraph,
     src: &dyn MediaSource,
     times: &[Ticks],
@@ -275,12 +274,6 @@ fn digests(
     times
         .iter()
         .map(|t| frame_digest(&render_frame(graph, &seq, *t, s, src).unwrap().image))
-        .collect::<Vec<_>>()
-        .into_iter()
-        .map(|d| {
-            let _ = lab;
-            d
-        })
         .collect()
 }
 
@@ -319,7 +312,7 @@ fn project_render_equals_the_direct_decode_oracle_on_random_timelines() {
         let times: Vec<Ticks> = (0..7)
             .map(|_| Ticks(rng.below(total as u64) as i64 * F))
             .collect();
-        let want = digests(&lab, &graph, &oracle, &times, &s);
+        let want = digests(&graph, &oracle, &times, &s);
         let audio_range = TimeRange::new(Ticks(rng.below(10) as i64 * F), Ticks(20 * F));
         let (want_audio, _) = mix_audio_range(&graph, &seq, audio_range, &s, &oracle).unwrap();
 
@@ -332,7 +325,7 @@ fn project_render_equals_the_direct_decode_oracle_on_random_timelines() {
                 .render_source(&lab.services, &graph, SourceOptions::default())
                 .unwrap();
             assert_eq!(
-                digests(&lab, &graph, &src, &times, &s),
+                digests(&graph, &src, &times, &s),
                 want,
                 "seed {seed} warm pass {pass}"
             );
@@ -350,7 +343,7 @@ fn project_render_equals_the_direct_decode_oracle_on_random_timelines() {
             .render_source(&lab.services, &graph, SourceOptions::default())
             .unwrap();
         assert_eq!(
-            digests(&lab, &graph, &src, &times, &s),
+            digests(&graph, &src, &times, &s),
             want,
             "seed {seed} after reopen"
         );
@@ -364,7 +357,7 @@ fn project_render_equals_the_direct_decode_oracle_on_random_timelines() {
             .render_source(&tiny, &graph, SourceOptions::default())
             .unwrap();
         assert_eq!(
-            digests(&lab, &graph, &src, &times, &s),
+            digests(&graph, &src, &times, &s),
             want,
             "seed {seed} tiny caches"
         );
