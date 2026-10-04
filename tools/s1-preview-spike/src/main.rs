@@ -338,6 +338,43 @@ mod harness {
             )?
         }
 
+        /// Limita um tamanho interno (px fisicos) a area util do monitor (sem barra de tarefas),
+        /// descontando a moldura da janela. Sem isso a faixa de codigo (rodape do preview) pode
+        /// ficar sob a barra de tarefas em telas pequenas e a latencia nao e decodificavel.
+        fn fit(&self, pw: u32, ph: u32) -> (u32, u32) {
+            let (Ok(mon), Ok(outer), Ok(inner)) = (
+                self.app_window.current_monitor(),
+                self.app_window.outer_size(),
+                self.app_window.inner_size(),
+            ) else {
+                return (pw, ph);
+            };
+            let Some(mon) = mon else { return (pw, ph) };
+            let wa = mon.work_area();
+            let chrome_w = outer.width.saturating_sub(inner.width);
+            let chrome_h = outer.height.saturating_sub(inner.height);
+            (
+                pw.min(wa.size.width.saturating_sub(chrome_w + 8)),
+                ph.min(wa.size.height.saturating_sub(chrome_h + 8)),
+            )
+        }
+
+        /// Move a janela para o canto da area util e ajusta o tamanho base (1280x720 logicos).
+        fn fit_window_to_screen(&self, dpr: f64) -> Value {
+            let want = ((1280.0 * dpr).round() as u32, (720.0 * dpr).round() as u32);
+            let got = self.fit(want.0, want.1);
+            if let Ok(Some(mon)) = self.app_window.current_monitor() {
+                let wa = mon.work_area();
+                let _ = self
+                    .app_window
+                    .set_position(tauri::PhysicalPosition::new(wa.position.x, wa.position.y));
+            }
+            let _ = self
+                .app_window
+                .set_size(tauri::PhysicalSize::new(got.0, got.1));
+            json!({ "wanted": [want.0, want.1], "applied": [got.0, got.1], "clamped": want != got })
+        }
+
         /// A thread de UI esta bombeando mensagens? (ida e volta pela fila da thread principal)
         fn ui_alive(&self, timeout: Duration) -> bool {
             on_main(&self.app_window, "ping", timeout, || ()).is_ok()
@@ -541,6 +578,7 @@ mod harness {
                 (f64::from(w) * dpr).round() as u32,
                 (f64::from(h) * dpr).round() as u32,
             );
+            let (pw, ph) = ctx.fit(pw, ph);
             let t0 = Instant::now();
             let s0 = ctx.shared.seq();
             ctx.app_window
@@ -577,6 +615,7 @@ mod harness {
         for i in 0..60 {
             let pw = (base_w + f64::from(i) * 6.0 * dpr) as u32;
             let ph = (base_h + f64::from(i) * 3.4 * dpr) as u32;
+            let (pw, ph) = ctx.fit(pw, ph);
             let s0 = ctx.shared.seq();
             let _ = ctx.app_window.set_size(tauri::PhysicalSize::new(pw, ph));
             let t = Instant::now();
@@ -597,10 +636,8 @@ mod harness {
                 thread::sleep(Duration::from_millis(2));
             }
         }
-        let _ = ctx.app_window.set_size(tauri::PhysicalSize::new(
-            (1280.0 * dpr) as u32,
-            (720.0 * dpr) as u32,
-        ));
+        let (rw, rh) = ctx.fit((1280.0 * dpr) as u32, (720.0 * dpr) as u32);
+        let _ = ctx.app_window.set_size(tauri::PhysicalSize::new(rw, rh));
         Ok(json!({
             "mode": mode, "dpr": dpr, "steps": steps,
             "continuous_resize": { "frames": 60, "samples": samples, "samples_without_pattern_at_expected_rect": bad,
@@ -1003,7 +1040,12 @@ mod harness {
                 return report;
             }
         };
+        let dpr0 = ctx.app_window.scale_factor().unwrap_or(1.0);
+        let fitted = ctx.fit_window_to_screen(dpr0);
+        ev("setup", json!({ "step": "fit_window_to_screen", "result": fitted }));
+        thread::sleep(Duration::from_millis(600));
         report["runtime"] = runtime_info(&ctx);
+        report["runtime"]["window_fit"] = fitted;
         let mut modes = Map::new();
         for m in &cfg.modes {
             *lock(&MODE) = m.clone();
