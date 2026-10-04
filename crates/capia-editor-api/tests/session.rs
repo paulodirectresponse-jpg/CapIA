@@ -418,3 +418,38 @@ fn clip_id(s: &mut Session) -> String {
         .unwrap()
         .clone()
 }
+
+/// Todo comando/undo/redo anuncia a nova revisão na fila de eventos: um segundo cliente (CLI, IA,
+/// outra janela) percebe que está defasado e ressincroniza.
+#[test]
+fn commands_announce_the_new_revision_to_other_clients() {
+    let (mut s, _dir) = setup("announce");
+    let _ = call(&mut s, "events.poll", json!({})); // esvazia
+    let r = cmds(
+        &mut s,
+        "seq",
+        json!([{ "operation_id": "a1", "type": "create_sequence", "id": "S", "name": "S", "frame_rate": "30" }]),
+    );
+    let rev = r["revision"].as_u64().unwrap();
+    let ev = call(&mut s, "events.poll", json!({}));
+    let kinds: Vec<_> = ev["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["kind"].as_str().unwrap().to_owned(),
+                e["revision"].as_u64(),
+            )
+        })
+        .collect();
+    assert!(
+        kinds.contains(&("revision_changed".into(), Some(rev))),
+        "{kinds:?}"
+    );
+    let u = call(&mut s, "command.undo", json!({}));
+    let ev = call(&mut s, "events.poll", json!({}));
+    let last = ev["events"].as_array().unwrap().last().unwrap();
+    assert_eq!(last["kind"], "revision_changed");
+    assert_eq!(last["revision"], u["revision"]);
+}

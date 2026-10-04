@@ -240,6 +240,8 @@ export type CommandBody = { type: string } & Record<string, unknown>;
 
 export type EditorEvent =
   | { kind: "document_changed"; change: ChangeSet }
+  /** O documento mudou por um comando (de qualquer cliente): quem estiver defasado ressincroniza. */
+  | { kind: "revision_changed"; revision: number }
   | { kind: "assets_changed"; assets: AssetRow[] }
   | { kind: "import_finalized"; ticket_id: string; result: { asset_id: string; outcome: string } }
   | { kind: "export_item_started"; batch: string; id: string }

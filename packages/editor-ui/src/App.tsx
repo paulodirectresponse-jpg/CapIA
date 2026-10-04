@@ -63,6 +63,18 @@ export function App({ client, platform, loadCore, storage, pollMs }: AppProps) {
       }, 0);
     };
   }, [controller]);
+  // preferências pendentes (debounce) são gravadas ao sair/recarregar/esconder a janela
+  useEffect(() => {
+    const flush = () => {
+      controller.flushPrefs();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", flush);
+    };
+  }, [controller]);
   return (
     <ControllerProvider controller={controller}>
       <Root />

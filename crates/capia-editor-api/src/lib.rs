@@ -202,6 +202,18 @@ impl Session {
         }
     }
 
+    /// Avisa os **outros** clientes (UI, CLI, futura IA) de que o documento mudou: só a revisão —
+    /// quem tiver uma réplica mais antiga ressincroniza; quem emitiu o comando já a tem (a UI ignora
+    /// o evento quando a revisão não é mais nova que a sua).
+    fn announce_revision(events: &EventQueue, reply: &Value) {
+        if let Some(rev) = reply.get("revision").and_then(Value::as_u64) {
+            Self::push_event(
+                events,
+                json!({ "kind": "revision_changed", "revision": rev }),
+            );
+        }
+    }
+
     fn open_ref(&self) -> Result<&Open, ApiError> {
         self.open.as_ref().ok_or_else(ApiError::no_project)
     }
@@ -356,29 +368,25 @@ impl Session {
                     "results": serde_json::to_value(&r.results)?,
                     "replayed": r.replayed,
                 });
-                Ok(Reply::Json(Self::commit_reply(o, r.entry_id, false, extra)))
+                let reply = Self::commit_reply(o, r.entry_id, false, extra);
+                Self::announce_revision(&self.events, &reply);
+                Ok(Reply::Json(reply))
             }
             "command.undo" => {
                 let actor = self.actor.clone();
                 let o = self.open_mut()?;
                 let r = o.project.undo(&actor)?;
-                Ok(Reply::Json(Self::commit_reply(
-                    o,
-                    r.entry_id,
-                    true,
-                    json!({}),
-                )))
+                let reply = Self::commit_reply(o, r.entry_id, true, json!({}));
+                Self::announce_revision(&self.events, &reply);
+                Ok(Reply::Json(reply))
             }
             "command.redo" => {
                 let actor = self.actor.clone();
                 let o = self.open_mut()?;
                 let r = o.project.redo(&actor)?;
-                Ok(Reply::Json(Self::commit_reply(
-                    o,
-                    r.entry_id,
-                    false,
-                    json!({}),
-                )))
+                let reply = Self::commit_reply(o, r.entry_id, false, json!({}));
+                Self::announce_revision(&self.events, &reply);
+                Ok(Reply::Json(reply))
             }
             "history.list" => Ok(Reply::Json(model::history(&self.open_ref()?.project))),
             "assets.list" => {

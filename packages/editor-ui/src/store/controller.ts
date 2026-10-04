@@ -317,6 +317,10 @@ export class EditorController {
       case "document_changed":
         this.applyChangeSet(ev.change);
         break;
+      case "revision_changed":
+        // outro cliente (CLI, IA, outra janela) alterou o documento: ressincroniza se defasado
+        void this.resyncIfBehind(ev.revision);
+        break;
       case "assets_changed":
         this.store.set((s) => ({ model: withAssets(s.model, ev.assets) }));
         break;
@@ -357,6 +361,45 @@ export class EditorController {
         );
         break;
     }
+  }
+
+  /**
+   * Relê o projeto quando o engine avisa de uma revisão que a réplica não tem. Roda na fila de
+   * comandos (depois dos comandos desta UI já em voo); o evento do próprio comando chega com a
+   * revisão que a réplica já aplicou e não faz nada.
+   */
+  private resyncIfBehind(revision: number): Promise<void> {
+    const run = async () => {
+      if (this.disposed || revision <= this.state.model.revision) return;
+      try {
+        const snap = await this.client.snapshot();
+        const alive = new Set(snap.sequences.map((q) => q.id));
+        const loaded = Object.keys(this.state.model.models).filter((id) => alive.has(id));
+        const bodies = await Promise.all(
+          loaded.map(async (id) => [id, await this.client.sequence(id)] as const),
+        );
+        this.store.set((s) => {
+          let model = fromSnapshot(snap);
+          for (const [id, m] of bodies) model = withSequenceModel(model, id, m);
+          const tabs = s.tabs.filter((id) => alive.has(id));
+          const active = s.active && alive.has(s.active) ? s.active : (tabs[0] ?? null);
+          const seq = active ? model.models[active] : undefined;
+          return {
+            model,
+            tabs,
+            active,
+            selection: seq ? s.selection.filter((id) => id in seq.clips) : [],
+            history: null,
+          };
+        });
+        this.syncCore(true);
+      } catch (e) {
+        this.reportError(e);
+      }
+    };
+    const p = this.queue.then(run, run);
+    this.queue = p.catch(() => null);
+    return p;
   }
 
   private updateExport(id: string, patch: Partial<ExportRunItem>): void {
