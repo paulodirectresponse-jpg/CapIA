@@ -147,7 +147,7 @@ export const RUST_RULES = {
   },
   "capia-desktop": {
     workspace: ["capia-project", "capia-editor-api"],
-    normal: ["tauri"],
+    normal: ["tauri", "tauri-plugin-dialog", "serde_json"],
     build: ["tauri-build"],
     dev: [],
   },
@@ -173,7 +173,7 @@ export const JS_RULES = {
     forbidden: [/^@tauri-apps\//],
   },
   "@capia/desktop": {
-    workspace: ["@capia/editor-ui", "@capia/engine-bindings"],
+    workspace: ["@capia/editor-ui", "@capia/engine-bindings", "@capia/ui-timeline"],
     forbidden: [],
   },
   // E2E (Playwright) dos fluxos do editor: dirige a app pelo navegador/WebView, sem importar código

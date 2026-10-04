@@ -14,14 +14,14 @@
       {
         "label": "main",
         "title": "CapIA",
-        "width": 1280,
-        "height": 720,
-        "minWidth": 800,
-        "minHeight": 450
+        "width": 1600,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 640
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src ipc: http://ipc.localhost; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:"
     }
   },
   "bundle": {

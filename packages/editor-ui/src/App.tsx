@@ -1,45 +1,71 @@
 import { useEffect, useState } from "react";
-import type { EngineClient, EngineInfo } from "@capia/engine-bindings";
+import type { EditorClient } from "@capia/engine-bindings";
+import type { TimelineCore } from "@capia/ui-timeline";
+import { EditorShell } from "./components/EditorShell";
+import { Welcome } from "./components/Welcome";
+import { ControllerProvider, useUi } from "./context";
+import { I18nProvider } from "./i18n";
+import type { KeyValueStorage } from "./lib/prefs";
+import type { PlatformServices } from "./platform";
+import { EditorController } from "./store/controller";
+import "@capia/ui-kit/styles.css";
+import "./app.css";
 
-type EngineState =
-  | { status: "loading" }
-  | { status: "ready"; info: EngineInfo }
-  | { status: "unavailable"; reason: string };
+export interface AppProps {
+  client: EditorClient;
+  platform?: PlatformServices;
+  /** Carrega o núcleo WASM da timeline (ghost/snap). Sem ele o editor ainda funciona. */
+  loadCore?: () => Promise<TimelineCore | null>;
+  storage?: KeyValueStorage | null;
+  pollMs?: number;
+}
 
-/** Janela mínima do scaffold: identifica o CapIA e mostra o engine por trás do cliente injetado. */
-export function App({ client }: { client: EngineClient }) {
-  const [state, setState] = useState<EngineState>({ status: "loading" });
-
-  useEffect(() => {
-    let active = true;
-    client.getEngineInfo().then(
-      (info) => {
-        if (active) setState({ status: "ready", info });
-      },
-      (error: unknown) => {
-        if (active) {
-          setState({
-            status: "unavailable",
-            reason: error instanceof Error ? error.message : "unknown error",
-          });
-        }
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [client]);
-
+function Root() {
+  const phase = useUi((s) => s.phase);
+  const lang = useUi((s) => s.prefs.language);
   return (
-    <main className="capia-shell">
-      <h1>CapIA</h1>
-      <p>Editor de vídeo AI-first — scaffold da Fase 1 (sem editor visual).</p>
-      <p role="status" data-testid="engine-status">
-        {state.status === "loading" && "Conectando ao engine…"}
-        {state.status === "ready" &&
-          `Engine ${state.info.name} v${state.info.version} · API ${String(state.info.engine_api_version)} · schema documento ${String(state.info.document_schema_version)} / comandos ${String(state.info.command_schema_version)}`}
-        {state.status === "unavailable" && `Engine indisponível: ${state.reason}`}
-      </p>
-    </main>
+    <I18nProvider lang={lang}>
+      {phase === "ready" ? (
+        <EditorShell />
+      ) : phase === "boot" ? (
+        <div className="ed-welcome" role="status" aria-busy="true" />
+      ) : (
+        <Welcome />
+      )}
+    </I18nProvider>
+  );
+}
+
+/**
+ * Raiz do editor. O controlador é criado uma vez por montagem; o `dispose` é adiado para o fim
+ * do tick para sobreviver ao ciclo mount→unmount→mount do StrictMode sem perder o estado.
+ */
+export function App({ client, platform, loadCore, storage, pollMs }: AppProps) {
+  const [controller] = useState(
+    () =>
+      new EditorController(client, {
+        ...(platform ? { platform } : {}),
+        ...(loadCore ? { loadCore } : {}),
+        ...(storage !== undefined ? { storage } : {}),
+        ...(pollMs !== undefined ? { pollMs } : {}),
+      }),
+  );
+  useEffect(() => {
+    const pending = (controller as unknown as { __pendingDispose?: ReturnType<typeof setTimeout> })
+      .__pendingDispose;
+    if (pending) clearTimeout(pending);
+    if (controller.state.phase === "boot") void controller.boot();
+    return () => {
+      (
+        controller as unknown as { __pendingDispose?: ReturnType<typeof setTimeout> }
+      ).__pendingDispose = setTimeout(() => {
+        controller.dispose();
+      }, 0);
+    };
+  }, [controller]);
+  return (
+    <ControllerProvider controller={controller}>
+      <Root />
+    </ControllerProvider>
   );
 }

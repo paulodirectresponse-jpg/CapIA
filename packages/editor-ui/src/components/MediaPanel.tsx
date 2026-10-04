@@ -39,7 +39,7 @@ function Thumb({ asset }: { asset: AssetRow }) {
   );
 }
 
-export function MediaPanel() {
+export function MediaPanel({ initialFilter = "all" }: { initialFilter?: Filter }) {
   const c = useController();
   const t = useT();
   const { assets, pending, mediaOk, last } = useUi((s) => ({
@@ -49,7 +49,7 @@ export function MediaPanel() {
     last: s.lastImported,
   }));
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [sort, setSort] = useState<Sort>("name");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");

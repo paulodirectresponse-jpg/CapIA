@@ -506,6 +506,21 @@ export function Dialog({ title, open, onClose, children, footer, initialFocus }:
     };
   }, [open, initialFocus]);
 
+  // Esc fecha mesmo se o foco saiu do diálogo (ex.: o botão focado foi desabilitado)
+  useEffect(() => {
+    if (!open) return;
+    const on = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", on);
+    return () => {
+      document.removeEventListener("keydown", on);
+    };
+  }, [open, onClose]);
+
   const onKey = useCallback(
     (e: ReactKeyboardEvent<HTMLDivElement>) => {
       if (e.key === "Escape") {
@@ -631,12 +646,14 @@ export function Spinner({ label }: { label: string }) {
 export function Badge({
   children,
   tone,
+  "data-testid": testId,
 }: {
   children: ReactNode;
   tone?: "danger" | "warning" | "success";
+  "data-testid"?: string;
 }) {
   return (
-    <span className="cp-badge" data-tone={tone}>
+    <span className="cp-badge" data-tone={tone} data-testid={testId}>
       {children}
     </span>
   );

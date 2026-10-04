@@ -316,7 +316,7 @@ export const en = {
   "settings.resetKeymap": "Reset all to defaults",
   "settings.resetOne": "Reset",
   "settings.pressKeys": "Press the new shortcut…",
-  "settings.conflict": "Conflicts with: {actions}",
+  "settings.conflict": "{key} is assigned to several actions: {actions}.",
   "settings.unsaved": "Preferences could not be saved on this machine.",
   "settings.prefsRecovered": "Preferences were corrupted and have been reset to defaults.",
 

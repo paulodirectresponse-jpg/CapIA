@@ -25,6 +25,7 @@ import {
   type SequenceModel,
   type Ticks,
   type Transition,
+  type TransitionKind,
 } from "@capia/engine-bindings";
 import type { MovePlan, TimelineCore } from "@capia/ui-timeline";
 import { describeError, type MessageKey, type Translate, createTranslator } from "../i18n";
@@ -153,6 +154,7 @@ export class EditorController {
   private poller: ReturnType<typeof setInterval> | null = null;
   private raf: number | null = null;
   private lastTick = 0;
+  private pollTicks = 0;
   private toastId = 0;
   private toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
   private prefsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -296,6 +298,10 @@ export class EditorController {
     try {
       const { events } = await this.client.pollEvents();
       for (const ev of events) this.handleEvent(ev);
+      // disponibilidade (online/offline/modificado) é recalculada pelo engine em `assets.list`
+      // (só `metadata`, sem hash): releitura leve a cada ~4 s para o aviso de offline aparecer
+      this.pollTicks += 1;
+      if (this.pollTicks % 16 === 0 && this.state.pendingImports === 0) await this.refreshAssets();
     } catch {
       /* falha transitória do transporte: tenta no próximo ciclo */
     }
@@ -362,7 +368,13 @@ export class EditorController {
   // ------------------------------------------------------------------------------ projeto
 
   async createProject(path: string): Promise<boolean> {
-    return this.openWith(() => this.client.createProject(path));
+    const ok = await this.openWith(() => this.client.createProject(path));
+    // projeto novo já abre com uma sequence pronta para editar (comando comum, desfazível)
+    if (ok && Object.keys(this.state.model.sequences).length === 0) {
+      await this.createSequence();
+      this.store.set({ renaming: null });
+    }
+    return ok;
   }
 
   async openProject(path: string): Promise<boolean> {
@@ -605,7 +617,7 @@ export class EditorController {
       try {
         const change = await this.client.execute(label, commands);
         this.applyChangeSet(change);
-        this.store.set({ save: "saved" });
+        this.store.set({ save: "saved", lastError: null });
         return change;
       } catch (e) {
         this.store.set({ save: "saved" });
@@ -900,6 +912,15 @@ export class EditorController {
     ]);
   }
 
+  /** Várias propriedades de um clip numa só transação (um passo de undo). */
+  setProperties(clip: Clip, props: [string, number][]): Promise<ChangeSet | null> {
+    const frame = this.activeSequence()?.frame_ticks ?? frameTicks("30");
+    return this.exec(
+      "property",
+      props.map(([p, v]) => setPropertyCommand(clip, p, v, this.state.playhead, frame)),
+    );
+  }
+
   setClipSpeed(clip: string, speed: string): Promise<ChangeSet | null> {
     return this.exec("speed", [{ type: "set_clip_speed", clip, speed }]);
   }
@@ -928,6 +949,73 @@ export class EditorController {
 
   setTransition(clip: string, transition: Transition | null): Promise<ChangeSet | null> {
     return this.exec("transition", [{ type: "set_transition", clip, transition }]);
+  }
+
+  /** Corta uma legenda específica no playhead (o texto é duplicado; o usuário edita depois). */
+  splitClipAt(clip: string, at?: Ticks): Promise<ChangeSet | null> {
+    const frame = this.frame();
+    return this.exec("split", [
+      { type: "split_clip", clip, at: snapToFrame(at ?? this.state.playhead, frame) },
+    ]);
+  }
+
+  /** Une a legenda com a seguinte da mesma track: texto concatenado, fim estendido (1 transação). */
+  mergeCaptionWithNext(clip: string): Promise<ChangeSet | null> {
+    const seq = this.activeSequence();
+    const a = seq?.clips[clip];
+    if (!seq || !a || a.content.type !== "text") return Promise.resolve(null);
+    const next = Object.values(seq.clips)
+      .filter((x) => x.track === a.track && x.start >= a.start + a.duration && x.id !== a.id)
+      .sort((x, y) => x.start - y.start)[0];
+    if (!next || next.content.type !== "text") return Promise.resolve(null);
+    const text = `${a.content.text} ${next.content.text}`.trim();
+    return this.exec("merge captions", [
+      { type: "delete_clip", clip: next.id, ripple: null },
+      { type: "trim_clip", clip: a.id, edge: "out", to: next.start + next.duration },
+      { type: "set_text", clip: a.id, text },
+    ]);
+  }
+
+  /** Aplica um estilo a todas as legendas (tracks de função Captions) da sequence ativa. */
+  applyCaptionStyle(style: Record<string, unknown>): Promise<ChangeSet | null> {
+    const seq = this.activeSequence();
+    if (!seq) return Promise.resolve(null);
+    const capTracks = new Set(
+      seq.tracks
+        .filter((t) => (typeof t.role === "string" ? t.role : "") === "captions")
+        .map((t) => t.id),
+    );
+    const cmds: CommandBody[] = Object.values(seq.clips)
+      .filter((cl) => capTracks.has(cl.track) && cl.content.type === "text")
+      .map((cl) => ({ type: "set_text", clip: cl.id, style }));
+    return cmds.length > 0 ? this.exec("caption style", cmds) : Promise.resolve(null);
+  }
+
+  /** Transição na entrada dos clips selecionados que têm clip anterior na mesma track. */
+  applyTransitionToSelection(kind: TransitionKind): Promise<ChangeSet | null> {
+    const seq = this.activeSequence();
+    if (!seq) return Promise.resolve(null);
+    const frame = this.frame();
+    const cmds: CommandBody[] = [];
+    for (const id of this.state.selection) {
+      const cl = seq.clips[id];
+      if (!cl) continue;
+      const prev = Object.values(seq.clips).find(
+        (x) => x.track === cl.track && x.start + x.duration === cl.start,
+      );
+      if (prev) {
+        // meio segundo, mas nunca mais que a metade do menor dos dois clips (o engine valida o resto)
+        const cap = Math.floor(Math.min(prev.duration, cl.duration) / 2 / frame) * frame;
+        const duration = Math.min(Math.round(TICKS_PER_SECOND / 2 / frame) * frame, cap);
+        if (duration >= frame)
+          cmds.push({ type: "set_transition", clip: id, transition: { kind, duration } });
+      }
+    }
+    if (cmds.length === 0) {
+      this.toast("info", this.t("transitions.needsCut"));
+      return Promise.resolve(null);
+    }
+    return this.exec("transition", cmds);
   }
 
   detachAudio(): Promise<ChangeSet | null> {

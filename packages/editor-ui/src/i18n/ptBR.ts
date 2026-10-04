@@ -318,7 +318,7 @@ export const ptBR: Record<MessageKey, string> = {
   "settings.resetKeymap": "Restaurar todos os padrões",
   "settings.resetOne": "Restaurar",
   "settings.pressKeys": "Pressione o novo atalho…",
-  "settings.conflict": "Conflita com: {actions}",
+  "settings.conflict": "{key} está atribuída a várias ações: {actions}.",
   "settings.unsaved": "Não foi possível salvar as preferências nesta máquina.",
   "settings.prefsRecovered": "As preferências estavam corrompidas e voltaram ao padrão.",
 

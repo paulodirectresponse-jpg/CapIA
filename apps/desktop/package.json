@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Shell desktop: Vite + Tauri. Adaptador fino; a lógica de produto vive em crates/ e packages/.",
+  "description": "Shell desktop: Vite + Tauri. Adaptador fino; a l\u00f3gica de produto vive em crates/ e packages/.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -14,7 +14,9 @@
   "dependencies": {
     "@capia/editor-ui": "workspace:*",
     "@capia/engine-bindings": "workspace:*",
+    "@capia/ui-timeline": "workspace:*",
     "@tauri-apps/api": "^2.12.1",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

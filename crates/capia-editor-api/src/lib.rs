@@ -448,6 +448,11 @@ impl Session {
                 let o = self.open_ref()?;
                 let mut settings = RenderSettings::new(width, height);
                 settings.strict_sources = false;
+                settings.design_size = o
+                    .project
+                    .document()
+                    .sequence(&sequence)
+                    .map(|s| (s.header.width, s.header.height));
                 let f = o
                     .project
                     .render_frame(&services, &sequence, Ticks(at), &settings)?;

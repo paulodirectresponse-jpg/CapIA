@@ -13,13 +13,14 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
     "test": "pnpm -r --workspace-concurrency=1 test",
-    "build": "pnpm --filter @capia/desktop build",
+    "build": "node tools/build-wasm.mjs --if-missing && pnpm --filter @capia/desktop build",
     "test:tools": "node --test \"tools/*.test.mjs\"",
     "check:arch": "node tools/check-architecture.mjs",
     "check:licenses": "node tools/check-licenses.mjs",
     "check:parity": "node tools/check-wasm-parity.mjs",
     "desktop:dev": "pnpm --filter @capia/desktop tauri dev",
-    "desktop:build": "pnpm --filter @capia/desktop tauri build --no-bundle"
+    "desktop:build": "pnpm --filter @capia/desktop tauri build --no-bundle",
+    "build:wasm": "node tools/build-wasm.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

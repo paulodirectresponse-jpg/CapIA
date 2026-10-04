@@ -23,7 +23,14 @@ export function TopBar({
     imports: s.pendingImports,
     keymap: s.prefs.keymap,
   }));
-  const exporting = useUi((s) => s.exportRun !== null && !s.exportRun.finished);
+  const exportProgress = useUi((s) => {
+    const run = s.exportRun;
+    if (!run || run.finished) return null;
+    return {
+      done: run.items.reduce((a, i) => a + i.done, 0),
+      total: run.items.reduce((a, i) => a + i.total, 0),
+    };
+  });
   const b = resolveBindings(keymap);
   const [closing, setClosing] = useState(false);
   return (
@@ -63,7 +70,11 @@ export function TopBar({
           <Spinner label={t("media.importing")} /> {t("topbar.jobs", { count: imports })}
         </Badge>
       )}
-      {exporting && <Badge tone="warning">{t("export.progress", { done: "…", total: "…" })}</Badge>}
+      {exportProgress && (
+        <Badge tone="warning" data-testid="export-badge">
+          {t("export.progress", { done: exportProgress.done, total: exportProgress.total })}
+        </Badge>
+      )}
       <span
         data-testid="save-state"
         role="status"

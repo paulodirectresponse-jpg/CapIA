@@ -264,3 +264,32 @@ fn audio_fades_shape_the_gain() {
         "fade-out termina quase mudo: {tail} vs {mid}"
     );
 }
+
+/// Preview em resolução menor tem a mesma composição do export: o deslocamento (pixels da
+/// sequence) é escalado para a saída quando `design_size` está definido.
+#[test]
+fn design_size_makes_low_res_preview_match_full_res_composition() {
+    let (mut d, src) = two_clips();
+    d.prop("a", "scale", 0.5);
+    d.prop("a", "position_x", 40.0);
+    let g = RenderGraph::compile(d.doc(), &"S".into()).unwrap();
+    let bbox_x = |w: u32, h: u32, design: Option<(u32, u32)>| -> (f64, f64) {
+        let mut st = RenderSettings::new(w, h);
+        st.design_size = design;
+        let f = render_frame(&g, &"S".into(), Ticks(5 * F), &st, &src).unwrap();
+        let xs: Vec<u32> = (0..w).filter(|&x| f.image.pixel(x, h / 2) == RED).collect();
+        (
+            f64::from(*xs.first().unwrap()) / f64::from(w),
+            f64::from(*xs.last().unwrap() + 1) / f64::from(w),
+        )
+    };
+    let big = bbox_x(200, 100, Some((200, 100)));
+    let small = bbox_x(100, 50, Some((200, 100)));
+    assert!(
+        (big.0 - small.0).abs() < 0.03 && (big.1 - small.1).abs() < 0.03,
+        "{big:?} {small:?}"
+    );
+    // sem design_size o deslocamento é literal em pixels (comportamento da Fase 2)
+    let lit = bbox_x(100, 50, None);
+    assert!((lit.0 - small.0).abs() > 0.1, "{lit:?} {small:?}");
+}

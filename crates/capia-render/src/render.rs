@@ -70,6 +70,12 @@ fn draw_layers(
             ));
             rotation = 0.0;
         }
+        let (kx, ky) = settings.design_size.map_or((1.0, 1.0), |(dw, dh)| {
+            (
+                f64::from(settings.width) / f64::from(dw.max(1)),
+                f64::from(settings.height) / f64::from(dh.max(1)),
+            )
+        });
         let draw = |canvas: &mut Image, img: &Image| -> Result<(), RenderError> {
             let slide_px = layer.slide_x * f64::from(canvas.width);
             blit_layer(
@@ -77,8 +83,8 @@ fn draw_layers(
                 img,
                 tr.opacity,
                 tr.scale,
-                tr.pos_x + slide_px,
-                tr.pos_y,
+                tr.pos_x * kx + slide_px,
+                tr.pos_y * ky,
                 rotation,
             )
             .map(|_| ())

@@ -372,10 +372,9 @@ mod tests {
             &json!({"px_milli": 10_000, "pps_milli": 50_000}),
         );
         assert_eq!(r["ticks"], 141_120_000);
-        assert_eq!(
+        assert!(
             dispatch(op::THRESHOLD, &json!({"px_milli": 10_000, "pps_milli": 0}))["error"]["code"]
-                .is_string(),
-            true
+                .is_string()
         );
     }
 

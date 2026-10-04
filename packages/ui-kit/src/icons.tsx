@@ -49,6 +49,10 @@ const PATHS = {
   grid: "M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z",
   search: "M7 3.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM9.6 9.6L13 13",
   fullscreen: "M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3",
+  skipBack: "M3.5 3.5v9M12.5 3.5L6 8l6.5 4.5zM9.5 3.5L4 8l5.5 4.5z",
+  skipForward: "M12.5 3.5v9M3.5 3.5L10 8l-6.5 4.5zM6.5 3.5L12 8l-5.5 4.5z",
+  proxy: "M2.5 4h11v8h-11zM5 9.5l2-2 1.5 1.5L11 6.5",
+  safeArea: "M2.5 3.5h11v9h-11zM4.5 5.5h7v5h-7z",
   fullscreenExit: "M6 3v3H3M13 6h-3V3M10 13v-3h3M3 10h3v3",
 } as const;
 

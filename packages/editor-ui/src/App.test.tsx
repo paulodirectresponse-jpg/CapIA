@@ -1,34 +1,35 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { EngineClient, EngineInfo } from "@capia/engine-bindings";
+import type { EditorClient } from "@capia/engine-bindings";
 import { App } from "./App";
 
-const info: EngineInfo = {
-  name: "capia-engine",
-  version: "0.0.0",
-  engine_api_version: 1,
-  document_schema_version: 1,
-  command_schema_version: 1,
-  ticks_per_second: 705_600_000,
-};
+/** Cliente mínimo: só o que o boot usa. */
+function fakeClient(engineInfo: () => Promise<unknown>): EditorClient {
+  return { engineInfo } as unknown as EditorClient;
+}
 
 describe("App", () => {
   afterEach(cleanup);
 
-  it("identifies CapIA and shows the engine reported by the injected client", async () => {
-    const client: EngineClient = { getEngineInfo: () => Promise.resolve(info) };
-    render(<App client={client} />);
-    expect(screen.getByRole("heading", { name: "CapIA" })).toBeTruthy();
-    expect((await screen.findByTestId("engine-status")).textContent).toContain(
-      "Engine capia-engine v0.0.0",
+  it("mostra a tela de boas-vindas depois de consultar o engine", async () => {
+    render(
+      <App
+        client={fakeClient(() => Promise.resolve({ media_available: true }))}
+        storage={null}
+        pollMs={100000}
+      />,
     );
+    expect(await screen.findByTestId("welcome")).toBeTruthy();
   });
 
-  it("shows an unavailable state without crashing when the engine fails", async () => {
-    const client: EngineClient = { getEngineInfo: () => Promise.reject(new Error("boom")) };
-    render(<App client={client} />);
-    expect((await screen.findByTestId("engine-status")).textContent).toBe(
-      "Engine indisponível: boom",
+  it("não quebra quando o engine falha: continua nas boas-vindas", async () => {
+    render(
+      <App
+        client={fakeClient(() => Promise.reject(new Error("boom")))}
+        storage={null}
+        pollMs={100000}
+      />,
     );
+    expect(await screen.findByTestId("welcome")).toBeTruthy();
   });
 });

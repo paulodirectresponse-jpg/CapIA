@@ -29,6 +29,12 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "error",
     },
   },
+  // Playwright: o parâmetro `use` dos fixtures não é um hook do React; Node + DOM no mesmo arquivo.
+  {
+    files: ["packages/e2e/**/*.ts"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+    rules: { "react-hooks/rules-of-hooks": "off", "no-empty-pattern": "off" },
+  },
   // Scripts Node (ferramentas) e arquivos de configuração: sem type-check de projeto.
   {
     files: ["tools/**/*.mjs", "**/*.config.{js,ts}"],

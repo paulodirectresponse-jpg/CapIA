@@ -28,7 +28,7 @@ export const DEFAULT_PREFS: Prefs = {
   panels: {
     leftWidth: 300,
     rightWidth: 300,
-    timelineHeight: 320,
+    timelineHeight: 400,
     leftCollapsed: false,
     rightCollapsed: false,
   },

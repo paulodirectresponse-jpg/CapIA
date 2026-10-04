@@ -24,3 +24,6 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 capia-project.workspace = true
+capia-editor-api.workspace = true
+serde_json.workspace = true
+tauri-plugin-dialog = "2"

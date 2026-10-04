@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissões mínimas da janela principal (SECURITY.md §7: sem shell, sem fs amplo).",
+  "description": "Permiss\u00f5es m\u00ednimas da janela principal (SECURITY.md \u00a77: sem shell, sem fs amplo).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
 }

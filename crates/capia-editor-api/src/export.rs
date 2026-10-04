@@ -77,7 +77,8 @@ fn run_item(
         .unwrap_or(0)
         .max(1);
     let range = TimeRange::new(Ticks(0), gs.duration);
-    let settings = RenderSettings::new(w, h);
+    let mut settings = RenderSettings::new(w, h);
+    settings.design_size = Some((sw, sh));
     let done = AtomicU64::new(0);
     let last = Mutex::new(Instant::now());
     let id = item.id.clone();

@@ -15,6 +15,10 @@ pub struct RenderSettings {
     /// `true` (padrão, **export**): fonte indisponível/falha de decode é erro. `false` (**preview**):
     /// vira aviso `SOURCE_UNAVAILABLE` e o layer é pulado.
     pub strict_sources: bool,
+    /// Tamanho de referência (largura, altura) em que `position_x/y` (pixels) foram autorados — o
+    /// da sequence. `Some`: o deslocamento é escalado para a saída (preview 540p/720p = export
+    /// 1080p, mesma composição). `None` (padrão): pixels literais da saída (comportamento da Fase 2).
+    pub design_size: Option<(u32, u32)>,
 }
 
 impl RenderSettings {
@@ -26,6 +30,7 @@ impl RenderSettings {
             audio_sample_rate: 48_000,
             audio_channels: 2,
             strict_sources: true,
+            design_size: None,
         }
     }
 
