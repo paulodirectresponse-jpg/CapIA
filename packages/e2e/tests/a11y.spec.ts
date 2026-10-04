@@ -21,7 +21,7 @@ test("a11y baseline: names, keyboard, visible focus, dialog focus handling", asy
         labels?.[0]?.textContent ??
         el.textContent;
       const labelled = el.getAttribute("aria-labelledby");
-      if (!(name ?? "").trim() && !labelled && !el.closest("label")) {
+      if (!name.trim() && !labelled && !el.closest("label")) {
         bad.push(`${el.tagName.toLowerCase()}[${el.getAttribute("data-testid") ?? el.className}]`);
       }
     }
