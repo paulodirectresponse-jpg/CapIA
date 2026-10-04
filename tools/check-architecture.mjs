@@ -27,7 +27,8 @@ export const RUST_RULES = {
   // Render headless determinístico (ADR-064..067): grafo, compositor CPU e mixer PUROS (sem IO, sem
   // FFmpeg); recebem mídia decodificada por um trait. Compila para WASM.
   "capia-render": {
-    workspace: ["capia-time", "capia-model"],
+    // `capia-commands` só como dev-dependency: os testes montam documentos pelo Command Engine real
+    workspace: ["capia-time", "capia-model", "capia-commands"],
     normal: [],
     build: [],
     dev: [],
