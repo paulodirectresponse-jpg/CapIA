@@ -311,6 +311,10 @@ export const en = {
   "export.itemPending": "Waiting",
   "export.itemRunning": "Exporting",
 
+  "settings.copyDiagnostics": "Copy diagnostics",
+  "settings.diagnosticsCopied": "Diagnostics copied",
+  "settings.diagnosticsFailed": "Could not copy diagnostics",
+  "settings.diagnosticsHint": "Versions and timings only; no file names or paths.",
   "settings.title": "Settings",
   "settings.language": "Language",
   "settings.keymap": "Keyboard shortcuts",

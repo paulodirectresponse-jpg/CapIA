@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cronômetro de aceitação — CapIA</title>
+    <style>
+      body {
+        font:
+          16px system-ui,
+          sans-serif;
+        margin: 24px;
+        max-width: 640px;
+      }
+      #clock {
+        font:
+          700 48px ui-monospace,
+          monospace;
+      }
+      button {
+        font: inherit;
+        padding: 8px 14px;
+        margin: 4px 4px 4px 0;
+      }
+      li {
+        margin: 6px 0;
+      }
+      .done {
+        color: #080;
+      }
+      small {
+        color: #666;
+      }
+      textarea {
+        width: 100%;
+        height: 5em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Tarefa UGC 30–45 s</h1>
+    <div id="clock">00:00</div>
+    <button id="start">Iniciar</button> <button id="stop">Terminar</button>
+    <button id="export">Exportar JSON</button>
+    <ol id="steps"></ol>
+    <p><button id="stuck">Registrar trava agora</button> <small id="stuckinfo"></small></p>
+    <textarea id="notes" placeholder="Confusões e observações (sem dados pessoais)"></textarea>
+    <script>
+      const NAMES = [
+        "Importar a pasta",
+        "Talking head + trim",
+        "Split + ripple delete",
+        "B-rolls por cima",
+        "Transição",
+        "Título",
+        "Legendas (≥3)",
+        "Música −18 dB + SFX",
+        "Desfazer/refazer",
+        "Exportar MP4",
+      ];
+      let t0 = null,
+        tEnd = null,
+        last = 0;
+      const marks = Array(10).fill(null),
+        stuck = [];
+      const $ = (id) => document.getElementById(id);
+      const fmt = (s) =>
+        String(Math.floor(s / 60)).padStart(2, "0") +
+        ":" +
+        String(Math.floor(s % 60)).padStart(2, "0");
+      NAMES.forEach((n, i) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<button data-i="${i}">Passo ${i + 1} concluído</button> ${n} <small id="m${i}"></small>`;
+        $("steps").appendChild(li);
+      });
+      $("steps").addEventListener("click", (e) => {
+        const i = e.target.dataset?.i;
+        if (i === undefined || !t0) return;
+        const s = (Date.now() - t0) / 1000;
+        marks[i] = s;
+        $("m" + i).textContent = ` ${fmt(s)}`;
+        e.target.parentElement.classList.add("done");
+      });
+      $("start").onclick = () => {
+        t0 = Date.now();
+        tEnd = null;
+        setInterval(() => {
+          if (t0 && !tEnd) $("clock").textContent = fmt((Date.now() - t0) / 1000);
+        }, 250);
+      };
+      $("stop").onclick = () => {
+        tEnd = Date.now();
+      };
+      $("stuck").onclick = () => {
+        if (!t0) return;
+        stuck.push({ seconds_from_start: Math.round((Date.now() - t0) / 1000) });
+        $("stuckinfo").textContent = `${stuck.length} trava(s) registrada(s)`;
+      };
+      $("export").onclick = () => {
+        let prev = 0;
+        const steps = marks.map((m, i) => {
+          const done = m !== null;
+          const sec = done ? Math.round(m - prev) : 0;
+          if (done) prev = m;
+          return { n: i + 1, done, seconds: sec };
+        });
+        const out = {
+          participant: "P?",
+          date: new Date().toISOString().slice(0, 10),
+          steps,
+          total_seconds: Math.round(((tEnd ?? Date.now()) - (t0 ?? Date.now())) / 1000),
+          stuck_events: stuck,
+          notes: $("notes").value,
+        };
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(
+          new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }),
+        );
+        a.download = "timer-result.json";
+        a.click();
+      };
+    </script>
+  </body>
+</html>

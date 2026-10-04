@@ -1474,6 +1474,44 @@ export class EditorController {
     return true;
   }
 
+  /**
+   * Diagnóstico **não sensível** para o pacote de aceitação: versões, transporte do preview,
+   * contadores/latências (ms) e tamanho do projeto. Sem caminhos, nomes de arquivo nem conteúdo.
+   */
+  diagnostics(): Record<string, unknown> {
+    const s = this.state;
+    const seq = s.active ? s.model.sequences[s.active] : undefined;
+    return {
+      generated: new Date().toISOString(),
+      app: {
+        language: s.prefs.language,
+        preview: s.prefs.preview,
+        mediaAvailable: s.engine?.mediaAvailable,
+      },
+      previewTransport: this.frames.kind,
+      project: {
+        sequences: Object.keys(s.model.sequences).length,
+        assets: Object.keys(s.model.assets).length,
+        activeSequence: seq
+          ? {
+              clips: seq.clip_count,
+              durationTicks: seq.duration,
+              width: seq.width,
+              height: seq.height,
+            }
+          : null,
+        revision: s.model.revision,
+      },
+      perfMs: this.perf.summary(),
+      environment: {
+        userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
+        devicePixelRatio: typeof window === "undefined" ? 1 : window.devicePixelRatio,
+        viewport:
+          typeof window === "undefined" ? null : { w: window.innerWidth, h: window.innerHeight },
+      },
+    };
+  }
+
   // -------------------------------------------------------------------------------- prefs
 
   setPrefs(patch: Partial<Prefs>): void {

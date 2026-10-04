@@ -313,6 +313,10 @@ export const ptBR: Record<MessageKey, string> = {
   "export.itemPending": "Aguardando",
   "export.itemRunning": "Exportando",
 
+  "settings.copyDiagnostics": "Copiar diagnóstico",
+  "settings.diagnosticsCopied": "Diagnóstico copiado",
+  "settings.diagnosticsFailed": "Não foi possível copiar o diagnóstico",
+  "settings.diagnosticsHint": "Só versões e tempos; sem nomes de arquivo nem caminhos.",
   "settings.title": "Configurações",
   "settings.language": "Idioma",
   "settings.keymap": "Atalhos de teclado",

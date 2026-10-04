@@ -77,6 +77,25 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           ))}
         </Select>
         <div className="ed-row">
+          <Button
+            data-testid="copy-diagnostics"
+            onClick={() => {
+              const text = JSON.stringify(c.diagnostics(), null, 2);
+              void navigator.clipboard
+                .writeText(text)
+                .then(() => {
+                  c.toast("success", t("settings.diagnosticsCopied"));
+                })
+                .catch(() => {
+                  c.toast("error", t("settings.diagnosticsFailed"), text.slice(0, 200));
+                });
+            }}
+          >
+            {t("settings.copyDiagnostics")}
+          </Button>
+          <span className="ed-hint">{t("settings.diagnosticsHint")}</span>
+        </div>
+        <div className="ed-row">
           <h3 className="ed-subhead">{t("settings.keymap")}</h3>
           <Button
             data-testid="keymap-reset-all"

@@ -1,0 +1,42 @@
+{
+  "participant": "P1",
+  "date": "AAAA-MM-DD",
+  "app_build": "commit ou versão",
+  "machine": {
+    "os": "",
+    "cpu": "",
+    "gpu": "",
+    "ram_gb": 0,
+    "display_scale_percent": 100,
+    "monitors": 1
+  },
+  "language": "pt-BR",
+  "experience": "nunca editou vídeo | editou ocasionalmente | edita com frequência",
+  "steps": [
+    { "n": 1, "done": false, "seconds": 0 },
+    { "n": 2, "done": false, "seconds": 0 },
+    { "n": 3, "done": false, "seconds": 0 },
+    { "n": 4, "done": false, "seconds": 0 },
+    { "n": 5, "done": false, "seconds": 0 },
+    { "n": 6, "done": false, "seconds": 0 },
+    { "n": 7, "done": false, "seconds": 0 },
+    { "n": 8, "done": false, "seconds": 0 },
+    { "n": 9, "done": false, "seconds": 0 },
+    { "n": 10, "done": false, "seconds": 0 }
+  ],
+  "total_seconds": 0,
+  "exported_mp4_validated": false,
+  "issues": [
+    {
+      "step": 0,
+      "severity": "S1|S2|S3|S4",
+      "summary": "",
+      "reproduces": "sempre|às vezes|uma vez",
+      "resolved": false
+    }
+  ],
+  "confusion_points": [""],
+  "stuck_events": [{ "step": 0, "seconds_stuck": 0, "hint_given": "" }],
+  "diagnostics": {},
+  "notes": ""
+}
