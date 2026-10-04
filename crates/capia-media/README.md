@@ -24,3 +24,15 @@ Mídia externa como **entrada hostil** (ADR-047). Probe estruturado via `ffprobe
 Feature `failpoints` (**só testes**): `CAPIA_FAILPOINT=index_running|waveform_running|proxy_running` + `CAPIA_FAILPOINT_MODE=park|abort` para os crash tests reais.
 Fixtures com quadros identificáveis (luma = função do número do quadro): `cfr_gop.mp4`, `vfr.mp4`; áudio 44,1 kHz: `tone_44k.wav` (`tools/gen-media-fixtures.sh`).
 Testes: `tests/pipeline.rs` (índice, decode exato, áudio, waveform, proxy, cancelamento com PID que some).
+
+## Fase 2 — conclusão: sessões de decode, índice de áudio, encoders e export
+
+| Peça | API | ADR |
+|---|---|---|
+| Sessão de decode **persistente** (um ffmpeg, quadros em ordem, contrapressão, mata no `Drop`) | `FrameStream::open/next_frame` | 059 |
+| Imagem estática → RGBA8 | `decode_still` | 064/065 |
+| Índice de frames de áudio `CAIX` + seek com pouso **verificado** (`-copyts -af ashowinfo`) | `build_audio_index`, `AudioIndex`, `decode_audio_indexed[_stats]`, `container_supports_exact_seek` | 061 |
+| `EncoderCapability`: detecção real (NVENC/QSV/AMF/`h264_mf`/OpenH264/VideoToolbox/VAAPI/V4L2/MPEG-4), política (nunca x264/x265, nunca nome fora do catálogo) | `detect_encoders`, `select_export_encoder`, `encoder_policy`, `ExportCodec` | 067 |
+| Codificação de export por pipe + validação por ffprobe (contêiner, codec, dimensões, fps exato, nº de quadros, áudio, drift A/V) | `EncodeSession`, `Mp4Spec`, `validate_export`, `ExportExpect` | 067 |
+
+Falha de injeção (só testes): `audio_index_running`. Testes: `tests/audio_seek.rs` (PCM bit-exato, AAC por posição, offset, **custo do seek independente do início**), `encoder::tests` (política sem FFmpeg).

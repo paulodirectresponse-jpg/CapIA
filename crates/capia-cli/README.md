@@ -27,3 +27,15 @@ capia cache info|clean <arq.capia> [--all]
 ```
 
 `media index|waveform|proxy` rodam como **job** (`--priority`, `--progress`); `job cancel` de outro processo mata o FFmpeg. Testes: `tests/media.rs` (binário real, FFmpeg real).
+
+## Fase 2 — render, export e encoders
+
+```
+capia media encoders [--json]                           # detecção real + política (nunca x264/x265)
+capia render frame <p.capia> --sequence ID [--at SEG | --frame N] [--width W --height H] [--out q.ppm] [--json]
+capia render audio <p.capia> --sequence ID [--start SEG] [--duration SEG] [--rate HZ] [--channels N] --out a.wav
+capia export intermediate <p.capia> --sequence ID --out PASTA [--start SEG] [--duration SEG | --frames N] [--overwrite]
+capia export mp4 <p.capia> --sequence ID --out a.mp4 [--codec h264|mpeg4-reference] [--encoder NOME] [--overwrite]
+```
+
+O render lê o **original** (nunca o proxy) e não escreve no documento. `export mp4 --codec h264` usa o primeiro encoder aprovado e disponível; sem nenhum ⇒ `MEDIA_ENCODER_UNAVAILABLE` (sem fallback e sem arquivo); `--encoder libx264` ⇒ `MEDIA_ENCODER_PROHIBITED`. `mpeg4-reference` (não é H.264) só por pedido explícito. Teste de aceitação da fase: `tests/phase2_e2e.rs`.
