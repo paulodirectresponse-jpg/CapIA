@@ -162,6 +162,17 @@ describe("EditorController: toda escrita é comando/undo/redo", () => {
     expect(c.state.model.revision).toBe(9);
   });
 
+  it("resposta com revisão que pula uma (outro cliente commitou no intervalo) ressincroniza em vez de aplicar", async () => {
+    const { c, client } = await ready();
+    // réplica em r1; o engine responde r3 (r2 foi de outro cliente) ⇒ não pode aplicar o patch às cegas
+    (client.execute as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(change(3));
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- é um vi.fn, sem this
+    const snap = client.snapshot as unknown as ReturnType<typeof vi.fn>;
+    await c.addMarker();
+    expect(snap.mock.calls.length).toBe(1);
+    expect(c.state.model.revision).toBe(9); // snapshot do engine (revisão verdadeira)
+  });
+
   it("falha de comando vira toast + diagnóstico e mantém a réplica", async () => {
     const { c, client } = await ready();
     (client.execute as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(

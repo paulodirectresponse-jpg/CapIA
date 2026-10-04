@@ -329,9 +329,12 @@ export class EditorController {
   /** Processa um evento do engine (exposto para testes). */
   handleEvent(ev: EditorEvent): void {
     switch (ev.kind) {
-      case "document_changed":
-        this.applyChangeSet(ev.change);
+      case "document_changed": {
+        const run = () => this.accept(ev.change);
+        const p = this.queue.then(run, run);
+        this.queue = p.catch(() => null);
         break;
+      }
       case "revision_changed":
         // outro cliente (CLI, IA, outra janela) alterou o documento: ressincroniza se defasado
         void this.resyncIfBehind(ev.revision);
@@ -379,6 +382,21 @@ export class EditorController {
   }
 
   /**
+   * Aceita uma mudança do engine **só se for a próxima revisão** da réplica: se outro cliente
+   * (CLI, IA, outra janela) commitou no intervalo, aplicar este patch deixaria a réplica sem as
+   * mudanças intermediárias; então relê o projeto (a revisão mais velha ou igual já foi vista).
+   */
+  private async accept(change: ChangeSet): Promise<void> {
+    const cur = this.state.model.revision;
+    if (change.revision <= cur) return;
+    if (cur > 0 && change.revision > cur + 1) {
+      await this.resyncNow();
+      return;
+    }
+    this.applyChangeSet(change);
+  }
+
+  /**
    * Relê o projeto quando o engine avisa de uma revisão que a réplica não tem. Roda na fila de
    * comandos (depois dos comandos desta UI já em voo); o evento do próprio comando chega com a
    * revisão que a réplica já aplicou e não faz nada.
@@ -386,35 +404,41 @@ export class EditorController {
   private resyncIfBehind(revision: number): Promise<void> {
     const run = async () => {
       if (this.disposed || revision <= this.state.model.revision) return;
-      try {
-        const snap = await this.client.snapshot();
-        const alive = new Set(snap.sequences.map((q) => q.id));
-        const loaded = Object.keys(this.state.model.models).filter((id) => alive.has(id));
-        const bodies = await Promise.all(
-          loaded.map(async (id) => [id, await this.client.sequence(id)] as const),
-        );
-        this.store.set((s) => {
-          let model = fromSnapshot(snap);
-          for (const [id, m] of bodies) model = withSequenceModel(model, id, m);
-          const tabs = s.tabs.filter((id) => alive.has(id));
-          const active = s.active && alive.has(s.active) ? s.active : (tabs[0] ?? null);
-          const seq = active ? model.models[active] : undefined;
-          return {
-            model,
-            tabs,
-            active,
-            selection: seq ? s.selection.filter((id) => id in seq.clips) : [],
-            history: null,
-          };
-        });
-        this.syncCore(true);
-      } catch (e) {
-        this.reportError(e);
-      }
+      await this.resyncNow();
     };
     const p = this.queue.then(run, run);
     this.queue = p.catch(() => null);
     return p;
+  }
+
+  /** Relê snapshot + sequences carregadas (chamar dentro da fila de comandos). */
+  private async resyncNow(): Promise<void> {
+    if (this.disposed) return;
+    try {
+      const snap = await this.client.snapshot();
+      const alive = new Set(snap.sequences.map((q) => q.id));
+      const loaded = Object.keys(this.state.model.models).filter((id) => alive.has(id));
+      const bodies = await Promise.all(
+        loaded.map(async (id) => [id, await this.client.sequence(id)] as const),
+      );
+      this.store.set((s) => {
+        let model = fromSnapshot(snap);
+        for (const [id, m] of bodies) model = withSequenceModel(model, id, m);
+        const tabs = s.tabs.filter((id) => alive.has(id));
+        const active = s.active && alive.has(s.active) ? s.active : (tabs[0] ?? null);
+        const seq = active ? model.models[active] : undefined;
+        return {
+          model,
+          tabs,
+          active,
+          selection: seq ? s.selection.filter((id) => id in seq.clips) : [],
+          history: null,
+        };
+      });
+      this.syncCore(true);
+    } catch (e) {
+      this.reportError(e);
+    }
   }
 
   private updateExport(id: string, patch: Partial<ExportRunItem>): void {
@@ -680,7 +704,7 @@ export class EditorController {
         const t0 = performance.now();
         const change = await this.client.execute(label, commands);
         const t1 = performance.now();
-        this.applyChangeSet(change);
+        await this.accept(change);
         const t2 = performance.now();
         this.perf.record("rpc", t1 - t0);
         this.perf.record("apply", t2 - t1);
@@ -734,7 +758,7 @@ export class EditorController {
         const t0 = performance.now();
         const change = await fn();
         const t1 = performance.now();
-        this.applyChangeSet(change);
+        await this.accept(change);
         const t2 = performance.now();
         this.perf.record("rpc", t1 - t0);
         this.perf.record("apply", t2 - t1);

@@ -14,10 +14,11 @@ test("a11y baseline: names, keyboard, visible focus, dialog focus handling", asy
     const sel =
       "button, [role=button], [role=tab], input:not([type=hidden]), select, textarea, canvas";
     for (const el of document.querySelectorAll<HTMLElement>(sel)) {
+      const labels = "labels" in el ? (el as HTMLInputElement).labels : null;
       const name =
         el.getAttribute("aria-label") ??
         el.getAttribute("title") ??
-        (el as HTMLInputElement).labels?.[0]?.textContent ??
+        labels?.[0]?.textContent ??
         el.textContent;
       const labelled = el.getAttribute("aria-labelledby");
       if (!(name ?? "").trim() && !labelled && !el.closest("label")) {
