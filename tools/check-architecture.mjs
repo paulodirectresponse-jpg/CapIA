@@ -41,6 +41,14 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Serviço de decode persistente (ADR-059..061): sessões de ffmpeg + cache de quadros por bytes.
+  // Só decodifica: não conhece modelo, assets, projeto nem SQLite. Fora do WASM.
+  "capia-decode": {
+    workspace: ["capia-time", "capia-media"],
+    normal: [],
+    build: [],
+    dev: [],
+  },
   // Domínio de assets (ADR-046..049): identidade, hash em streaming, import, verify, relink, cache.
   // Sem SQLite e sem Command Engine.
   "capia-assets": {

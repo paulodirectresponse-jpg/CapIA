@@ -13,6 +13,7 @@ const base = () => [
   pkg("capia-jobs", [["serde"], ["serde_json"]]),
   pkg("capia-render", [["capia-time"], ["capia-model"], ["capia-commands", "dev"]]),
   pkg("capia-media", [["capia-time"], ["serde"], ["serde_json"], ["sha2"], ["capia-media", "dev"]]),
+  pkg("capia-decode", [["capia-time"], ["capia-media"]]),
   pkg("capia-assets", [
     ["capia-time"],
     ["capia-model"],

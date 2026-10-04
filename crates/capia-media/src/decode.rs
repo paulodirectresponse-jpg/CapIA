@@ -22,7 +22,7 @@ pub const DEFAULT_MAX_FRAME_BYTES: u64 = 256 * 1024 * 1024;
 /// Teto padrão de PCM numa chamada (≈ 1 h de estéreo 48 kHz em f32 = 1,4 GB é demais: 512 MiB).
 pub const DEFAULT_MAX_PCM_BYTES: u64 = 512 * 1024 * 1024;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PixelFormat {
     Rgba8,
 }
@@ -58,7 +58,7 @@ impl Default for DecodeLimits {
     }
 }
 
-fn ffmpeg_of(tc: &MediaToolchain) -> Result<&Path, MediaError> {
+pub(crate) fn ffmpeg_of(tc: &MediaToolchain) -> Result<&Path, MediaError> {
     tc.ffmpeg.as_deref().ok_or_else(|| {
         MediaError::new(
             MediaErrorCode::MediaBackendNotFound,
@@ -69,7 +69,7 @@ fn ffmpeg_of(tc: &MediaToolchain) -> Result<&Path, MediaError> {
 
 /// `Ticks` → segundos com 6 casas por aritmética inteira (arredondando para **cima** quando
 /// `ceil`, senão para baixo). Negativos viram 0.
-fn seconds_arg(t: Ticks, ceil: bool) -> String {
+pub(crate) fn seconds_arg(t: Ticks, ceil: bool) -> String {
     let n = i128::from(t.0.max(0)) * 1_000_000;
     let d = i128::from(TICKS_PER_SECOND);
     let micros = if ceil { (n + d - 1) / d } else { n / d };
@@ -77,7 +77,7 @@ fn seconds_arg(t: Ticks, ceil: bool) -> String {
 }
 
 /// Tempo absoluto (em ticks, **sem** subtrair o início do índice) de um PTS cru.
-fn absolute_ticks(index: &FrameIndex, pts: i64) -> Ticks {
+pub(crate) fn absolute_ticks(index: &FrameIndex, pts: i64) -> Ticks {
     let tb = index.time_base();
     let num = i128::from(pts) * i128::from(tb.num()) * i128::from(TICKS_PER_SECOND);
     let den = i128::from(tb.den());
@@ -85,7 +85,11 @@ fn absolute_ticks(index: &FrameIndex, pts: i64) -> Ticks {
     Ticks(i64::try_from(t).unwrap_or(i64::MAX))
 }
 
-fn frame_len(width: u32, height: u32, limits: &DecodeLimits) -> Result<usize, MediaError> {
+pub(crate) fn frame_len(
+    width: u32,
+    height: u32,
+    limits: &DecodeLimits,
+) -> Result<usize, MediaError> {
     let bytes = u64::from(width)
         .checked_mul(u64::from(height))
         .and_then(|p| p.checked_mul(4))

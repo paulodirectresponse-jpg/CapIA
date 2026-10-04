@@ -13,6 +13,7 @@ mod limits;
 mod normalize;
 mod process;
 mod proxy;
+mod stream;
 mod thumbnail;
 mod toolchain;
 mod waveform;
@@ -45,6 +46,7 @@ pub use proxy::{
     FpsPolicy, HARDWARE_H264_ENCODERS, PROXY_PRODUCER, ProxyAudio, ProxyCodec, ProxyEncoder,
     ProxyProfileV1, ProxyReport, generate_proxy, list_encoders, select_encoder,
 };
+pub use stream::FrameStream;
 pub use thumbnail::{ThumbnailRequest, extract_frame_png};
 pub use toolchain::{MediaConfig, MediaToolchain, ToolSource};
 pub use waveform::{
