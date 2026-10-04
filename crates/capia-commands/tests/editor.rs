@@ -565,3 +565,228 @@ fn rename_and_enable_clip() {
             .clone();
     assert_eq!((c.name.as_str(), c.enabled), ("Hook", false));
 }
+
+fn starts(w: &W, track: &str) -> Vec<(String, i64)> {
+    w.e.document()
+        .sequence(&"s".into())
+        .unwrap()
+        .track_clips(&track.into())
+        .map(|c| (c.id.to_string(), c.start.0 / FRAME))
+        .collect()
+}
+
+fn with_main() -> W {
+    let mut w = W::new();
+    w.cmd(Command::AddTrack {
+        sequence: "s".into(),
+        id: Some("m".into()),
+        kind: TrackKind::Visual,
+        name: None,
+        role: None,
+        magnetic: true,
+        index: None,
+    })
+    .unwrap();
+    for (i, id) in ["a", "b", "c"].iter().enumerate() {
+        w.insert(
+            "m",
+            i as i64 * 30,
+            30,
+            id,
+            ClipContent::Solid {
+                color: "#112233".into(),
+            },
+            0,
+        )
+        .unwrap();
+    }
+    w
+}
+
+#[test]
+fn reorder_within_a_magnetic_track_keeps_it_gapless() {
+    let mut w = with_main();
+    w.cmd(Command::ReorderClip {
+        clip: "c".into(),
+        track: None,
+        before: Some("a".into()),
+        start: None,
+    })
+    .unwrap();
+    assert_eq!(
+        starts(&w, "m"),
+        [("c".into(), 0), ("a".into(), 30), ("b".into(), 60)]
+    );
+    w.cmd(Command::ReorderClip {
+        clip: "c".into(),
+        track: None,
+        before: None,
+        start: None,
+    })
+    .unwrap();
+    assert_eq!(
+        starts(&w, "m"),
+        [("a".into(), 0), ("b".into(), 30), ("c".into(), 60)]
+    );
+    // undo devolve exatamente a ordem anterior
+    w.e.undo(&Actor::user("t"), 0).unwrap();
+    assert_eq!(
+        starts(&w, "m"),
+        [("c".into(), 0), ("a".into(), 30), ("b".into(), 60)]
+    );
+}
+
+#[test]
+fn reorder_into_and_out_of_a_magnetic_track() {
+    let mut w = with_main();
+    w.solid(200, 15, "o").unwrap(); // overlay livre em 200..215
+    // entra na track magnética antes de `b`: abre espaço e reempurra b, c
+    w.cmd(Command::ReorderClip {
+        clip: "o".into(),
+        track: Some("m".into()),
+        before: Some("b".into()),
+        start: None,
+    })
+    .unwrap();
+    assert_eq!(
+        starts(&w, "m"),
+        [
+            ("a".into(), 0),
+            ("o".into(), 30),
+            ("b".into(), 45),
+            ("c".into(), 75)
+        ]
+    );
+    assert!(starts(&w, "v").is_empty());
+    // sai da magnética para a track livre em 100: fecha o gap
+    w.cmd(Command::ReorderClip {
+        clip: "o".into(),
+        track: Some("v".into()),
+        before: None,
+        start: Some(frames(100)),
+    })
+    .unwrap();
+    assert_eq!(
+        starts(&w, "m"),
+        [("a".into(), 0), ("b".into(), 30), ("c".into(), 60)]
+    );
+    assert_eq!(starts(&w, "v"), [("o".into(), 100)]);
+}
+
+#[test]
+fn reorder_errors_are_structured() {
+    let mut w = with_main();
+    w.solid(200, 15, "o").unwrap();
+    assert_eq!(
+        code(w.cmd(Command::ReorderClip {
+            clip: "a".into(),
+            track: None,
+            before: Some("a".into()),
+            start: None
+        })),
+        ErrorCode::InvalidArgument
+    );
+    assert_eq!(
+        code(w.cmd(Command::ReorderClip {
+            clip: "o".into(),
+            track: Some("m".into()),
+            before: Some("ghost".into()),
+            start: None
+        })),
+        ErrorCode::InvalidArgument
+    );
+    // livre → livre não é reorder
+    assert_eq!(
+        code(w.cmd(Command::ReorderClip {
+            clip: "o".into(),
+            track: None,
+            before: None,
+            start: Some(frames(10))
+        })),
+        ErrorCode::InvalidArgument
+    );
+    // destino livre sem start
+    assert_eq!(
+        code(w.cmd(Command::ReorderClip {
+            clip: "a".into(),
+            track: Some("v".into()),
+            before: None,
+            start: None
+        })),
+        ErrorCode::InvalidArgument
+    );
+    // destino ocupado
+    assert_eq!(
+        code(w.cmd(Command::ReorderClip {
+            clip: "a".into(),
+            track: Some("v".into()),
+            before: None,
+            start: Some(frames(205))
+        })),
+        ErrorCode::Overlap
+    );
+    // nenhuma das falhas alterou o documento
+    assert_eq!(
+        starts(&w, "m"),
+        [("a".into(), 0), ("b".into(), 30), ("c".into(), 60)]
+    );
+    // track travada
+    w.cmd(Command::SetTrackFlags {
+        track: "m".into(),
+        locked: Some(true),
+        hidden: None,
+        muted: None,
+        solo: None,
+        magnetic: None,
+        sync_lock: None,
+        group: None,
+        clear_group: false,
+        compact: false,
+    })
+    .unwrap();
+    assert_eq!(
+        code(w.cmd(Command::ReorderClip {
+            clip: "a".into(),
+            track: None,
+            before: None,
+            start: None
+        })),
+        ErrorCode::TrackLocked
+    );
+}
+
+#[test]
+fn point_snap_prefers_the_playhead_then_markers_then_edges_and_respects_exclusion() {
+    use capia_commands::{SnapTargetKind, resolve_point_snap};
+    let mut w = W::new();
+    w.solid(10, 10, "a").unwrap(); // bordas em 10F e 20F
+    w.cmd(Command::AddMarker {
+        sequence: "s".into(),
+        id: None,
+        time: frames(30),
+        label: String::new(),
+    })
+    .unwrap();
+    let seq = w.e.document().sequence(&"s".into()).unwrap();
+    let th = Ticks(FRAME * 2);
+    // borda de clip
+    let hit = resolve_point_snap(seq, &[], frames(11), th, &[], None).unwrap();
+    assert_eq!((hit.kind, hit.t), (SnapTargetKind::ClipStart, frames(10)));
+    // o clip excluído deixa de ser alvo (sobra o início da sequence, fora do limiar)
+    assert!(resolve_point_snap(seq, &["a".into()], frames(11), th, &[], None).is_none());
+    // empate de distância: playhead vence marcador e borda
+    let hit = resolve_point_snap(
+        seq,
+        &[],
+        frames(29),
+        Ticks(FRAME * 5),
+        &[],
+        Some(frames(28)),
+    )
+    .unwrap();
+    assert_eq!(hit.kind, SnapTargetKind::Playhead);
+    // marcador vence borda quando equidistantes
+    let hit = resolve_point_snap(seq, &[], frames(25), Ticks(FRAME * 6), &[], None).unwrap();
+    // fim do clip (20F) e marcador (30F) a 5F: o marcador tem prioridade maior
+    assert_eq!((hit.kind, hit.t), (SnapTargetKind::Marker, frames(30)));
+}

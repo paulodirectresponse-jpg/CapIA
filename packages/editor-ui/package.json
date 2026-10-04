@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "UI do editor (React). Cliente do engine: depende só da interface EngineClient, nunca de Tauri.",
+  "description": "UI do editor (React). Cliente do engine: depende s\u00f3 da interface EngineClient, nunca de Tauri.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -14,7 +14,8 @@
   "dependencies": {
     "@capia/engine-bindings": "workspace:*",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "@capia/ui-kit": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",
@@ -23,6 +24,7 @@
     "@types/react-dom": "^19.3.0",
     "jsdom": "^30.1.1",
     "typescript": "catalog:",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "@testing-library/user-event": "^14.6.1"
   }
 }

@@ -185,6 +185,28 @@ pub fn resolve_snap(seq: &Sequence, req: &SnapRequest<'_>) -> Result<SnapResult>
     })
 }
 
+/// Snap de um **ponto** (borda em trim, playhead em scrub, marcador): o alvo mais próximo dentro do
+/// `threshold`, com a mesma prioridade do snap de clips (`playhead > marcador > borda > menor t`).
+/// Clips em `exclude` não são alvos (o clip arrastado). Sem alvo no limiar, devolve `None`.
+pub fn resolve_point_snap(
+    seq: &Sequence,
+    exclude: &[ClipId],
+    t: Ticks,
+    threshold: Ticks,
+    markers: &[Ticks],
+    playhead: Option<Ticks>,
+) -> Option<SnapTarget> {
+    let targets = collect_targets(seq, &|id| exclude.contains(id), markers, playhead);
+    targets
+        .into_iter()
+        .filter_map(|target| {
+            let d = (i128::from(t.0) - i128::from(target.t.0)).abs();
+            (d <= i128::from(threshold.0)).then(|| (rank(d, target), target))
+        })
+        .min_by_key(|(key, _)| *key)
+        .map(|(_, target)| target)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]

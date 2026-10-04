@@ -107,6 +107,12 @@ pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<Comman
         ),
         Command::UpdateDeliverable { deliverable } => editor::update_deliverable(ctx, deliverable),
         Command::DeleteDeliverable { deliverable } => editor::delete_deliverable(ctx, deliverable),
+        Command::ReorderClip {
+            clip,
+            track,
+            before,
+            start,
+        } => clips::reorder_clip(ctx, clip, track.as_ref(), before.as_ref(), *start),
         Command::RenameClip { clip, name } => editor::rename_clip(ctx, clip, name),
         Command::SetClipEnabled { clip, enabled } => editor::set_clip_enabled(ctx, clip, *enabled),
         Command::SetText { clip, text, style } => {

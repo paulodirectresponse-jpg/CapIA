@@ -432,6 +432,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-timeline-wasm"
+version = "0.0.0"
+dependencies = [
+ "capia-commands",
+ "capia-model",
+ "capia-time",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

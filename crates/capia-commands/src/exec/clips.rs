@@ -401,6 +401,102 @@ pub(crate) fn set_clip_speed(
 // move_clips (estrito)
 // ---------------------------------------------------------------------------------------------
 
+/// Reorder de/para track magnética (ver `Command::ReorderClip`).
+pub(crate) fn reorder_clip(
+    ctx: &mut Ctx,
+    clip_id: &ClipId,
+    dest_track: Option<&TrackId>,
+    before: Option<&ClipId>,
+    start: Option<Ticks>,
+) -> Result<CommandOutput> {
+    let (seq_id, clip, src) = ctx.locate_clip(clip_id)?;
+    let dest_id = dest_track.cloned().unwrap_or_else(|| src.id.clone());
+    let (dest_seq, dest) = ctx.locate_track(&dest_id)?;
+    if dest_seq != seq_id {
+        return Err(
+            CommandError::invalid("clips can only move within their sequence")
+                .with_entities([clip_ref(clip_id)]),
+        );
+    }
+    track_locked(&src)?;
+    track_locked(&dest)?;
+    if !src.magnetic && !dest.magnetic {
+        return Err(CommandError::invalid(
+            "reorder_clip is for magnetic tracks; use move_clips between free tracks",
+        )
+        .with_entities([clip_ref(clip_id)]));
+    }
+    if before == Some(clip_id) {
+        return Err(
+            CommandError::invalid("a clip cannot be placed before itself")
+                .with_entities([clip_ref(clip_id)]),
+        );
+    }
+    // 1) retira da origem (fechando o gap se for magnética)
+    ctx.remove_clip_op(&seq_id, clip.clone())?;
+    if src.magnetic {
+        ripple_shift(
+            ctx,
+            &seq_id,
+            &src,
+            Some(clip_id),
+            clip.end(),
+            Ticks(-clip.duration.0),
+            &RippleScope::Track,
+        )?;
+    }
+    // 2) destino
+    let mut new = clip.clone();
+    new.track = dest.id.clone();
+    if dest.magnetic {
+        let pos = match before {
+            Some(b) => {
+                let s = ctx.sequence(&seq_id)?;
+                let target = s.clip(b).filter(|c| c.track == dest.id).ok_or_else(|| {
+                    CommandError::invalid(format!(
+                        "clip {b} is not on the destination track {}",
+                        dest.id
+                    ))
+                    .with_entities([clip_ref(b)])
+                })?;
+                target.start
+            }
+            None => ctx.sequence(&seq_id)?.track_end(&dest.id),
+        };
+        ripple_shift(
+            ctx,
+            &seq_id,
+            &dest,
+            None,
+            pos,
+            clip.duration,
+            &RippleScope::Track,
+        )?;
+        new.start = pos;
+    } else {
+        let s = start.ok_or_else(|| {
+            CommandError::invalid("`start` is required to place a clip on a free track")
+        })?;
+        if s < Ticks::ZERO {
+            return Err(
+                CommandError::new(ErrorCode::OutOfRange, "start must be >= 0")
+                    .with_entities([clip_ref(clip_id)]),
+            );
+        }
+        new.start = s;
+        check_no_overlap(
+            ctx.sequence(&seq_id)?,
+            &dest.id,
+            new.start,
+            new.end(),
+            &BTreeSet::new(),
+        )?;
+    }
+    check_clip(&ctx.doc, ctx.sequence(&seq_id)?, &new)?;
+    ctx.insert_clip_op(&seq_id, new)?;
+    Ok(ctx.take_output(None))
+}
+
 pub(crate) fn move_clips(ctx: &mut Ctx, moves: &[ClipMove]) -> Result<CommandOutput> {
     if moves.is_empty() {
         return Err(CommandError::invalid("move_clips needs at least one move"));

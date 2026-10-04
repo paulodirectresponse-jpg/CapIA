@@ -374,6 +374,23 @@ pub enum Command {
         scope: RippleScope,
     },
 
+    /// Reordena/move um clip **de/para uma track magnética** (semântica de reorder): fecha o gap na
+    /// origem (se magnética) e abre espaço no destino, na fronteira antes de `before` (ou no fim da
+    /// track). Para destino não magnético informe `start`. Entre tracks não magnéticas use
+    /// `move_clips`.
+    ReorderClip {
+        clip: ClipId,
+        /// Track de destino (omitido = a do clip).
+        #[serde(default)]
+        track: Option<TrackId>,
+        /// Insere imediatamente antes deste clip (destino magnético); `None` = no fim.
+        #[serde(default)]
+        before: Option<ClipId>,
+        /// Início no destino não magnético.
+        #[serde(default)]
+        start: Option<Ticks>,
+    },
+
     // --- campos de clip do editor ---------------------------------------------------------
     RenameClip {
         clip: ClipId,
@@ -472,6 +489,7 @@ impl Command {
             Self::CreateDeliverable { .. } => "create_deliverable",
             Self::UpdateDeliverable { .. } => "update_deliverable",
             Self::DeleteDeliverable { .. } => "delete_deliverable",
+            Self::ReorderClip { .. } => "reorder_clip",
             Self::RenameClip { .. } => "rename_clip",
             Self::SetClipEnabled { .. } => "set_clip_enabled",
             Self::SetText { .. } => "set_text",

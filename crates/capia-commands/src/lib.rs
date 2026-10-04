@@ -40,5 +40,6 @@ pub use hash::document_digest;
 pub use placement::{InsertSide, Placement, PlacementStrategy, resolve_placement};
 pub use query::eval_property;
 pub use snap::{
-    SnapRequest, SnapResult, SnapTarget, SnapTargetKind, resolve_snap, threshold_ticks,
+    SnapRequest, SnapResult, SnapTarget, SnapTargetKind, resolve_point_snap, resolve_snap,
+    threshold_ticks,
 };

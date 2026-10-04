@@ -16,8 +16,9 @@ use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 
 fn header(name: &str, value: &str) -> Header {
     // nomes/valores são ASCII controlados por nós: falha aqui seria bug de programação
-    Header::from_bytes(name.as_bytes(), value.as_bytes())
-        .unwrap_or_else(|()| Header::from_bytes(&b"X-Error"[..], &b"bad-header"[..]).unwrap_or_else(|()| unreachable!()))
+    Header::from_bytes(name.as_bytes(), value.as_bytes()).unwrap_or_else(|()| {
+        Header::from_bytes(&b"X-Error"[..], &b"bad-header"[..]).unwrap_or_else(|()| unreachable!())
+    })
 }
 
 fn json_response(status: u16, v: &Value) -> Response<std::io::Cursor<Vec<u8>>> {
@@ -65,17 +66,31 @@ fn handle(session: &Mutex<Session>, root: &Path, token: Option<&str>, mut req: R
                 .iter()
                 .any(|h| h.field.equiv("x-capia-token") && h.value.as_str() == t);
             if !ok {
-                let _ = req.respond(json_response(401, &json!({"code":"UNAUTHORIZED","message":"missing or wrong token"})));
+                let _ = req.respond(json_response(
+                    401,
+                    &json!({"code":"UNAUTHORIZED","message":"missing or wrong token"}),
+                ));
                 return;
             }
         }
         if *req.method() != Method::Post {
-            let _ = req.respond(json_response(405, &json!({"code":"METHOD_NOT_ALLOWED","message":"use POST"})));
+            let _ = req.respond(json_response(
+                405,
+                &json!({"code":"METHOD_NOT_ALLOWED","message":"use POST"}),
+            ));
             return;
         }
         let mut body = String::new();
-        if req.as_reader().take(64 << 20).read_to_string(&mut body).is_err() {
-            let _ = req.respond(json_response(400, &json!({"code":"BAD_BODY","message":"unreadable body"})));
+        if req
+            .as_reader()
+            .take(64 << 20)
+            .read_to_string(&mut body)
+            .is_err()
+        {
+            let _ = req.respond(json_response(
+                400,
+                &json!({"code":"BAD_BODY","message":"unreadable body"}),
+            ));
             return;
         }
         let params: Value = if body.trim().is_empty() {
@@ -84,7 +99,10 @@ fn handle(session: &Mutex<Session>, root: &Path, token: Option<&str>, mut req: R
             match serde_json::from_str(&body) {
                 Ok(v) => v,
                 Err(e) => {
-                    let _ = req.respond(json_response(400, &json!({"code":"BAD_JSON","message":e.to_string()})));
+                    let _ = req.respond(json_response(
+                        400,
+                        &json!({"code":"BAD_JSON","message":e.to_string()}),
+                    ));
                     return;
                 }
             }
@@ -92,7 +110,10 @@ fn handle(session: &Mutex<Session>, root: &Path, token: Option<&str>, mut req: R
         let result = match session.lock() {
             Ok(mut s) => s.call(method, params),
             Err(_) => {
-                let _ = req.respond(json_response(500, &json!({"code":"POISONED","message":"session lock poisoned"})));
+                let _ = req.respond(json_response(
+                    500,
+                    &json!({"code":"POISONED","message":"session lock poisoned"}),
+                ));
                 return;
             }
         };
@@ -119,7 +140,9 @@ fn handle(session: &Mutex<Session>, root: &Path, token: Option<&str>, mut req: R
     });
     match file.and_then(|p| std::fs::read(&p).ok().map(|b| (p, b))) {
         Some((p, bytes)) => {
-            let _ = req.respond(Response::from_data(bytes).with_header(header("Content-Type", mime_of(&p))));
+            let _ = req.respond(
+                Response::from_data(bytes).with_header(header("Content-Type", mime_of(&p))),
+            );
         }
         None => {
             let _ = req.respond(Response::from_string("not found").with_status_code(404));
@@ -141,7 +164,9 @@ fn main() {
             }
         }
     }
-    let token = std::env::var("CAPIA_DEVSERVER_TOKEN").ok().filter(|t| !t.is_empty());
+    let token = std::env::var("CAPIA_DEVSERVER_TOKEN")
+        .ok()
+        .filter(|t| !t.is_empty());
     let server = match Server::http(("127.0.0.1", port)) {
         Ok(s) => s,
         Err(e) => {
@@ -149,7 +174,10 @@ fn main() {
             std::process::exit(1);
         }
     };
-    println!("capia-devserver listening on http://127.0.0.1:{port} (static: {})", root.display());
+    println!(
+        "capia-devserver listening on http://127.0.0.1:{port} (static: {})",
+        root.display()
+    );
     let session = Mutex::new(Session::new(SessionConfig::default()));
     for req in server.incoming_requests() {
         handle(&session, &root, token.as_deref(), req);

@@ -58,6 +58,13 @@ const base = () => [
     ["serde_json"],
   ]),
   pkg("capia-devserver", [["capia-editor-api"], ["serde_json"], ["tiny_http"]]),
+  pkg("capia-timeline-wasm", [
+    ["capia-time"],
+    ["capia-model"],
+    ["capia-commands"],
+    ["serde"],
+    ["serde_json"],
+  ]),
   pkg("capia-desktop", [
     ["capia-project"],
     ["capia-editor-api"],
@@ -184,9 +191,16 @@ test("a new crate must be added to the matrix on purpose", () => {
 test("JS: engine-bindings must not know React or Tauri; UI must not know Tauri", () => {
   const ok = [
     { name: "@capia/engine-bindings", dependencies: {} },
+    { name: "@capia/ui-kit", dependencies: { react: "1" } },
+    { name: "@capia/ui-timeline", dependencies: { "@capia/engine-bindings": "workspace:*" } },
     {
       name: "@capia/editor-ui",
-      dependencies: { "@capia/engine-bindings": "workspace:*", react: "1" },
+      dependencies: {
+        "@capia/engine-bindings": "workspace:*",
+        "@capia/ui-kit": "workspace:*",
+        "@capia/ui-timeline": "workspace:*",
+        react: "1",
+      },
     },
     {
       name: "@capia/desktop",
@@ -198,6 +212,6 @@ test("JS: engine-bindings must not know React or Tauri; UI must not know Tauri",
   badBindings[0].dependencies = { react: "1" };
   assert.match(checkJs(badBindings).join("\n"), /engine-bindings não pode depender de react/);
   const badUi = structuredClone(ok);
-  badUi[1].dependencies["@tauri-apps/api"] = "2";
+  badUi[3].dependencies["@tauri-apps/api"] = "2";
   assert.match(checkJs(badUi).join("\n"), /editor-ui não pode depender de @tauri-apps\/api/);
 });

@@ -1074,6 +1074,20 @@ fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()
         | Command::CreateDeliverable { .. }
         | Command::UpdateDeliverable { .. }
         | Command::DeleteDeliverable { .. } => {}
+        Command::ReorderClip {
+            clip,
+            track,
+            before,
+            ..
+        } => {
+            sub(&mut clip.0, refs)?;
+            if let Some(t) = track {
+                sub(&mut t.0, refs)?;
+            }
+            if let Some(b) = before {
+                sub(&mut b.0, refs)?;
+            }
+        }
         Command::RenameClip { clip, .. }
         | Command::SetClipEnabled { clip, .. }
         | Command::SetText { clip, .. }

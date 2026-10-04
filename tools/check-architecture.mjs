@@ -137,6 +137,14 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Funções puras de UX da timeline (snap/grupo/colocação do core) em WASM (ADR-070). Só o núcleo
+  // puro; única crate com `unsafe` (borda FFI mínima, sem herdar os lints do workspace).
+  "capia-timeline-wasm": {
+    workspace: ["capia-time", "capia-model", "capia-commands"],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
+  },
   "capia-desktop": {
     workspace: ["capia-project", "capia-editor-api"],
     normal: ["tauri"],
@@ -153,11 +161,24 @@ export const CORE_CRATES = ["capia-time", "capia-model", "capia-commands", "capi
 /** Matriz JS. `external` = prefixos de dependências de terceiros permitidas além das listadas. */
 export const JS_RULES = {
   "@capia/engine-bindings": { workspace: [], forbidden: [/^react/, /^@tauri-apps\//] },
-  "@capia/editor-ui": { workspace: ["@capia/engine-bindings"], forbidden: [/^@tauri-apps\//] },
+  // Design system: sem lógica de produto nem dependência do engine.
+  "@capia/ui-kit": { workspace: [], forbidden: [/^@tauri-apps\//] },
+  // Timeline em canvas + ponte WASM do core (snap/grupo/colocação): só conhece o contrato do engine.
+  "@capia/ui-timeline": {
+    workspace: ["@capia/engine-bindings"],
+    forbidden: [/^@tauri-apps\//],
+  },
+  "@capia/editor-ui": {
+    workspace: ["@capia/engine-bindings", "@capia/ui-kit", "@capia/ui-timeline"],
+    forbidden: [/^@tauri-apps\//],
+  },
   "@capia/desktop": {
     workspace: ["@capia/editor-ui", "@capia/engine-bindings"],
     forbidden: [],
   },
+  // E2E (Playwright) dos fluxos do editor: dirige a app pelo navegador/WebView, sem importar código
+  // do produto.
+  "@capia/e2e": { workspace: [], forbidden: [] },
 };
 
 export function findCycles(graph) {

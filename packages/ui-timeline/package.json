@@ -1,0 +1,23 @@
+{
+  "name": "@capia/ui-timeline",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Timeline do CapIA: renderer em canvas virtualizado, interação por gestos e ponte WASM com o core (snap/grupo/colocação). Sem DOM por clip.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@capia/engine-bindings": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "jsdom": "^30.1.1",
+    "typescript": "catalog:",
+    "vitest": "^5.0.3"
+  }
+}
