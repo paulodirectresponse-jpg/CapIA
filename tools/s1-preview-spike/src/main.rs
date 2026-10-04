@@ -109,6 +109,10 @@ mod harness {
     static LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
     static T0: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
     static PHASE: Mutex<String> = Mutex::new(String::new());
+    static MODE: Mutex<String> = Mutex::new(String::new());
+    static PHASE_STARTED: Mutex<Option<Instant>> = Mutex::new(None);
+    /// Fases ja concluidas (para o relatorio parcial se uma fase travar de vez).
+    static DONE: Mutex<Vec<Value>> = Mutex::new(Vec::new());
 
     fn open_log(path: &str) {
         T0.get_or_init(Instant::now);
@@ -408,7 +412,8 @@ mod harness {
 
     fn phase<F: FnOnce() -> Result<Value, String>>(name: &str, f: F) -> Value {
         *lock(&PHASE) = name.to_owned();
-        ev("phase_start", json!({ "name": name }));
+        *lock(&PHASE_STARTED) = Some(Instant::now());
+        ev("phase_start", json!({ "name": name, "mode": lock(&MODE).clone() }));
         let start = utc_ms();
         let t0 = Instant::now();
         let outcome = catch_unwind(AssertUnwindSafe(f));
@@ -422,7 +427,10 @@ mod harness {
             json!({ "name": name, "status": status, "seconds": t0.elapsed().as_secs_f64(),
                 "error": body.get("error") }),
         );
-        json!({ "name": name, "status": status, "started_utc_ms": start, "ended_utc_ms": utc_ms(), "seconds": t0.elapsed().as_secs_f64(), "result": body })
+        *lock(&PHASE_STARTED) = None;
+        let done = json!({ "name": name, "status": status, "started_utc_ms": start, "ended_utc_ms": utc_ms(), "seconds": t0.elapsed().as_secs_f64(), "result": body });
+        lock(&DONE).push(json!({ "mode": lock(&MODE).clone(), "phase": done.clone() }));
+        done
     }
 
     // ---------------------------------------------------------------- fases (comuns a P1/P2)
@@ -707,7 +715,10 @@ mod harness {
             if let Some(e) = lock(&engine).as_ref() {
                 e.set_size(r.w as u32, r.h as u32);
             }
-            *lock(&ctx.geo) = lock(&ctx.geo).map(|g| Geometry {
+            // atencao: NAO travar `ctx.geo` duas vezes na mesma expressao (o temporario do lado direito
+            // ainda segura o lock quando o lado esquerdo tenta travar: deadlock garantido).
+            let mut geo = lock(&ctx.geo);
+            *geo = geo.map(|g| Geometry {
                 pat_w: r.w as u32,
                 pat_h: r.h as u32,
                 ..g
@@ -970,6 +981,8 @@ mod harness {
         report["runtime"] = runtime_info(&ctx);
         let mut modes = Map::new();
         for m in &cfg.modes {
+            *lock(&MODE) = m.clone();
+            ev("mode_start", json!({ "mode": m }));
             let r = catch_unwind(AssertUnwindSafe(|| match m.as_str() {
                 "p1" => mode_p1(&ctx, false),
                 "p1_above" => mode_p1(&ctx, true),
@@ -1008,11 +1021,30 @@ mod harness {
                 let (shared, cfg) = (shared_for_setup.clone(), cfg_for_setup.clone());
                 // watchdog: registra se a thread de UI parar de responder (diagnostico de travamentos)
                 if let Some(win) = app.get_webview_window("main") {
+                    let (out_path, steady) = (cfg_for_setup.out.clone(), cfg_for_setup.steady_secs);
                     thread::Builder::new().name("s1-watchdog".into()).spawn(move || {
                         let mut tick = 0u32;
                         loop {
                             thread::sleep(Duration::from_secs(2));
                             tick += 1;
+                            // Fase travada (deadlock/bloqueio): nenhuma fase legitima passa disto. Grava o
+                            // relatorio PARCIAL (fases concluidas + a que travou) e encerra, em vez de
+                            // deixar o usuario esperando ate o timeout do run.ps1.
+                            let limit = Duration::from_secs(steady * 2 + 120);
+                            let hung = lock(&PHASE_STARTED).filter(|t| t.elapsed() > limit);
+                            if let Some(t) = hung {
+                                let phase = lock(&PHASE).clone();
+                                let mode = lock(&MODE).clone();
+                                ev("phase_hung", json!({ "mode": mode, "phase": phase, "seconds": t.elapsed().as_secs() }));
+                                let report = json!({
+                                    "schema": "capia-s1-report/1",
+                                    "fatal": format!("a fase '{phase}' do modo '{mode}' travou (> {} s); relatorio parcial", limit.as_secs()),
+                                    "hung": { "mode": mode, "phase": phase },
+                                    "completed_phases": lock(&DONE).clone(),
+                                });
+                                let _ = std::fs::write(&out_path, serde_json::to_string_pretty(&report).unwrap_or_default());
+                                std::process::exit(3);
+                            }
                             let alive = on_main(&win, "watchdog", Duration::from_millis(1500), || ()).is_ok();
                             if !alive || tick % 5 == 0 {
                                 ev("watchdog", json!({ "ui_thread_alive": alive, "phase": lock(&PHASE).clone() }));

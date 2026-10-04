@@ -246,6 +246,7 @@ foreach ($mode in @("p1", "p1_above", "p2")) {
 }
 $reading = G $Report @("summary", "findings", "harness_validity_and_p1_reading")
 if ($reading) { [void]$md.AppendLine(""); [void]$md.AppendLine("Leitura automatica: $reading") }
+$fatalMd = G $Report @("fatal"); if ($fatalMd) { [void]$md.AppendLine(""); [void]$md.AppendLine("FALHA GRAVE DO HARNESS: $fatalMd") }
 $setupErr = G $Report @("setup_error"); if ($setupErr) { [void]$md.AppendLine(""); [void]$md.AppendLine("ERRO DE SETUP DO HARNESS: $setupErr") }
 [void]$md.AppendLine("")
 [void]$md.AppendLine("Este resumo NAO decide OD-1. A decisao segue a regra de docs/spikes/S1-preview-surface.md ?4, aplicada pelo analista sobre o JSON completo.")
@@ -263,6 +264,8 @@ foreach ($mode in @("p1", "p1_above", "p2")) {
     foreach ($r in @($sm.failure_reasons)) { if ($r) { Write-Host "      - $r" -ForegroundColor $color } }
   } else { Write-Host "  $mode  NAO EXECUTADO" -ForegroundColor Red }
 }
+$fatal = G $Report @("fatal")
+if ($fatal) { Write-Host "  FALHA GRAVE DO HARNESS: $fatal" -ForegroundColor Red; foreach ($cp in @($Report.completed_phases)) { if ($cp) { Write-Host ("      concluida: {0} / {1} -> {2}" -f $cp.mode, $cp.phase.name, $cp.phase.status) -ForegroundColor Yellow } } }
 if ($reading) { Write-Host "  $reading" -ForegroundColor Cyan }
 if ($setupErr) { Write-Host "  ERRO DE SETUP: $setupErr" -ForegroundColor Red }
 Write-Host "----------------------------------------------------" -ForegroundColor Cyan

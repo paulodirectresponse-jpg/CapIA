@@ -48,7 +48,7 @@ jobs:
         run: |
           Get-ChildItem reports -ErrorAction SilentlyContinue | Format-Table Name, Length
           foreach ($f in Get-ChildItem reports -Filter "*.md" -ErrorAction SilentlyContinue) { Get-Content $f.FullName }
-          foreach ($f in Get-ChildItem reports -Filter "*.events.jsonl" -ErrorAction SilentlyContinue) { Write-Host "=== $($f.Name)"; Get-Content $f.FullName -Tail 400 }
+          foreach ($f in Get-ChildItem reports -Filter "*.events.jsonl" -ErrorAction SilentlyContinue) { Write-Host "=== $($f.Name)"; Get-Content $f.FullName | Select-String -NotMatch '"ui_thread_alive":true' | Select-Object -Last 300 }
           foreach ($f in Get-ChildItem reports -Filter "*.log" -ErrorAction SilentlyContinue) { if ($f.Name -notmatch "build") { Write-Host "=== $($f.Name)"; Get-Content $f.FullName -Tail 200 } }
       - uses: actions/upload-artifact@v4
         if: always()
