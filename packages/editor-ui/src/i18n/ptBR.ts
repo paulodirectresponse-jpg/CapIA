@@ -123,6 +123,7 @@ export const ptBR: Record<MessageKey, string> = {
   "media.durationLabel": "Duração",
   "media.addToTimeline": "Adicionar à timeline",
 
+  "timeline.tracksLabel": "Faixas",
   "timeline.label": "Timeline",
   "timeline.empty": "Arraste mídia para cá para começar",
   "timeline.noSequence": "Abra uma sequence para editar",
@@ -195,6 +196,7 @@ export const ptBR: Record<MessageKey, string> = {
   "preview.quality.540": "540p",
   "preview.quality.720": "720p",
   "preview.audio": "Áudio do preview",
+  "preview.metricsLabel": "Métricas do preview",
   "preview.proxy": "Usar proxies",
   "preview.safeAreas": "Áreas seguras",
   "preview.fullscreen": "Tela cheia",

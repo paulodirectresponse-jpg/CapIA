@@ -691,7 +691,11 @@ export function TimelinePanel() {
         />
       </div>
       <div className="ed-tl-body">
-        <div className="ed-tl-headers" aria-label="tracks" style={{ paddingTop: RULER_H }}>
+        <div
+          className="ed-tl-headers"
+          aria-label={t("timeline.tracksLabel")}
+          style={{ paddingTop: RULER_H }}
+        >
           <div style={{ transform: `translateY(${String(-viewport.scrollY)}px)` }}>
             {rows.rows.map((row) => {
               const tr = row.track;

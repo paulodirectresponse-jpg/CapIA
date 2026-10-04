@@ -113,3 +113,53 @@ test("corrupt UI preferences never crash the app and are reported", async ({ edi
   await page.getByTestId("settings-btn").click();
   await expect(page.getByTestId("settings-dialog")).toContainText("reset to defaults");
 });
+
+test("cancelling an export stops it for real and publishes nothing", async ({
+  editor,
+  page,
+  server,
+}) => {
+  await editor.goto();
+  await editor.createProject();
+  const seq = await editor.sequence();
+  const main = seq.tracks.find((t) => t.role === "overlay");
+  if (!main) throw new Error("sem overlay");
+  const frame = 23_520_000;
+  await editor.api("command.execute", {
+    label: "long",
+    commands: [
+      {
+        operation_id: "cancel-long",
+        type: "insert_clip",
+        track: main.id,
+        start: 0,
+        clip: {
+          name: "long",
+          duration: 600 * 30 * frame,
+          content: { type: "solid", color: "#336699" },
+          source_in: 0,
+          speed: "1",
+          reversed: false,
+          properties: {},
+        },
+      },
+    ],
+  });
+  const out = join(server.dir, "cancelled_export");
+  await page.getByTestId("export-btn").click();
+  await page.getByTestId("export-preset").selectOption("intermediate");
+  await page.getByRole("textbox", { name: "Width" }).fill("1280");
+  await page.getByRole("textbox", { name: "Width" }).press("Enter");
+  await page.getByRole("textbox", { name: "Height" }).fill("720");
+  await page.getByRole("textbox", { name: "Height" }).press("Enter");
+  await page.getByTestId("export-path").fill(out);
+  await page.getByTestId("export-start").click();
+  await expect(page.getByTestId("export-run").locator("progress")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("export-cancel").click();
+  await expect(page.getByTestId("export-run")).toContainText("cancelled", {
+    ignoreCase: true,
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("export-cancel")).toHaveCount(0); // lote terminou
+  expect(existsSync(out)).toBe(false);
+});

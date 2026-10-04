@@ -19,6 +19,7 @@ function InlineRename({
   onCommit: (v: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [v, setV] = useState(initial);
   const key = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") onCommit(v);
@@ -28,7 +29,7 @@ function InlineRename({
   return (
     <input
       className="cp-input"
-      aria-label="rename"
+      aria-label={t("common.rename")}
       data-testid="inline-rename"
       autoFocus
       value={v}

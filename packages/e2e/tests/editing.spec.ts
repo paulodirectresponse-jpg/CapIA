@@ -359,3 +359,70 @@ test("playback: play/pause, J/K/L, frame step and playhead follow the audio cloc
   await audio.click();
   await expect(audio).toHaveAttribute("aria-pressed", "false");
 });
+
+test("undo after a long run of UI edits restores the exact original document", async ({
+  editor,
+  page,
+}) => {
+  const { overlay, text } = await setup(editor);
+  await seedSolids(editor, [
+    { track: overlay, start: 0, duration: 3 * SEC, name: "U1" },
+    { track: overlay, start: 4 * SEC, duration: 3 * SEC, name: "U2" },
+    { track: text, start: 0, duration: 2 * SEC, name: "U3" },
+  ]);
+  const clips0 = await editor.clips();
+  const norm = (cs: Awaited<ReturnType<typeof editor.clips>>) =>
+    JSON.stringify(
+      cs
+        .map((c) => ({ ...c, id: undefined }))
+        .sort((a, b) => a.start - b.start || a.name.localeCompare(b.name)),
+    );
+  const original = norm(clips0);
+  const historyBefore = (await editor.api<{ entries: unknown[] }>("history.list")).entries.length;
+
+  const u1 = byName(clips0, "U1");
+  const u2 = byName(clips0, "U2");
+  // 1) split U1 no meio
+  const p1 = await editor.clipPoint(u1.id);
+  await page.mouse.click(p1.x, p1.y);
+  await page.keyboard.press("Escape");
+  const o = await page.evaluate(() => window.__capiaTimeline?.canvasOrigin());
+  const pps = await page.evaluate(() => window.__capiaTimeline?.viewState().pps ?? 80);
+  if (!o) throw new Error("sem canvas");
+  await page.mouse.click(o.x + 1.5 * pps, o.y + 12);
+  await page.mouse.click(p1.x, p1.y);
+  await page.getByTestId("split").click();
+  // 2) mover U2
+  const p2 = await editor.clipPoint(u2.id);
+  await page.mouse.move(p2.x, p2.y);
+  await page.mouse.down();
+  await page.mouse.move(p2.x + 70, p2.y, { steps: 6 });
+  await page.mouse.up();
+  // 3) propriedade + keyframe + texto + transição + grupo + apagar
+  await page.mouse.click(p2.x + 70, p2.y);
+  const inspector = page.getByTestId("inspector");
+  const posX = inspector.getByRole("textbox", { name: "Position X", exact: true });
+  await posX.fill("50");
+  await posX.press("Enter");
+  await page.getByTestId("rail-text").click();
+  await page.getByTestId("text-add-title").click();
+  await page.getByTestId("rail-captions").click();
+  await page.getByTestId("caption-add").click();
+  await page.keyboard.press("Control+a");
+  await page.getByTestId("group").click();
+  await page.getByTestId("ungroup").click();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Delete");
+
+  const changed = norm(await editor.clips());
+  expect(changed).not.toBe(original);
+  const count =
+    (await editor.api<{ entries: unknown[] }>("history.list")).entries.length - historyBefore;
+  expect(count).toBeGreaterThan(5);
+  for (let i = 0; i < count; i++) await page.getByTestId("undo").click();
+  await expect.poll(async () => norm(await editor.clips())).toBe(original);
+  // e refazer tudo volta ao estado editado
+  for (let i = 0; i < count; i++) await page.getByTestId("redo").click();
+  await expect.poll(async () => norm(await editor.clips())).toBe(changed);
+});

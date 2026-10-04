@@ -227,6 +227,8 @@ export function PreviewPanel() {
           <canvas
             ref={canvasRef}
             data-testid="preview-canvas"
+            role="img"
+            aria-label={t("preview.label")}
             data-mode={metrics.mode}
             data-presented={metrics.presented}
             data-transport={c.frames.kind}
@@ -330,7 +332,11 @@ export function PreviewPanel() {
           {formatTimecode(playhead, summary?.frame_rate ?? "30")}
         </span>
         <div className="ed-spacer" />
-        <span className="ed-metrics" data-testid="preview-metrics" aria-label="preview metrics">
+        <span
+          className="ed-metrics"
+          data-testid="preview-metrics"
+          aria-label={t("preview.metricsLabel")}
+        >
           {metrics.fps} fps · {t("preview.latency", { ms: Math.round(metrics.lastLatencyMs) })} ·{" "}
           {t("preview.dropped", { count: metrics.dropped })} · {size.width}×{size.height} ·{" "}
           {metrics.mode}

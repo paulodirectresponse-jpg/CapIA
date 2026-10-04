@@ -121,6 +121,7 @@ export const en = {
   "media.durationLabel": "Duration",
   "media.addToTimeline": "Add to timeline",
 
+  "timeline.tracksLabel": "Tracks",
   "timeline.label": "Timeline",
   "timeline.empty": "Drag media here to start",
   "timeline.noSequence": "Open a sequence to edit",
@@ -193,6 +194,7 @@ export const en = {
   "preview.quality.540": "540p",
   "preview.quality.720": "720p",
   "preview.audio": "Preview audio",
+  "preview.metricsLabel": "Preview metrics",
   "preview.proxy": "Use proxies",
   "preview.safeAreas": "Safe areas",
   "preview.fullscreen": "Fullscreen",
