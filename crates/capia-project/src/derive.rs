@@ -287,12 +287,29 @@ pub(crate) fn ensure_audio_index(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<Produced, AssetError> {
     let a = audio_of(rec)?;
-    let tb = a.time_base.ok_or_else(|| {
-        AssetError::new(
-            AssetErrorCode::Media(capia_media::MediaErrorCode::MediaMetadataInvalid),
-            "the audio stream has no time base",
-        )
-    })?;
+    // registros importados antes do índice de áudio não têm o *time base* do stream: relê do arquivo
+    let tb = match a.time_base {
+        Some(tb) => tb,
+        None => {
+            use capia_media::{FfprobeBackend, MediaProbe};
+            let fresh = FfprobeBackend::new(env.toolchain.clone())
+                .probe(file)
+                .map_err(media_err)?;
+            fresh
+                .streams
+                .iter()
+                .find_map(|s| match s {
+                    capia_media::StreamInfo::Audio(x) if x.index == a.index => x.time_base,
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    AssetError::new(
+                        AssetErrorCode::Media(capia_media::MediaErrorCode::MediaMetadataInvalid),
+                        "the audio stream has no time base",
+                    )
+                })?
+        }
+    };
     let key = audio_index_key(env, rec, a.index)?;
     if let Some(path) = env
         .cache

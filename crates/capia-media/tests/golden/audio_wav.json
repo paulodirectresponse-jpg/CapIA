@@ -16,6 +16,7 @@
       "duration": 705600000,
       "index": 0,
       "sample_rate": 48000,
+      "time_base": "1/48000",
       "type": "audio"
     }
   ]

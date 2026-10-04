@@ -40,6 +40,7 @@
       "duration": 705600000,
       "index": 1,
       "sample_rate": 48000,
+      "time_base": "1/48000",
       "type": "audio"
     },
     {
@@ -48,6 +49,7 @@
       "duration": 705600000,
       "index": 2,
       "sample_rate": 44100,
+      "time_base": "1/44100",
       "type": "audio"
     }
   ]
