@@ -8,6 +8,36 @@ use capia_project::{AssetView, Project};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+/// Linha de asset para a UI (biblioteca): documento ∪ catálogo, já achatada.
+pub(crate) fn asset_rows(assets: &[AssetView]) -> Value {
+    let rows: Vec<Value> = assets
+        .iter()
+        .map(|a| {
+            let video = a.catalog.as_ref().and_then(|c| c.media.video());
+            let status = a.catalog.as_ref().map_or("online", |c| c.status.as_str());
+            json!({
+                "id": a.asset_id,
+                "in_document": a.in_document,
+                "name": a.catalog.as_ref().map(|c| c.display_name.clone())
+                    .or_else(|| a.document.as_ref().map(|d| d.name.clone()))
+                    .unwrap_or_default(),
+                "kind": a.catalog.as_ref().map(|c| c.kind.as_str()),
+                "duration": a.document.as_ref().and_then(|d| d.duration)
+                    .or_else(|| a.catalog.as_ref().and_then(|c| c.media.duration)),
+                "has_video": a.document.as_ref().map(|d| d.has_video),
+                "has_audio": a.document.as_ref().map(|d| d.has_audio),
+                "width": video.map(|v| v.width),
+                "height": video.map(|v| v.height),
+                "size_bytes": a.catalog.as_ref().map(|c| c.size_bytes),
+                "status": status,
+                "path": a.resolved_path.clone().or_else(|| a.catalog.as_ref().map(|c| c.location.path.clone())),
+                "has_file": a.catalog.is_some(),
+            })
+        })
+        .collect();
+    Value::Array(rows)
+}
+
 fn sequence_summary(
     doc: &Document,
     id: &SequenceId,
@@ -24,6 +54,7 @@ fn sequence_summary(
         "width": seq.header.width,
         "height": seq.header.height,
         "folder": seq.header.folder,
+        "frame_ticks": seq.frame_rate().frame_duration(),
         "duration": seq.duration(),
         "clip_count": seq.clip_count(),
         "nested_usage": usage.get(id).copied().unwrap_or(0),
@@ -75,16 +106,16 @@ pub(crate) fn snapshot(project: &Project, assets: &[AssetView]) -> Value {
     v["sequences"] = Value::Array(sequences);
     v["folders"] = Value::Array(folders);
     v["deliverables"] = Value::Array(deliverables);
-    v["assets"] = serde_json::to_value(assets).unwrap_or(Value::Null);
+    v["assets"] = asset_rows(assets);
     v
 }
 
 /// Conteúdo de uma sequence (tracks, clips, marcadores) — formato do `Serialize` do modelo.
 pub(crate) fn sequence_model(project: &Project, id: &SequenceId) -> Option<Value> {
-    project
-        .document()
-        .sequence(id)
-        .and_then(|s| serde_json::to_value(s).ok())
+    let seq = project.document().sequence(id)?;
+    let mut v = serde_json::to_value(seq).ok()?;
+    v["frame_ticks"] = json!(seq.frame_rate().frame_duration());
+    Some(v)
 }
 
 fn entry_ops(e: &HistoryEntry, inverse: bool) -> Vec<Value> {

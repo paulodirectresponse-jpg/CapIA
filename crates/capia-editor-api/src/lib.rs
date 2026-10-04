@@ -315,7 +315,7 @@ impl Session {
             "history.list" => Ok(Reply::Json(model::history(&self.open_ref()?.project))),
             "assets.list" => {
                 let o = self.open_ref()?;
-                Ok(Reply::Json(serde_json::to_value(o.project.assets()?)?))
+                Ok(Reply::Json(model::asset_rows(&o.project.assets()?)))
             }
             "assets.import" => {
                 let ImportParams { paths } = params(p)?;
@@ -535,7 +535,7 @@ impl Session {
                     if let Ok(assets) = o.project.assets() {
                         Self::push_event(
                             &self.events,
-                            json!({ "kind": "assets_changed", "assets": serde_json::to_value(assets)? }),
+                            json!({ "kind": "assets_changed", "assets": model::asset_rows(&assets) }),
                         );
                     }
                 }

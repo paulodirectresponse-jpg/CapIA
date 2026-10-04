@@ -79,3 +79,5 @@ export function createEngineClient(transport: EngineTransport): EngineClient {
     },
   };
 }
+export * from "./editor";
+export * from "./readmodel";
