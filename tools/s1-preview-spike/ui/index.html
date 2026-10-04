@@ -122,9 +122,17 @@
       $('box').addEventListener('click', () => invoke('s1_event', { kind: 'click_box', detail: {} }));
       window.addEventListener('keydown', (ev) => invoke('s1_event', { kind: 'keydown', detail: { key: ev.key } }));
       let moves = 0; window.addEventListener('mousemove', () => { moves++; if (moves % 20 === 1) invoke('s1_event', { kind: 'mousemove', detail: { n: moves } }); });
-      new ResizeObserver(() => report()).observe(document.documentElement);
-      window.addEventListener('load', () => { $('info').textContent = 'CapIA S1 spike — não feche: o teste é automático.'; report(); });
-      window.addEventListener('resize', () => report());
+      // Falhas do IPC nao podem ser silenciosas: vao para o console E para o harness.
+      const safeReport = () => report().catch((e) => console.error('s1_layout falhou', e));
+      window.addEventListener('error', (e) => invoke('s1_event', { kind: 'page_error', detail: { msg: String(e.message) } }).catch(() => {}));
+      window.addEventListener('unhandledrejection', (e) => invoke('s1_event', { kind: 'page_unhandled_rejection', detail: { msg: String(e.reason) } }).catch(() => {}));
+      // Batimento e layout periodicos (setInterval, nao rAF: rAF e suspenso em janela oculta/ocluida).
+      // O harness tambem pede layout por eval, mas assim nunca depende so do eval.
+      setInterval(() => invoke('s1_event', { kind: 'heartbeat', detail: {} }).catch(() => {}), 500);
+      setInterval(safeReport, 1000);
+      new ResizeObserver(() => safeReport()).observe(document.documentElement);
+      window.addEventListener('load', () => { $('info').textContent = 'CapIA S1 spike - nao feche: o teste e automatico.'; safeReport(); });
+      window.addEventListener('resize', () => safeReport());
     </script>
   </body>
 </html>

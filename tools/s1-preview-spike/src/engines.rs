@@ -276,6 +276,7 @@ fn p2_loop(
         Vec<f64>,
     ) = (vec![], vec![], vec![], vec![]);
     let (mut produced, mut late, mut frame_no) = (0u64, 0u64, 1u32);
+    let mut readback_timeouts = 0u32;
     let begin = Instant::now();
     let mut next = begin;
     while !stop.load(Ordering::Relaxed) {
@@ -318,8 +319,26 @@ fn p2_loop(
         gpu.queue.submit([enc.finish()]);
         let f1 = Instant::now();
         let slice = readback.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
-        let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+        let mapped = Arc::new(AtomicBool::new(false));
+        let mapped2 = mapped.clone();
+        slice.map_async(wgpu::MapMode::Read, move |r| {
+            if r.is_ok() {
+                mapped2.store(true, Ordering::Release);
+            }
+        });
+        // espera limitada: um device perdido/travado nao pode pendurar o harness inteiro
+        let _ = gpu.device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: Some(Duration::from_secs(5)),
+        });
+        if !mapped.load(Ordering::Acquire) {
+            readback_timeouts += 1;
+            if readback_timeouts >= 1 {
+                return json!({ "error": "readback GPU->CPU nao completou (timeout de 5 s): device travado/perdido?",
+                    "frames_produced": produced, "readback_timeouts": readback_timeouts });
+            }
+            continue;
+        }
         let f2 = Instant::now();
         {
             let data = slice.get_mapped_range();
@@ -361,7 +380,7 @@ fn p2_loop(
     json!({
         "engine": "p2_offscreen_readback_sharedbuffer", "resolution": [w, h], "target_fps": fps,
         "frames_produced": produced, "seconds": secs, "avg_fps": produced as f64 / secs.max(1e-9),
-        "frames_that_missed_their_slot": late,
+        "frames_that_missed_their_slot": late, "readback_timeouts": readback_timeouts,
         "render_and_submit_ms": percentiles(&mut render_ms),
         "gpu_to_cpu_readback_wait_ms": percentiles(&mut readback_ms),
         "memcpy_into_sharedbuffer_ms": percentiles(&mut copy_ms),

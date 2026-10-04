@@ -25,10 +25,11 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_LEFTUP, MOUSEINPUT, SendInput, VIRTUAL_KEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, GetClientRect, HWND_BOTTOM, HWND_TOP, RegisterClassExW,
-    SWP_NOACTIVATE, SWP_SHOWWINDOW, SetCursorPos, SetForegroundWindow, SetWindowPos,
-    WM_LBUTTONDOWN, WM_MOUSEMOVE, WNDCLASSEXW, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-    WS_VISIBLE,
+    CreateWindowExW, DefWindowProcW, EnumChildWindows, GWL_EXSTYLE, GWL_STYLE, GetClassNameW,
+    GetClientRect, GetWindowLongPtrW, GetWindowRect, HWND_BOTTOM, HWND_TOP, IsWindowVisible,
+    RegisterClassExW, SWP_NOACTIVATE, SWP_SHOWWINDOW, SetCursorPos, SetForegroundWindow,
+    SetWindowPos, WM_LBUTTONDOWN, WM_MOUSEMOVE, WNDCLASSEXW, WS_CHILD, WS_CLIPCHILDREN,
+    WS_CLIPSIBLINGS, WS_VISIBLE,
 };
 use windows::core::{PCWSTR, w};
 
@@ -370,4 +371,43 @@ pub fn key_press(vk: u16) -> u32 {
             std::mem::size_of::<INPUT>() as i32,
         )
     }
+}
+
+/// Descreve uma janela (classe, estilos, retangulo na tela, visibilidade) para o relatorio.
+pub fn window_info(hwnd: HWND) -> serde_json::Value {
+    unsafe {
+        let mut name = [0u16; 128];
+        let n = GetClassNameW(hwnd, &mut name);
+        let class = String::from_utf16_lossy(&name[..n.max(0) as usize]);
+        let mut r = RECT::default();
+        let rect_ok = GetWindowRect(hwnd, &mut r).is_ok();
+        serde_json::json!({
+            "hwnd": hwnd.0 as isize,
+            "class": class,
+            "style": format!("{:#010x}", GetWindowLongPtrW(hwnd, GWL_STYLE) as u32),
+            "ex_style": format!("{:#010x}", GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32),
+            "visible": IsWindowVisible(hwnd).as_bool(),
+            "screen_rect": if rect_ok { serde_json::json!([r.left, r.top, r.right - r.left, r.bottom - r.top]) } else { serde_json::Value::Null },
+        })
+    }
+}
+
+unsafe extern "system" fn collect_child(hwnd: HWND, lp: LPARAM) -> windows::core::BOOL {
+    // SAFETY: `lp` aponta para o Vec vivo em `window_tree` durante a enumeracao.
+    let out = unsafe { &mut *(lp.0 as *mut Vec<serde_json::Value>) };
+    out.push(window_info(hwnd));
+    true.into()
+}
+
+/// Janela principal + todos os descendentes (a ordem de enumeracao e a ordem Z, de cima para baixo).
+pub fn window_tree(hwnd: HWND) -> Vec<serde_json::Value> {
+    let mut out = vec![window_info(hwnd)];
+    unsafe {
+        let _ = EnumChildWindows(
+            Some(hwnd),
+            Some(collect_child),
+            LPARAM(&mut out as *mut Vec<serde_json::Value> as isize),
+        );
+    }
+    out
 }

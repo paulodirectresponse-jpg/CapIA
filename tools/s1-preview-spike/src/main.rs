@@ -62,6 +62,7 @@ mod harness {
         p2_res: (u32, u32),
         label: String,
         skip_input: bool,
+        events: String,
     }
 
     fn parse_args() -> Cfg {
@@ -72,6 +73,7 @@ mod harness {
             p2_res: (960, 540),
             label: String::new(),
             skip_input: false,
+            events: String::new(),
         };
         let args: Vec<String> = std::env::args().collect();
         let mut i = 1;
@@ -82,6 +84,7 @@ mod harness {
                 "--modes" => cfg.modes = val.split(',').map(str::to_owned).collect(),
                 "--steady-secs" => cfg.steady_secs = val.parse().unwrap_or(10),
                 "--label" => cfg.label = val,
+                "--events" => cfg.events = val,
                 "--p2-res" => {
                     if let Some((w, h)) = val.split_once('x') {
                         cfg.p2_res = (w.parse().unwrap_or(960), h.parse().unwrap_or(540));
@@ -95,7 +98,60 @@ mod harness {
             }
             i += 2;
         }
+        if cfg.events.is_empty() {
+            cfg.events = format!("{}.events.jsonl", cfg.out.trim_end_matches(".json"));
+        }
         cfg
+    }
+
+    // ------------------------------------------------------------ log estruturado (JSON Lines)
+
+    static LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
+    static T0: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    static PHASE: Mutex<String> = Mutex::new(String::new());
+
+    fn open_log(path: &str) {
+        T0.get_or_init(Instant::now);
+        *lock(&LOG) = std::fs::File::create(path).ok();
+    }
+
+    /// Um evento por linha: `{t_ms, thread, kind, detail}`. Vai para o arquivo e para o stderr.
+    fn ev(kind: &str, detail: Value) {
+        use std::io::Write;
+        let t = T0.get_or_init(Instant::now).elapsed().as_millis() as u64;
+        let line = json!({
+            "t_ms": t, "utc_ms": utc_ms(), "thread": thread::current().name().unwrap_or("?"),
+            "kind": kind, "detail": detail,
+        })
+        .to_string();
+        eprintln!("[s1] {line}");
+        if let Some(f) = lock(&LOG).as_mut() {
+            let _ = writeln!(f, "{line}");
+            let _ = f.flush();
+        }
+    }
+
+    /// Executa `f` NA THREAD PRINCIPAL (a que bombeia as mensagens do Windows) e espera o resultado.
+    /// Janelas Win32 pertencem a thread que as criou: o HWND filho e as chamadas sobre ele precisam
+    /// viver na thread de UI, senao a UI do app trava esperando uma thread que nao bombeia mensagens.
+    fn on_main<T: Send + 'static>(
+        window: &WebviewWindow,
+        what: &str,
+        timeout: Duration,
+        f: impl FnOnce() -> T + Send + 'static,
+    ) -> Result<T, String> {
+        let (tx, rx) = mpsc::channel();
+        window
+            .run_on_main_thread(move || {
+                let _ = tx.send(f());
+            })
+            .map_err(|e| format!("{what}: run_on_main_thread: {e}"))?;
+        rx.recv_timeout(timeout).map_err(|_| {
+            format!(
+                "{what}: a thread de UI nao respondeu em {} ms (UI travada?)",
+                timeout.as_millis()
+            )
+        })
     }
 
     /// Layout reportado pela página (px CSS) convertido em físico no uso.
@@ -115,6 +171,7 @@ mod harness {
         cv: Condvar,
         events: Mutex<Map<String, Value>>,
         page_stats: Mutex<Option<Value>>,
+        last_layout: Mutex<Option<Instant>>,
     }
 
     impl Shared {
@@ -157,6 +214,7 @@ mod harness {
             toolbar_btn_css: rect4(&payload, "toolbar_btn"),
             raw: payload,
         };
+        *lock(&state.last_layout) = Some(Instant::now());
         *lock(&state.seq) += 1;
         state.cv.notify_all();
     }
@@ -237,14 +295,17 @@ mod harness {
                 let _ = tx.send(result);
             })
             .map_err(|e| format!("with_webview: {e}"))?;
-        rx.recv_timeout(Duration::from_secs(10))
-            .map_err(|e| format!("timeout criando SharedBuffer: {e}"))?
+        rx.recv_timeout(Duration::from_secs(30)).map_err(|e| {
+            format!(
+                "timeout (30 s) criando SharedBuffer: a closure de with_webview nao rodou na thread de UI ({e})"
+            )
+        })?
     }
 
     struct Ctx {
         app_window: WebviewWindow,
         hwnd: HWND,
-        child: HWND,
+        child: isize,
         shared: Arc<Shared>,
         gpu: Arc<Gpu>,
         pattern: Arc<Mutex<Pattern>>,
@@ -257,16 +318,57 @@ mod harness {
 
     impl Ctx {
         fn js(&self, code: &str) {
-            let _ = self.app_window.eval(code);
+            if let Err(e) = self.app_window.eval(code) {
+                ev("eval_error", json!({ "code": code, "error": e.to_string() }));
+            }
         }
 
-        /// Pede novo layout à página e espera a resposta.
+        /// SetWindowPos no filho nativo, SEMPRE na thread de UI (dona do HWND).
+        fn place(&self, r: Rect, above: bool) -> Result<(), String> {
+            let child = self.child;
+            on_main(
+                &self.app_window,
+                "SetWindowPos(filho)",
+                Duration::from_secs(5),
+                move || win::place_child(HWND(child as *mut _), r, above),
+            )?
+        }
+
+        /// A thread de UI esta bombeando mensagens? (ida e volta pela fila da thread principal)
+        fn ui_alive(&self, timeout: Duration) -> bool {
+            on_main(&self.app_window, "ping", timeout, || ()).is_ok()
+        }
+
+        /// Pede novo layout a pagina e espera a resposta: ate 3 tentativas, com diagnostico
+        /// estruturado (UI viva? batimentos da pagina? idade do ultimo layout?) se todas falharem.
         fn refresh_layout(&self) -> Result<Layout, String> {
-            let s0 = self.shared.seq();
-            self.js("window.s1.report()");
-            self.shared
-                .wait_layout_after(s0, Duration::from_millis(2500))
-                .ok_or_else(|| "página não respondeu ao layout".into())
+            for attempt in 1..=3 {
+                let s0 = self.shared.seq();
+                self.js("window.s1.report()");
+                if let Some(l) = self
+                    .shared
+                    .wait_layout_after(s0, Duration::from_millis(4000))
+                {
+                    return Ok(l);
+                }
+                ev(
+                    "layout_retry",
+                    json!({ "attempt": attempt, "seq": self.shared.seq(),
+                        "heartbeats": self.shared.count("heartbeat"),
+                        "ui_thread_alive": self.ui_alive(Duration::from_millis(1500)) }),
+                );
+            }
+            let age = lock(&self.shared.last_layout).map(|t| t.elapsed().as_millis() as u64);
+            let diag = json!({
+                "seq": self.shared.seq(), "ms_since_last_layout": age,
+                "page_heartbeats": self.shared.count("heartbeat"),
+                "ui_thread_alive": self.ui_alive(Duration::from_millis(2000)),
+                "phase": lock(&PHASE).clone(),
+            });
+            ev("layout_failed", diag.clone());
+            Err(format!(
+                "a pagina nao respondeu ao layout apos 3 tentativas de 4 s (diagnostico: {diag})"
+            ))
         }
 
         fn stage_phys(&self, l: &Layout) -> Rect {
@@ -305,7 +407,8 @@ mod harness {
     }
 
     fn phase<F: FnOnce() -> Result<Value, String>>(name: &str, f: F) -> Value {
-        eprintln!("[s1] fase {name} …");
+        *lock(&PHASE) = name.to_owned();
+        ev("phase_start", json!({ "name": name }));
         let start = utc_ms();
         let t0 = Instant::now();
         let outcome = catch_unwind(AssertUnwindSafe(f));
@@ -314,6 +417,11 @@ mod harness {
             Ok(Err(e)) => ("error", json!({ "error": e })),
             Err(_) => ("panic", json!({ "error": "panic na fase" })),
         };
+        ev(
+            "phase_end",
+            json!({ "name": name, "status": status, "seconds": t0.elapsed().as_secs_f64(),
+                "error": body.get("error") }),
+        );
         json!({ "name": name, "status": status, "started_utc_ms": start, "ended_utc_ms": utc_ms(), "seconds": t0.elapsed().as_secs_f64(), "result": body })
     }
 
@@ -334,8 +442,28 @@ mod harness {
         let l2 = ctx.refresh_layout()?;
         let b = ctx.sample_at_fraction(&l2, 0.20, 0.15)?; // zona cinza coberta pelo overlay HTML 50% vermelho
         ctx.js("window.s1.setOverlay(false)");
+        // Diagnostico: grade 3x3 de amostras sobre a caixa do preview + estado do HWND filho.
+        let grid: Vec<Value> = {
+            let r = ctx.stage_phys(&l);
+            let (ox, oy) = ctx.screen_origin()?;
+            let mut v = Vec::new();
+            for gy in [0.1, 0.5, 0.9] {
+                for gx in [0.1, 0.5, 0.9] {
+                    let x = ox + r.x + (f64::from(r.w) * gx) as i32;
+                    let y = oy + r.y + (f64::from(r.h) * gy) as i32;
+                    v.push(json!({ "fx": gx, "fy": gy, "rgb": win::sample_points(&[(x, y)])?[0] }));
+                }
+            }
+            v
+        };
+        let child = ctx.child;
+        let child_info = on_main(&ctx.app_window, "window_info", Duration::from_secs(5), move || {
+            win::window_info(HWND(child as *mut _))
+        })
+        .unwrap_or_else(|e| json!({ "error": e }));
         Ok(json!({
             "mode": mode,
+            "diagnostics": { "grid_3x3_rgb_no_overlay": grid, "native_child_window": child_info, "stage_rect_physical": [ctx.stage_phys(&l).x, ctx.stage_phys(&l).y, ctx.stage_phys(&l).w, ctx.stage_phys(&l).h], "dpr": l.dpr },
             "sample_probe_no_overlay_rgb": a, "expected_gray_rgb": GRAY,
             "native_or_canvas_pattern_visible_at_probe": near(a, GRAY),
             "sample_outside_stage_rgb": outside,
@@ -557,7 +685,7 @@ mod harness {
         let setup = (|| -> Result<(Layout, Rect), String> {
             let l = ctx.refresh_layout()?;
             let r = ctx.stage_phys(&l);
-            win::place_child(ctx.child, r, above)?;
+            ctx.place(r, above)?;
             ctx.set_geometry(&l, (r.w as u32, r.h as u32))?;
             Ok((l, r))
         })();
@@ -573,7 +701,9 @@ mod harness {
             (r0.w as u32, r0.h as u32),
         )));
         let apply = |r: Rect, _hide: bool| {
-            let _ = win::place_child(ctx.child, r, above);
+            if let Err(e) = ctx.place(r, above) {
+                ev("place_error", json!({ "error": e }));
+            }
             if let Some(e) = lock(&engine).as_ref() {
                 e.set_size(r.w as u32, r.h as u32);
             }
@@ -601,8 +731,7 @@ mod harness {
         }
         phases.push(phase("input", || input_phase(ctx, name)));
         let engine_stats = lock(&engine).take().map_or(json!(null), P1Engine::stop);
-        let _ = win::place_child(
-            ctx.child,
+        let _ = ctx.place(
             Rect {
                 x: 0,
                 y: 0,
@@ -637,8 +766,20 @@ mod harness {
             return json!({ "mode": name, "setup_error": e });
         }
         ctx.js(&format!("window.s1.setMode('p2', {w}, {h})"));
-        thread::sleep(Duration::from_millis(1200));
+        // A pagina precisa CONFIRMAR o recebimento do SharedBuffer; sem isso o canvas nunca mostra nada.
+        let hs0 = Instant::now();
+        while ctx.shared.count("p2_buffer_received") == 0 && hs0.elapsed() < Duration::from_secs(10)
+        {
+            thread::sleep(Duration::from_millis(50));
+        }
         let got = ctx.shared.count("p2_buffer_received");
+        ev("p2_handshake", json!({ "received": got, "waited_ms": hs0.elapsed().as_millis() as u64 }));
+        if got == 0 {
+            return json!({ "mode": name, "setup_error":
+                "o SharedBuffer foi criado e postado, mas a pagina nao recebeu o evento 'sharedbufferreceived' em 10 s",
+                "page_heartbeats": ctx.shared.count("heartbeat") });
+        }
+        thread::sleep(Duration::from_millis(600));
         let Some(mem) = *lock(&ctx.mem) else {
             return json!({ "mode": name, "setup_error": "sem SharedBuffer" });
         };
@@ -692,8 +833,77 @@ mod harness {
             "window": { "scale_factor": ctx.app_window.scale_factor().ok(), "dpi_for_window": win::dpi_for_window(ctx.hwnd),
                 "client_size": win::client_size(ctx.hwnd).ok(), "dwm_refresh_hz": win::dwm_refresh_hz() },
             "monitors": monitors, "page": lock(&ctx.shared.layout).raw.clone(),
+            "window_tree": { "note": "janela principal e descendentes em ordem Z (cima -> baixo); mostra a hierarquia do WebView2 e o filho nativo", "windows": win::window_tree(ctx.hwnd) },
             "logical_cores": thread::available_parallelism().map(std::num::NonZero::get).ok(),
         })
+    }
+
+    /// Resume, por modo e por fase, o que FOI medido e o que falhou (e por que). Nao decide OD-1 e nao
+    /// altera nenhum criterio: so torna explicito o estado de cada medicao.
+    fn summarize(modes: &Map<String, Value>) -> Value {
+        let mut out = Map::new();
+        let mut visible: Map<String, Value> = Map::new();
+        for (key, m) in modes {
+            let mut reasons: Vec<String> = Vec::new();
+            let mut phase_status = Map::new();
+            let (mut ok, mut bad) = (0u32, 0u32);
+            if let Some(e) = m.get("setup_error").and_then(Value::as_str) {
+                reasons.push(format!("setup: {e}"));
+            }
+            if let Some(e) = m.get("error").and_then(Value::as_str) {
+                reasons.push(e.to_owned());
+            }
+            if let Some(phases) = m.get("phases").and_then(Value::as_array) {
+                for ph in phases {
+                    let name = ph.get("name").and_then(Value::as_str).unwrap_or("?");
+                    let st = ph.get("status").and_then(Value::as_str).unwrap_or("ok");
+                    phase_status.insert(name.to_owned(), json!(st));
+                    if st == "ok" {
+                        ok += 1;
+                    } else {
+                        bad += 1;
+                        let why = ph["result"]["error"].as_str().unwrap_or("sem detalhe");
+                        reasons.push(format!("fase {name}: {why}"));
+                    }
+                    if name == "probe_static" && st == "ok" {
+                        visible.insert(
+                            key.clone(),
+                            json!({
+                                "pattern_visible": ph["result"]["native_or_canvas_pattern_visible_at_probe"],
+                                "html_overlay_composited": ph["result"]["html_overlay_composited_over_pattern"],
+                            }),
+                        );
+                    }
+                }
+            }
+            let status = if !reasons.is_empty() && ok == 0 {
+                "FAILED"
+            } else if bad > 0 || !reasons.is_empty() {
+                "PARTIAL"
+            } else {
+                "MEASURED"
+            };
+            out.insert(
+                key.clone(),
+                json!({ "status": status, "phases_ok": ok, "phases_failed": bad, "phases": phase_status, "failure_reasons": reasons }),
+            );
+        }
+        // Validade do harness: o controle (filho NATIVO ACIMA do WebView2) tem que mostrar o padrao.
+        let control = visible.get("p1_above").and_then(|v| v["pattern_visible"].as_bool());
+        let p1 = visible.get("p1").and_then(|v| v["pattern_visible"].as_bool());
+        let reading = match (control, p1) {
+            (Some(false), _) => "HARNESS INVALIDO: ate o controle (HWND nativo ACIMA do WebView2) nao mostrou o padrao; a captura de tela ou o swapchain nao funciona neste ambiente. Os numeros de P1 nao sao interpretaveis.",
+            (Some(true), Some(false)) => "MEDIDO: com o HWND nativo ACIMA o padrao aparece (controle valido) mas ABAIXO do WebView2 transparente nao: o WebView2 transparente nao revela o HWND irmao (airspace) neste hardware/OS.",
+            (Some(true), Some(true)) => "MEDIDO: o padrao aparece tanto acima quanto abaixo do WebView2 transparente.",
+            (None, _) => "controle p1_above nao medido: validade do harness nao confirmada",
+            (_, None) => "p1 nao medido",
+        };
+        out.insert(
+            "findings".into(),
+            json!({ "probe_by_mode": visible, "harness_validity_and_p1_reading": reading,
+                "note": "resumo automatico; a decisao de OD-1 segue a regra de docs/spikes/S1-preview-surface.md §4" }),
+        );
+        Value::Object(out)
     }
 
     fn run_all(app: tauri::AppHandle, shared: Arc<Shared>, cfg: Cfg) -> Value {
@@ -715,18 +925,25 @@ mod harness {
                 return Err("a página não reportou layout em 20 s (WebView2 não iniciou?)".into());
             }
             let hwnd = window.hwnd().map_err(|e| format!("hwnd: {e}"))?;
-            let child = win::create_native_child(hwnd)?;
-            win::place_child(
-                child,
-                Rect {
-                    x: 0,
-                    y: 0,
-                    w: 1,
-                    h: 1,
-                },
-                false,
-            )?;
-            let (gpu, surface) = Gpu::new(child.0 as isize)?;
+            ev("setup", json!({ "step": "create_native_child_on_ui_thread" }));
+            let parent = hwnd.0 as isize;
+            let child = on_main(&window, "criar HWND filho", Duration::from_secs(15), move || {
+                let c = win::create_native_child(HWND(parent as *mut _))?;
+                win::place_child(
+                    c,
+                    Rect {
+                        x: 0,
+                        y: 0,
+                        w: 1,
+                        h: 1,
+                    },
+                    false,
+                )?;
+                Ok::<isize, String>(c.0 as isize)
+            })??;
+            ev("setup", json!({ "step": "gpu_init", "child_hwnd": child }));
+            let (gpu, surface) = Gpu::new(child)?;
+            ev("setup", json!({ "step": "gpu_ready", "adapter": gpu.describe() }));
             let gpu = Arc::new(gpu);
             let pattern = Arc::new(Mutex::new(Pattern::new(&gpu)));
             Ok(Ctx {
@@ -762,6 +979,7 @@ mod harness {
             .unwrap_or_else(|_| json!({ "error": "panic no modo" }));
             modes.insert(m.clone(), r);
         }
+        report["summary"] = summarize(&modes);
         report["modes"] = Value::Object(modes);
         report["ended_utc_ms"] = json!(utc_ms());
         report["unavailable_metrics"] = json!([
@@ -777,6 +995,8 @@ mod harness {
 
     pub fn run() {
         let cfg = parse_args();
+        open_log(&cfg.events);
+        ev("start", json!({ "cfg": format!("{cfg:?}"), "version": env!("CARGO_PKG_VERSION") }));
         let shared = Arc::new(Shared::default());
         let shared_for_setup = shared.clone();
         let cfg_for_setup = cfg.clone();
@@ -786,15 +1006,30 @@ mod harness {
             .setup(move |app| {
                 let handle = app.handle().clone();
                 let (shared, cfg) = (shared_for_setup.clone(), cfg_for_setup.clone());
-                thread::spawn(move || {
+                // watchdog: registra se a thread de UI parar de responder (diagnostico de travamentos)
+                if let Some(win) = app.get_webview_window("main") {
+                    thread::Builder::new().name("s1-watchdog".into()).spawn(move || {
+                        let mut tick = 0u32;
+                        loop {
+                            thread::sleep(Duration::from_secs(2));
+                            tick += 1;
+                            let alive = on_main(&win, "watchdog", Duration::from_millis(1500), || ()).is_ok();
+                            if !alive || tick % 5 == 0 {
+                                ev("watchdog", json!({ "ui_thread_alive": alive, "phase": lock(&PHASE).clone() }));
+                            }
+                        }
+                    }).ok();
+                }
+                thread::Builder::new().name("s1-orchestrator".into()).spawn(move || {
                     let report = catch_unwind(AssertUnwindSafe(|| run_all(handle.clone(), shared, cfg.clone())))
                         .unwrap_or_else(|_| json!({ "schema": "capia-s1-report/1", "fatal": "panic no orquestrador" }));
                     match std::fs::write(&cfg.out, serde_json::to_string_pretty(&report).unwrap_or_default()) {
                         Ok(()) => eprintln!("[s1] RELATORIO {}", cfg.out),
                         Err(e) => eprintln!("[s1] falha ao gravar relatório: {e}"),
                     }
+                    ev("exit", json!({}));
                     handle.exit(0);
-                });
+                }).ok();
                 Ok(())
             })
             .run(tauri::generate_context!())
