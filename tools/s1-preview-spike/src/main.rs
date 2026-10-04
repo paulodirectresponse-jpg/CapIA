@@ -876,6 +876,16 @@ mod harness {
                         let why = ph["result"]["error"].as_str().unwrap_or("sem detalhe");
                         reasons.push(format!("fase {name}: {why}"));
                     }
+                    if name == "steady_latency" && st == "ok" {
+                        let valid = ph["result"]["screen_latency"]["valid_samples"].as_u64().unwrap_or(0);
+                        if valid == 0 {
+                            bad += 1;
+                            reasons.push(format!(
+                                "fase steady_latency: 0 amostras validas (o codigo de frame nao foi lido da tela; capture_errors={}). Em P1 isso e esperado se o padrao nao aparece sob o WebView2 transparente",
+                                ph["result"]["screen_latency"]["capture_errors"]
+                            ));
+                        }
+                    }
                     if name == "probe_static" && st == "ok" {
                         visible.insert(
                             key.clone(),

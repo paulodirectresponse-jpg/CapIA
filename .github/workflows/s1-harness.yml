@@ -50,6 +50,23 @@ jobs:
           foreach ($f in Get-ChildItem reports -Filter "*.md" -ErrorAction SilentlyContinue) { Get-Content $f.FullName }
           foreach ($f in Get-ChildItem reports -Filter "*.events.jsonl" -ErrorAction SilentlyContinue) { Write-Host "=== $($f.Name)"; Get-Content $f.FullName | Select-String -NotMatch '"ui_thread_alive":true' | Select-Object -Last 300 }
           foreach ($f in Get-ChildItem reports -Filter "*.log" -ErrorAction SilentlyContinue) { if ($f.Name -notmatch "build") { Write-Host "=== $($f.Name)"; Get-Content $f.FullName -Tail 200 } }
+      - name: Detalhes do relatorio (latencia, sondas, arvore de janelas)
+        if: always()
+        shell: powershell
+        working-directory: tools/s1-preview-spike
+        run: |
+          foreach ($f in Get-ChildItem reports -Filter "*.harness.json" -ErrorAction SilentlyContinue) {
+            $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
+            Write-Host "=== runtime.window_tree"; $j.runtime.window_tree.windows | ConvertTo-Json -Depth 4 -Compress
+            Write-Host "=== summary"; $j.summary | ConvertTo-Json -Depth 6
+            foreach ($m in $j.modes.PSObject.Properties) {
+              foreach ($ph in @($m.Value.phases)) {
+                if ($ph.name -eq "steady_latency") { Write-Host "=== $($m.Name) steady_latency.screen_latency"; $ph.result.screen_latency | ConvertTo-Json -Depth 5 -Compress }
+                if ($ph.name -eq "probe_static") { Write-Host "=== $($m.Name) probe_static"; $ph.result | ConvertTo-Json -Depth 6 -Compress }
+              }
+              Write-Host "=== $($m.Name) engine_stats"; $m.Value.engine_stats_whole_mode | ConvertTo-Json -Depth 4 -Compress
+            }
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
