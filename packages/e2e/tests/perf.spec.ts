@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { test, expect, MEDIA, ROOT } from "./fixtures";
+import type { Page } from "@playwright/test";
+import { test, expect, ROOT } from "./fixtures";
 
 /**
  * Metas de TIMELINE_UX §6 medidas no navegador contra o engine real, com um projeto de 5.000
@@ -24,7 +25,7 @@ function stat(s: number[]): Stat {
   return { n: a.length, p50: at(0.5), p95: at(0.95), max: a[a.length - 1] ?? 0 };
 }
 
-async function window_commitCount(page: import("@playwright/test").Page): Promise<number> {
+async function window_commitCount(page: Page): Promise<number> {
   return (await page.evaluate(() => window.__capiaPerf?.samples("commit").length)) ?? 0;
 }
 
@@ -123,8 +124,6 @@ test("timeline UX §6 targets with 5k clips", async ({ editor, page, server }) =
   // aproxima antes de arrastar (clips ficam pequenos no fit)
   await page.getByTestId("zoom-in").click({ clickCount: 4 });
   await page.waitForTimeout(300);
-  let dragStat: Stat;
-  let commitStat: Stat;
   // 8 arrastos/drops seguidos do mesmo clip (±amostras para p95 de gesto e de commit)
   for (let round = 0; round < 8; round++) {
     const from = await editor.clipPoint(first.id, 0.5, 0.5).catch(() => null);
@@ -136,8 +135,10 @@ test("timeline UX §6 targets with 5k clips", async ({ editor, page, server }) =
     await page.mouse.up();
     await expect.poll(async () => (await window_commitCount(page)) > round).toBe(true);
   }
-  dragStat = stat(await page.evaluate(() => window.__capiaTimeline?.stats().gestureSamples ?? []));
-  commitStat = stat((await page.evaluate(() => window.__capiaPerf?.samples("commit"))) ?? []);
+  const dragStat = stat(
+    await page.evaluate(() => window.__capiaTimeline?.stats().gestureSamples ?? []),
+  );
+  const commitStat = stat((await page.evaluate(() => window.__capiaPerf?.samples("commit"))) ?? []);
   const commitRpc = stat((await page.evaluate(() => window.__capiaPerf?.samples("rpc"))) ?? []);
   const commitApply = stat((await page.evaluate(() => window.__capiaPerf?.samples("apply"))) ?? []);
 
@@ -242,7 +243,6 @@ test("timeline UX §6 targets with 5k clips", async ({ editor, page, server }) =
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, "phase3-ui-perf.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
-  void MEDIA;
 
   // smoke (CI): só regressões grosseiras; estrito: as metas do documento
   if (STRICT) {
