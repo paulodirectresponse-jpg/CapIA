@@ -21,9 +21,9 @@ mod toolchain;
 mod waveform;
 
 pub use audio_index::{
-    AUDIO_INDEX_MAGIC, AUDIO_INDEX_PRODUCER, AUDIO_INDEX_VERSION, AudioFrameEntry, AudioIndex,
-    MAX_AUDIO_FRAMES, SEEK_MARGIN_FRAMES, SeekPlan, build_audio_index,
-    container_supports_exact_seek, decode_audio_indexed,
+    AUDIO_INDEX_MAGIC, AUDIO_INDEX_PRODUCER, AUDIO_INDEX_VERSION, AudioDecodeStats,
+    AudioFrameEntry, AudioIndex, MAX_AUDIO_FRAMES, SEEK_MARGIN_FRAMES, SeekPlan, build_audio_index,
+    container_supports_exact_seek, decode_audio_indexed, decode_audio_indexed_stats,
 };
 pub use decode::{
     AudioPcm, AudioRequest, DEFAULT_MAX_FRAME_BYTES, DEFAULT_MAX_PCM_BYTES, DecodeLimits,

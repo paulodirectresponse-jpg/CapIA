@@ -352,3 +352,66 @@ fn aac_in_mp4_with_video_and_a_nonzero_start() {
     }
     let _ = std::fs::remove_dir_all(d);
 }
+
+/// Pedir 1 s em t = 300 s custa ~ o mesmo que em t = 0: o ffmpeg decodifica uma janela pequena
+/// (nunca os 300 s anteriores) e o resultado continua EXATO (PCM).
+#[test]
+fn seek_cost_does_not_scale_with_the_start() {
+    let Some(tc) = toolchain() else { return };
+    let d = std::env::temp_dir().join(format!("capia-aseek-scale-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let wav = make(&tc, &d, "long.wav", 44_100, 1, 330, &["-c:a", "pcm_s16le"]);
+    let (ix, ch) = index_of(&tc, &wav);
+    let rate = u64::from(ix.sample_rate());
+    let full = decode_audio(
+        &tc,
+        &wav,
+        &AudioRequest {
+            stream_index: ix.stream_index(),
+            sample_rate: ix.sample_rate(),
+            channels: ch,
+            start: Ticks(0),
+            duration: Ticks(330 * TICKS_PER_SECOND),
+        },
+        DEFAULT_MAX_PCM_BYTES,
+        Duration::from_secs(120),
+        &never,
+    )
+    .unwrap();
+    let mut costs = Vec::new();
+    for t in [0u64, 60, 300] {
+        let start = t * rate;
+        let t0 = std::time::Instant::now();
+        let (pcm, st) = decode_audio_indexed_stats(
+            &tc,
+            &wav,
+            &ix,
+            start,
+            rate,
+            ch,
+            Duration::from_secs(120),
+            &never,
+        )
+        .unwrap();
+        let took = t0.elapsed();
+        assert_eq!(pcm.frames, rate, "t={t}");
+        assert_eq!(
+            pcm.samples,
+            full.samples[start as usize..(start + rate) as usize],
+            "t={t}: exact"
+        );
+        // a janela decodificada é pequena e independe do início
+        assert!(
+            st.decoded_frames <= 8 * rate,
+            "t={t}: decoded {} frames (> 8 s) — the seek did not avoid the O(start) decode",
+            st.decoded_frames
+        );
+        if t > 0 {
+            assert!(st.seeked && !st.fell_back_to_start, "t={t}: {st:?}");
+        }
+        costs.push((t, st.decoded_frames, took));
+    }
+    eprintln!("seek cost (start s, decoded frames, wall): {costs:?}");
+    let _ = std::fs::remove_dir_all(d);
+}

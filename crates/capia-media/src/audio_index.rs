@@ -399,6 +399,43 @@ pub fn decode_audio_indexed(
     timeout: Duration,
     cancel: &dyn Fn() -> bool,
 ) -> Result<AudioPcm, MediaError> {
+    decode_audio_indexed_stats(
+        toolchain,
+        path,
+        index,
+        start_sample,
+        frames,
+        channels,
+        timeout,
+        cancel,
+    )
+    .map(|(pcm, _)| pcm)
+}
+
+/// O que um `decode_audio_indexed` custou (prova de que o seek não escala com o início).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AudioDecodeStats {
+    /// Amostras por canal que o ffmpeg decodificou (e entregou) nesta chamada, somando tentativas.
+    pub decoded_frames: u64,
+    /// A tentativa rápida (salto) foi usada com sucesso.
+    pub seeked: bool,
+    /// O pouso do salto não pôde ser verificado/insuficiente: decodificou do início.
+    pub fell_back_to_start: bool,
+}
+
+/// Como [`decode_audio_indexed`], devolvendo também o custo.
+#[allow(clippy::too_many_arguments)]
+pub fn decode_audio_indexed_stats(
+    toolchain: &MediaToolchain,
+    path: &Path,
+    index: &AudioIndex,
+    start_sample: u64,
+    frames: u64,
+    channels: u32,
+    timeout: Duration,
+    cancel: &dyn Fn() -> bool,
+) -> Result<(AudioPcm, AudioDecodeStats), MediaError> {
+    let mut stats = AudioDecodeStats::default();
     let ffmpeg = toolchain.ffmpeg.as_deref().ok_or_else(|| {
         MediaError::new(MediaErrorCode::MediaBackendNotFound, "ffmpeg was not found")
     })?;
@@ -417,13 +454,16 @@ pub fn decode_audio_indexed(
         ));
     }
     let Some(plan) = index.seek_plan(start_sample) else {
-        return Ok(AudioPcm {
-            sample_rate: index.sample_rate,
-            channels,
-            start_sample,
-            frames: 0,
-            samples: Vec::new(),
-        });
+        return Ok((
+            AudioPcm {
+                sample_rate: index.sample_rate,
+                channels,
+                start_sample,
+                frames: 0,
+                samples: Vec::new(),
+            },
+            stats,
+        ));
     };
     let abs = checked_input_path(path)?;
     let want_end = start_sample.saturating_add(frames);
@@ -442,22 +482,28 @@ pub fn decode_audio_indexed(
             timeout,
             cancel,
         )?;
+        stats.decoded_frames += (first.raw.len() as u64) / frame_bytes;
         if let Some(landing) = first.landing.and_then(|l| index.entry_at_pts_rate(l))
             && landing.sample_start <= start_sample
         {
             let have = (first.raw.len() as u64) / frame_bytes;
             let reached_eof = have < limit;
             if landing.sample_start + have >= want_end || reached_eof {
-                return Ok(slice_pcm(
-                    index,
-                    channels,
-                    &first.raw,
-                    landing.sample_start,
-                    start_sample,
-                    frames,
+                stats.seeked = true;
+                return Ok((
+                    slice_pcm(
+                        index,
+                        channels,
+                        &first.raw,
+                        landing.sample_start,
+                        start_sample,
+                        frames,
+                    ),
+                    stats,
                 ));
             }
         }
+        stats.fell_back_to_start = true;
     }
     let all = decode_pcm_from(
         ffmpeg,
@@ -469,13 +515,10 @@ pub fn decode_audio_indexed(
         timeout,
         cancel,
     )?;
-    Ok(slice_pcm(
-        index,
-        channels,
-        &all.raw,
-        0,
-        start_sample,
-        frames,
+    stats.decoded_frames += (all.raw.len() as u64) / frame_bytes;
+    Ok((
+        slice_pcm(index, channels, &all.raw, 0, start_sample, frames),
+        stats,
     ))
 }
 
