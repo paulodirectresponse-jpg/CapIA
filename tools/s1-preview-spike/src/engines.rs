@@ -406,8 +406,8 @@ fn luma(p: [u8; 3]) -> i32 {
     (i32::from(p[0]) * 299 + i32::from(p[1]) * 587 + i32::from(p[2]) * 114) / 1000
 }
 
-/// Captura a faixa de código da TELA e decodifica o número do frame (None se a faixa não é válida).
-pub fn read_frame_id(s: &mut ScreenSampler, g: &Geometry) -> Result<Option<u16>, String> {
+/// Captura a faixa de codigo da TELA e devolve o luma dos 18 blocos (calibracao + 16 bits + calibracao).
+pub fn read_strip(s: &mut ScreenSampler, g: &Geometry) -> Result<Vec<i32>, String> {
     let sx = f64::from(g.w) / f64::from(g.pat_w);
     let sy = f64::from(g.h) / f64::from(g.pat_h);
     let ch = (f64::from(BLOCK_PX) * sy).ceil() as i32 + 2;
@@ -415,19 +415,30 @@ pub fn read_frame_id(s: &mut ScreenSampler, g: &Geometry) -> Result<Option<u16>,
     let top = g.screen_y + g.h - (f64::from(BLOCK_PX) * sy).ceil() as i32 - 1;
     s.capture(g.screen_x, top, cw, ch)?;
     let cy = ((f64::from(BLOCK_PX) * sy) / 2.0) as i32 + 1;
-    let at = |i: u32| luma(s.pixel(((f64::from(i * BLOCK_PX + BLOCK_PX / 2)) * sx) as i32, cy));
-    let (white, black) = (at(0), at(CODE_BLOCKS - 1));
+    Ok((0..CODE_BLOCKS)
+        .map(|i| luma(s.pixel(((f64::from(i * BLOCK_PX + BLOCK_PX / 2)) * sx) as i32, cy)))
+        .collect())
+}
+
+/// Decodifica o numero do frame a partir do luma dos blocos (None se a calibracao nao e valida).
+pub fn decode_strip(v: &[i32]) -> Option<u16> {
+    let (white, black) = (*v.first()?, *v.get(CODE_BLOCKS as usize - 1)?);
     if white - black < 100 {
-        return Ok(None);
+        return None;
     }
     let thr = (white + black) / 2;
-    let mut v = 0u16;
-    for bit in 0..16u32 {
-        if at(bit + 1) > thr {
-            v |= 1 << bit;
+    let mut out = 0u16;
+    for bit in 0..16usize {
+        if v[bit + 1] > thr {
+            out |= 1 << bit;
         }
     }
-    Ok(Some(v))
+    Some(out)
+}
+
+/// Captura a faixa de codigo da TELA e decodifica o numero do frame (None se a faixa nao e valida).
+pub fn read_frame_id(s: &mut ScreenSampler, g: &Geometry) -> Result<Option<u16>, String> {
+    Ok(decode_strip(&read_strip(s, g)?))
 }
 
 /// Amostrador contínuo: mede em que instante cada frame submetido aparece NA TELA (pós-DWM).
@@ -467,14 +478,15 @@ fn sampler_loop(geo: &Mutex<Option<Geometry>>, log: &SubmitLog, stop: &AtomicBoo
     let (mut latencies, mut distinct_intervals): (Vec<f64>, Vec<f64>) = (vec![], vec![]);
     let (mut last_id, mut last_seen_us): (Option<u16>, Option<u64>) = (None, None);
     let mut first_error: Option<String> = None;
+    let mut first_invalid: Vec<Value> = Vec::new();
     let begin = Instant::now();
     while !stop.load(Ordering::Relaxed) {
         let Some(g) = *lock(geo) else {
             thread::sleep(Duration::from_millis(1));
             continue;
         };
-        match read_frame_id(&mut sampler, &g) {
-            Ok(Some(id)) => {
+        match read_strip(&mut sampler, &g).map(|v| (decode_strip(&v), v)) {
+            Ok((Some(id), _)) => {
                 samples += 1;
                 let now_us = log.base.elapsed().as_micros() as u64;
                 if last_id != Some(id) {
@@ -492,7 +504,12 @@ fn sampler_loop(geo: &Mutex<Option<Geometry>>, log: &SubmitLog, stop: &AtomicBoo
                     last_seen_us = Some(now_us);
                 }
             }
-            Ok(None) => invalid += 1,
+            Ok((None, strip)) => {
+                invalid += 1;
+                if first_invalid.len() < 3 {
+                    first_invalid.push(json!({ "strip_luma": strip, "geometry": format!("{g:?}") }));
+                }
+            }
             Err(e) => {
                 errors += 1;
                 first_error.get_or_insert(e);
@@ -504,7 +521,7 @@ fn sampler_loop(geo: &Mutex<Option<Geometry>>, log: &SubmitLog, stop: &AtomicBoo
         "method": "BitBlt da tela (pós-DWM) lendo faixa de 16 bits; latência = instante em que o frame aparece menos instante de submissão",
         "caveats": "não é latência fóton-a-fóton; resolução limitada pela taxa de captura; inclui jitter de escalonamento da thread",
         "capture_rate_hz": samples as f64 / secs.max(1e-9), "valid_samples": samples, "invalid_samples": invalid,
-        "capture_errors": errors, "first_capture_error": first_error,
+        "capture_errors": errors, "first_capture_error": first_error, "first_invalid_samples": first_invalid,
         "distinct_frames_observed": observed, "frame_ids_skipped_between_observations": skipped,
         "submit_to_visible_ms": percentiles(&mut latencies),
         "visible_frame_interval_ms": percentiles(&mut distinct_intervals),

@@ -439,7 +439,15 @@ mod harness {
         ctx.js("window.s1.setOverlay(false)");
         thread::sleep(Duration::from_millis(500));
         let l = ctx.refresh_layout()?;
-        let a = ctx.sample_at_fraction(&l, 0.08, 0.08)?; // dentro da zona cinza, fora do overlay
+        // O preview (sobretudo o canvas WebGL do P2, que compila shaders/cria o contexto) pode demorar
+        // para aparecer: consulta ate 6 s em vez de decidir pela PRIMEIRA amostra (falso negativo).
+        let t_vis = Instant::now();
+        let mut a = ctx.sample_at_fraction(&l, 0.08, 0.08)?; // dentro da zona cinza, fora do overlay
+        while !near(a, GRAY) && t_vis.elapsed() < Duration::from_secs(6) {
+            thread::sleep(Duration::from_millis(50));
+            a = ctx.sample_at_fraction(&l, 0.08, 0.08)?;
+        }
+        let ms_until_visible = near(a, GRAY).then(|| t_vis.elapsed().as_millis() as u64);
         let outside = {
             let r = ctx.stage_phys(&l);
             let (ox, oy) = ctx.screen_origin()?;
@@ -448,7 +456,13 @@ mod harness {
         ctx.js("window.s1.setOverlay(true)");
         thread::sleep(Duration::from_millis(600));
         let l2 = ctx.refresh_layout()?;
-        let b = ctx.sample_at_fraction(&l2, 0.20, 0.15)?; // zona cinza coberta pelo overlay HTML 50% vermelho
+        let mut b = ctx.sample_at_fraction(&l2, 0.20, 0.15)?; // zona cinza coberta pelo overlay HTML 50% vermelho
+        // so espera pelo overlay se o padrao em si apareceu (senao nao ha o que compor)
+        let t_ov = Instant::now();
+        while ms_until_visible.is_some() && !near(b, OVERLAY_BLEND) && t_ov.elapsed() < Duration::from_secs(3) {
+            thread::sleep(Duration::from_millis(50));
+            b = ctx.sample_at_fraction(&l2, 0.20, 0.15)?;
+        }
         ctx.js("window.s1.setOverlay(false)");
         // Diagnostico: grade 3x3 de amostras sobre a caixa do preview + estado do HWND filho.
         let grid: Vec<Value> = {
@@ -472,6 +486,7 @@ mod harness {
         Ok(json!({
             "mode": mode,
             "diagnostics": { "grid_3x3_rgb_no_overlay": grid, "native_child_window": child_info, "stage_rect_physical": [ctx.stage_phys(&l).x, ctx.stage_phys(&l).y, ctx.stage_phys(&l).w, ctx.stage_phys(&l).h], "dpr": l.dpr },
+            "ms_until_pattern_visible": ms_until_visible,
             "sample_probe_no_overlay_rgb": a, "expected_gray_rgb": GRAY,
             "native_or_canvas_pattern_visible_at_probe": near(a, GRAY),
             "sample_outside_stage_rgb": outside,
