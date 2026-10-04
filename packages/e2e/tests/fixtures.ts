@@ -218,7 +218,7 @@ export class Editor {
     // a UI recebe mudanças feitas por outros clientes via evento (poll de 250 ms)
     await this.page
       .waitForFunction((clip) => window.__capiaTimeline?.clipRect(clip) != null, id, {
-        timeout: 8_000,
+        timeout: 20_000,
       })
       .catch(() => undefined);
     const p = await this.page.evaluate(

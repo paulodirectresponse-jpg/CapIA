@@ -194,8 +194,11 @@ jobs:
       - run: cargo build --release -p capia-devserver
       - name: Chromium do Playwright
         run: pnpm --filter @capia/e2e exec playwright install --with-deps chromium
-      - name: E2E (17 fluxos) e desempenho (5k clips)
-        run: pnpm --filter @capia/e2e e2e
+      - name: E2E (17 fluxos, edição, crash, visual)
+        run: pnpm --filter @capia/e2e e2e --grep-invert "targets with 5k clips"
+      # sozinho (1 worker): a medição não pode competir por CPU com outros testes
+      - name: Desempenho da timeline (5k clips; smoke, sem competição por CPU)
+        run: pnpm --filter @capia/e2e e2e --workers=1 --grep "targets with 5k clips"
       - name: Relatório de desempenho
         if: always()
         run: cat target/perf/phase3-ui-perf.json || true
