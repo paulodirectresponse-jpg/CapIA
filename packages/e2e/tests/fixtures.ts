@@ -26,7 +26,8 @@ function freePort(): Promise<number> {
 
 function devserverBinary(): string {
   const exe = process.platform === "win32" ? "capia-devserver.exe" : "capia-devserver";
-  for (const profile of ["release", "debug"]) {
+  const forced = process.env.CAPIA_DEVSERVER_PROFILE;
+  for (const profile of forced ? [forced] : ["release", "debug"]) {
     const p = join(ROOT, "target", profile, exe);
     if (existsSync(p)) return p;
   }
@@ -182,8 +183,21 @@ declare global {
       clipRect(id: string): { x: number; y: number; w: number; h: number } | null;
       rowRect(track: string): { y: number; h: number } | null;
       canvasOrigin(): { x: number; y: number };
-      stats(): { fps: number; paintMs: number; visibleClips: number; frames: number };
+      stats(): {
+        fps: number;
+        paintMs: number;
+        visibleClips: number;
+        frames: number;
+        paintSamples: number[];
+        gestureSamples: number[];
+      };
+      resetSamples(): void;
       viewState(): { pps: number; origin: number; scrollY: number; playhead: number };
+    };
+    __capiaPerf?: {
+      summary(): Record<string, { n: number; p50: number; p95: number; max: number }>;
+      samples(key: "commit" | "history" | "thumb" | "preview" | "rpc" | "apply"): number[];
+      reset(): void;
     };
   }
 }

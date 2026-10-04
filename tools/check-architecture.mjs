@@ -133,7 +133,7 @@ export const RUST_RULES = {
   // Servidor HTTP local SÓ para desenvolvimento/E2E (não distribuído): adaptador fino da editor-api.
   "capia-devserver": {
     workspace: ["capia-editor-api"],
-    normal: ["serde_json", "tiny_http"],
+    normal: ["serde_json"],
     build: [],
     dev: [],
   },

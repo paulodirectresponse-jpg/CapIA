@@ -33,7 +33,15 @@ declare global {
       clipRect(id: string): { x: number; y: number; w: number; h: number } | null;
       rowRect(track: string): { y: number; h: number } | null;
       canvasOrigin(): { x: number; y: number };
-      stats(): { fps: number; paintMs: number; visibleClips: number; frames: number };
+      stats(): {
+        fps: number;
+        paintMs: number;
+        visibleClips: number;
+        frames: number;
+        paintSamples: number[];
+        gestureSamples: number[];
+      };
+      resetSamples(): void;
       viewState(): { pps: number; origin: number; scrollY: number; playhead: number };
     };
   }
@@ -158,7 +166,15 @@ export function TimelinePanel() {
           const r = canvas.getBoundingClientRect();
           return { x: r.left, y: r.top };
         },
-        stats: () => ({ ...view.stats }),
+        stats: () => ({
+          ...view.stats,
+          paintSamples: [...view.stats.paintSamples],
+          gestureSamples: [...view.stats.gestureSamples],
+        }),
+        resetSamples: () => {
+          view.stats.paintSamples.length = 0;
+          view.stats.gestureSamples.length = 0;
+        },
         viewState: () => ({
           pps: view.viewState.pps,
           origin: view.viewState.origin,

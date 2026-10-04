@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Dialog, Icon, Splitter, Toasts, type IconName } from "@capia/ui-kit";
 import { useController, useUi } from "../context";
+import type { PerfKey, PerfSummary } from "../store/perf";
 import { useT, type MessageKey } from "../i18n";
 import { ExportDialog } from "./ExportDialog";
 import { HistoryPopover } from "./HistoryPopover";
@@ -12,6 +13,16 @@ import { AudioPanel, CaptionsPanel, TextPanel, TransitionsPanel } from "./RailPa
 import { SettingsDialog } from "./SettingsDialog";
 import { TimelinePanel } from "./TimelinePanel";
 import { TopBar } from "./TopBar";
+
+declare global {
+  interface Window {
+    __capiaPerf?: {
+      summary(): Record<PerfKey, PerfSummary>;
+      samples(key: PerfKey): number[];
+      reset(): void;
+    };
+  }
+}
 
 export type RailId = "project" | "media" | "audio" | "text" | "captions" | "transitions";
 
@@ -78,6 +89,21 @@ export function EditorShell() {
     window.addEventListener("keydown", on);
     return () => {
       window.removeEventListener("keydown", on);
+    };
+  }, [c]);
+
+  // ganchos de medição para E2E/benchmark (só com `?e2e=1`; sem efeito no produto)
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("e2e")) return;
+    window.__capiaPerf = {
+      summary: () => c.perf.summary(),
+      samples: (k) => c.perf.samples(k),
+      reset: () => {
+        c.perf.reset();
+      },
+    };
+    return () => {
+      delete window.__capiaPerf;
     };
   }, [c]);
 

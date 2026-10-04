@@ -90,7 +90,12 @@ export interface ViewStats {
   paintMs: number;
   visibleClips: number;
   frames: number;
+  /** Últimas pinturas (ms) e últimos tratamentos de `pointermove` em gesto (ms): medição honesta. */
+  paintSamples: number[];
+  gestureSamples: number[];
 }
+
+const MAX_SAMPLES = 600;
 
 type Gesture =
   | { type: "scrub" }
@@ -149,7 +154,14 @@ export class TimelineView {
   private hoverCursor = "default";
   private dropPreview: { target: DropTarget; span: Ticks } | null = null;
   private frameTimes: number[] = [];
-  readonly stats: ViewStats = { fps: 0, paintMs: 0, visibleClips: 0, frames: 0 };
+  readonly stats: ViewStats = {
+    fps: 0,
+    paintMs: 0,
+    visibleClips: 0,
+    frames: 0,
+    paintSamples: [],
+    gestureSamples: [],
+  };
   private readonly cleanup: (() => void)[] = [];
 
   constructor(
@@ -259,6 +271,8 @@ export class TimelineView {
       const dt = performance.now() - t0;
       this.stats.paintMs = dt;
       this.stats.frames++;
+      this.stats.paintSamples.push(dt);
+      if (this.stats.paintSamples.length > MAX_SAMPLES) this.stats.paintSamples.shift();
       const now = performance.now();
       this.frameTimes.push(now);
       while (this.frameTimes.length > 0 && now - (this.frameTimes[0] ?? now) > 1000)
@@ -659,7 +673,12 @@ export class TimelineView {
       this.pointerDown(e);
     });
     on("pointermove", (e) => {
+      const t0 = performance.now();
       this.pointerMove(e);
+      if (this.gestureActive) {
+        this.stats.gestureSamples.push(performance.now() - t0);
+        if (this.stats.gestureSamples.length > MAX_SAMPLES) this.stats.gestureSamples.shift();
+      }
     });
     on("pointerup", (e) => {
       this.pointerUp(e);

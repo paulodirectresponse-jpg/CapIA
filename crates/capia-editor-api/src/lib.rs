@@ -29,6 +29,30 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+/// Resultado da fase 1 de [`Session::begin`].
+#[derive(Debug)]
+pub enum Outcome {
+    /// Pronto (resposta pequena, calculada sob o lock).
+    Done(Reply),
+    /// Trabalho pesado já preparado: rode com [`Job::run`] **sem** o lock da sessão.
+    Later(Job),
+}
+
+/// Trabalho independente da sessão (ex.: renderizar um quadro).
+pub struct Job(Box<dyn FnOnce() -> Result<Reply, ApiError> + Send>);
+
+impl Job {
+    pub fn run(self) -> Result<Reply, ApiError> {
+        (self.0)()
+    }
+}
+
+impl core::fmt::Debug for Job {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("Job(..)")
+    }
+}
+
 /// Resposta de uma chamada: JSON ou bytes (quadros, miniaturas) com metadados.
 #[derive(Debug)]
 pub enum Reply {
@@ -239,8 +263,52 @@ impl Session {
         v
     }
 
-    /// Ponto único de entrada.
+    /// Ponto único de entrada (síncrono): resolve e, se preciso, executa o trabalho pesado.
     pub fn call(&mut self, method: &str, p: Value) -> Result<Reply, ApiError> {
+        match self.begin(method, p)? {
+            Outcome::Done(r) => Ok(r),
+            Outcome::Later(job) => job.run(),
+        }
+    }
+
+    /// Entrada em **duas fases** para hospedeiros com lock: a fase 1 (esta, sob o lock da sessão)
+    /// resolve tudo o que precisa do projeto; o que for caro (compositor/decode do preview) volta
+    /// como [`Job`], que roda **fora** do lock — comandos e undo nunca esperam um quadro.
+    pub fn begin(&mut self, method: &str, p: Value) -> Result<Outcome, ApiError> {
+        if method == "render.frame" {
+            let FrameParams {
+                sequence,
+                at,
+                width,
+                height,
+            } = params(p)?;
+            let services = self.render_services()?;
+            let o = self.open_ref()?;
+            let mut settings = RenderSettings::new(width, height);
+            settings.strict_sources = false;
+            settings.design_size = o
+                .project
+                .document()
+                .sequence(&sequence)
+                .map(|s| (s.header.width, s.header.height));
+            let frame = o.project.prepare_frame(&services, &sequence)?;
+            return Ok(Outcome::Later(Job(Box::new(move || {
+                let f = frame.render(Ticks(at), &settings)?;
+                Ok(Reply::Binary {
+                    mime: "application/x-rgba",
+                    meta: json!({
+                        "width": f.image.width,
+                        "height": f.image.height,
+                        "warnings": f.warnings.iter().map(|w| json!({"code": w.code, "message": w.message})).collect::<Vec<_>>(),
+                    }),
+                    bytes: f.image.data,
+                })
+            }))));
+        }
+        self.call_locked(method, p).map(Outcome::Done)
+    }
+
+    fn call_locked(&mut self, method: &str, p: Value) -> Result<Reply, ApiError> {
         match method {
             "engine.info" => {
                 let mut v = serde_json::to_value(engine_info())?;
@@ -436,35 +504,6 @@ impl Session {
                 Ok(Reply::Json(
                     json!({ "asset": asset, "buckets": buckets, "peaks": flat }),
                 ))
-            }
-            "render.frame" => {
-                let FrameParams {
-                    sequence,
-                    at,
-                    width,
-                    height,
-                } = params(p)?;
-                let services = self.render_services()?;
-                let o = self.open_ref()?;
-                let mut settings = RenderSettings::new(width, height);
-                settings.strict_sources = false;
-                settings.design_size = o
-                    .project
-                    .document()
-                    .sequence(&sequence)
-                    .map(|s| (s.header.width, s.header.height));
-                let f = o
-                    .project
-                    .render_frame(&services, &sequence, Ticks(at), &settings)?;
-                Ok(Reply::Binary {
-                    mime: "application/x-rgba",
-                    meta: json!({
-                        "width": f.image.width,
-                        "height": f.image.height,
-                        "warnings": f.warnings.iter().map(|w| json!({"code": w.code, "message": w.message})).collect::<Vec<_>>(),
-                    }),
-                    bytes: f.image.data,
-                })
             }
             "export.encoders" => {
                 let services = self.render_services()?;

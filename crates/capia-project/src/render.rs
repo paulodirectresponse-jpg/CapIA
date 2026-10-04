@@ -97,6 +97,24 @@ pub struct ProjectSource {
     stills: Mutex<HashMap<AssetId, Arc<Image>>>,
 }
 
+/// Um quadro pronto para renderizar, desacoplado do `Project` (ver [`Project::prepare_frame`]).
+#[derive(Debug)]
+pub struct FrameJob {
+    graph: Arc<RenderGraph>,
+    source: ProjectSource,
+    seq: SequenceId,
+}
+
+impl FrameJob {
+    pub fn render(
+        &self,
+        time: Ticks,
+        settings: &RenderSettings,
+    ) -> Result<RenderedFrame, ProjectError> {
+        render_frame(&self.graph, &self.seq, time, settings, &self.source).map_err(render_err)
+    }
+}
+
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
@@ -366,15 +384,33 @@ impl Project {
         })
     }
 
-    /// Renderiza o quadro de `seq` em `time` (preto opaco por baixo; ver ADR-064).
-    pub fn render_frame(
+    /// Grafo de `seq` reaproveitado enquanto a revisão do documento é a mesma (a revisão muda em
+    /// todo commit/undo/redo, então o cache nunca serve um grafo antigo).
+    pub fn render_graph_cached(&self, seq: &SequenceId) -> Result<Arc<RenderGraph>, ProjectError> {
+        let revision = self.document().revision;
+        if let Ok(guard) = self.graph_cache.lock()
+            && let Some((rev, id, graph)) = guard.as_ref()
+            && *rev == revision
+            && id == seq
+        {
+            return Ok(Arc::clone(graph));
+        }
+        let graph = Arc::new(self.render_graph(seq)?);
+        if let Ok(mut guard) = self.graph_cache.lock() {
+            *guard = Some((revision, seq.clone(), Arc::clone(&graph)));
+        }
+        Ok(graph)
+    }
+
+    /// Prepara um quadro **sem renderizar**: resolve grafo e fonte (rápido, precisa de `&self`).
+    /// O [`FrameJob`] é independente do projeto e pode ser executado fora do lock da sessão, de
+    /// modo que um comando/undo nunca espera o compositor nem o decode.
+    pub fn prepare_frame(
         &self,
         services: &Arc<RenderServices>,
         seq: &SequenceId,
-        time: Ticks,
-        settings: &RenderSettings,
-    ) -> Result<RenderedFrame, ProjectError> {
-        let graph = self.render_graph(seq)?;
+    ) -> Result<FrameJob, ProjectError> {
+        let graph = self.render_graph_cached(seq)?;
         let source = self.render_source(
             services,
             &graph,
@@ -383,7 +419,22 @@ impl Project {
                 lane: None,
             },
         )?;
-        render_frame(&graph, seq, time, settings, &source).map_err(render_err)
+        Ok(FrameJob {
+            graph,
+            source,
+            seq: seq.clone(),
+        })
+    }
+
+    /// Renderiza o quadro de `seq` em `time` (preto opaco por baixo; ver ADR-064).
+    pub fn render_frame(
+        &self,
+        services: &Arc<RenderServices>,
+        seq: &SequenceId,
+        time: Ticks,
+        settings: &RenderSettings,
+    ) -> Result<RenderedFrame, ProjectError> {
+        self.prepare_frame(services, seq)?.render(time, settings)
     }
 
     /// Renderiza os quadros de `range` na cadência de `settings` (ou da sequence).

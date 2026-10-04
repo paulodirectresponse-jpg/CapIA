@@ -5,7 +5,7 @@
 //! (quadros/miniaturas). Quais métodos existem é decidido por `capia_editor_api::Session::call` —
 //! método desconhecido devolve `UNKNOWN_METHOD`; não há `eval`, shell nem acesso amplo a arquivos.
 
-use capia_editor_api::{Reply, Session, SessionConfig};
+use capia_editor_api::{Outcome, Reply, Session, SessionConfig};
 use capia_project::EngineInfo;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -37,9 +37,16 @@ impl Default for EditorState {
 }
 
 fn run_call(session: &Mutex<Session>, method: &str, params: Value) -> Result<Reply, Value> {
-    match session.lock() {
-        Ok(mut s) => s.call(method, params).map_err(|e| e.to_json()),
-        Err(_) => Err(json!({"code": "POISONED", "message": "editor session lock poisoned"})),
+    // fase 1 sob o lock; quadros (compositor/decode) rodam fora dele
+    let begun = match session.lock() {
+        Ok(mut s) => s.begin(method, params),
+        Err(_) => {
+            return Err(json!({"code": "POISONED", "message": "editor session lock poisoned"}));
+        }
+    };
+    match begun.map_err(|e| e.to_json())? {
+        Outcome::Done(r) => Ok(r),
+        Outcome::Later(job) => job.run().map_err(|e| e.to_json()),
     }
 }
 

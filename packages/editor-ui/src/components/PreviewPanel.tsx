@@ -32,7 +32,7 @@ type Drag =
 export function PreviewPanel() {
   const c = useController();
   const t = useT();
-  const { seqId, summary, playhead, playing, revision, assets, prefs } = useUi((s) => ({
+  const { seqId, summary, playhead, playing, revision, assets, prefs, busy } = useUi((s) => ({
     seqId: s.active,
     summary: s.active ? (s.model.sequences[s.active] ?? null) : null,
     playhead: s.playhead,
@@ -40,6 +40,7 @@ export function PreviewPanel() {
     revision: s.model.revision,
     assets: s.model.assets,
     prefs: s.prefs,
+    busy: s.busy,
   }));
   const selectedClip = useUi((s) => {
     const id = s.selection.length === 1 ? s.selection[0] : undefined;
@@ -85,6 +86,7 @@ export function PreviewPanel() {
       },
       presenter,
       (m) => {
+        if (m.presented > 0) c.perf.record("preview", m.lastLatencyMs);
         setMetrics(m);
         setUnavailable(m.presented === 0 && m.failed > 0);
         if (E2E)
@@ -110,8 +112,11 @@ export function PreviewPanel() {
   // novo pedido de quadro a cada mudança relevante (playhead, documento, tamanho, assets)
   useEffect(() => {
     if (!seqId || !summary) return;
+    // com um comando/undo em andamento o quadro seria descartado de qualquer modo (o documento
+    // vai mudar) e disputaria a sessão do engine: pede o quadro quando ficar ocioso
+    if (busy > 0) return;
     schedRef.current?.request({ at: playhead, width: size.width, height: size.height });
-  }, [seqId, summary, playhead, revision, assets, size.width, size.height]);
+  }, [seqId, summary, playhead, revision, assets, size.width, size.height, busy]);
 
   // tamanho do quadro na palco (razão da sequence, cabe no espaço disponível)
   useEffect(() => {

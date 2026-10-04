@@ -37,7 +37,14 @@ pub struct Project {
     jobs: Arc<JobStore>,
     /// Executor de jobs de mídia, quando iniciado (`start_pipeline`).
     pub(crate) pipeline: Option<Pipeline>,
+    /// Último grafo de render compilado, válido enquanto a revisão do documento não muda
+    /// (o preview pede um quadro por movimento; recompilar milhares de clips a cada quadro custava
+    /// dezenas de ms e disputava a sessão com os comandos).
+    pub(crate) graph_cache: std::sync::Mutex<Option<GraphCacheEntry>>,
 }
+
+/// Grafo compilado para `(revisão do documento, sequence)`.
+pub(crate) type GraphCacheEntry = (u64, capia_model::SequenceId, Arc<capia_render::RenderGraph>);
 
 impl Project {
     /// Cria um projeto vazio (falha se o arquivo já existe).
@@ -69,6 +76,7 @@ impl Project {
             pending,
             jobs,
             pipeline: None,
+            graph_cache: std::sync::Mutex::new(None),
         })
     }
 

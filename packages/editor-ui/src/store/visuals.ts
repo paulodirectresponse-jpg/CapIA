@@ -15,7 +15,10 @@ export class MediaVisuals {
   private listeners = new Set<() => void>();
   private disposed = false;
 
-  constructor(private readonly client: EditorClient) {}
+  constructor(
+    private readonly client: EditorClient,
+    private readonly onLatency: (ms: number) => void = () => undefined,
+  ) {}
 
   subscribe(fn: () => void): () => void {
     this.listeners.add(fn);
@@ -44,6 +47,7 @@ export class MediaVisuals {
 
   private async loadThumb(asset: string): Promise<void> {
     this.thumbs.set(asset, "loading");
+    const t0 = performance.now();
     try {
       const r = await this.client.thumbnail(asset, 0, 240);
       if (this.disposed) return;
@@ -64,6 +68,7 @@ export class MediaVisuals {
       });
       this.urls.set(asset, url);
       this.thumbs.set(asset, img);
+      this.onLatency(performance.now() - t0);
     } catch {
       this.thumbs.set(asset, "failed");
     }

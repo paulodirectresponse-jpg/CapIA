@@ -351,3 +351,70 @@ fn export_can_be_cancelled_and_never_publishes_a_partial_output() {
     assert_eq!(fin["cancelled"], true);
     assert!(!out.exists(), "no partial output may be published");
 }
+
+/// O quadro é preparado sob o lock mas renderizado **fora** dele: com um `Job` pendente a sessão
+/// continua aceitando comandos e o quadro reflete a revisão em que foi preparado.
+#[test]
+fn a_pending_frame_job_never_blocks_commands_and_keeps_its_revision() {
+    if !media_ok() {
+        return;
+    }
+    let (mut s, _dir) = setup("framejob");
+    cmds(
+        &mut s,
+        "seq",
+        json!([
+            { "operation_id": "a1", "type": "create_sequence", "id": "S", "name": "S", "frame_rate": "30" },
+            { "operation_id": "a2", "type": "add_track", "sequence": "S", "id": "V", "kind": "visual", "role": "overlay" },
+            { "operation_id": "a3", "type": "insert_clip", "track": "V", "start": 0,
+              "clip": { "name": "red", "duration": 30 * FRAME, "content": { "type": "solid", "color": "#FF0000" },
+                        "source_in": 0, "speed": "1", "reversed": false, "properties": {} } },
+        ]),
+    );
+    let outcome = s
+        .begin(
+            "render.frame",
+            json!({ "sequence": "S", "at": 0, "width": 16, "height": 16 }),
+        )
+        .unwrap();
+    let capia_editor_api::Outcome::Later(job) = outcome else {
+        panic!("render.frame deve voltar como Job");
+    };
+    // com o job pendente a sessão segue editável (o lock já foi solto)
+    let clip = clip_id(&mut s);
+    cmds(
+        &mut s,
+        "hide",
+        json!([{ "operation_id": "b1", "type": "set_property", "clip": clip, "prop": "opacity", "value": 0.0 }]),
+    );
+    let Reply::Binary { bytes, .. } = job.run().unwrap() else {
+        panic!("quadro é binário");
+    };
+    assert_eq!(
+        &bytes[..4],
+        &[255, 0, 0, 255],
+        "o job usa a revisão preparada (vermelho)"
+    );
+    // um quadro novo, depois do comando, já sai transparente → preto
+    let Reply::Binary { bytes, .. } = s
+        .call(
+            "render.frame",
+            json!({ "sequence": "S", "at": 0, "width": 16, "height": 16 }),
+        )
+        .unwrap()
+    else {
+        panic!("quadro é binário");
+    };
+    assert_eq!(&bytes[..4], &[0, 0, 0, 255]);
+}
+
+fn clip_id(s: &mut Session) -> String {
+    let seq = call(s, "sequence.get", json!({ "sequence": "S" }));
+    seq["clips"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .next()
+        .unwrap()
+        .clone()
+}

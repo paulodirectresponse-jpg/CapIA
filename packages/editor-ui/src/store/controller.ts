@@ -71,6 +71,7 @@ import {
 } from "./edit";
 import { createStore, type Store } from "./createStore";
 import { MediaVisuals } from "./visuals";
+import { PerfLog } from "./perf";
 import { noPlatform, type PlatformServices } from "../platform";
 
 export interface ToastItem {
@@ -163,12 +164,15 @@ export class EditorController {
   private disposed = false;
   private frameHeight = 1080;
   readonly visuals: MediaVisuals;
+  readonly perf = new PerfLog();
 
   constructor(
     readonly client: EditorClient,
     private readonly opts: ControllerOptions = {},
   ) {
-    this.visuals = new MediaVisuals(client);
+    this.visuals = new MediaVisuals(client, (ms) => {
+      this.perf.record("thumb", ms);
+    });
     this.storage = opts.storage === undefined ? browserStorage() : opts.storage;
     const { prefs, recovered } = loadPrefs(this.storage);
     this.t = createTranslator(prefs.language);
@@ -615,8 +619,14 @@ export class EditorController {
     const run = async (): Promise<ChangeSet | null> => {
       this.store.set((s) => ({ busy: s.busy + 1, save: "saving" }));
       try {
+        const t0 = performance.now();
         const change = await this.client.execute(label, commands);
+        const t1 = performance.now();
         this.applyChangeSet(change);
+        const t2 = performance.now();
+        this.perf.record("rpc", t1 - t0);
+        this.perf.record("apply", t2 - t1);
+        this.perf.record("commit", t2 - t0);
         this.store.set({ save: "saved", lastError: null });
         return change;
       } catch (e) {
@@ -658,7 +668,14 @@ export class EditorController {
   private stepHistory(fn: () => Promise<ChangeSet>): Promise<void> {
     const run = async () => {
       try {
-        this.applyChangeSet(await fn());
+        const t0 = performance.now();
+        const change = await fn();
+        const t1 = performance.now();
+        this.applyChangeSet(change);
+        const t2 = performance.now();
+        this.perf.record("rpc", t1 - t0);
+        this.perf.record("apply", t2 - t1);
+        this.perf.record("history", t2 - t0);
       } catch (e) {
         if (!(
           e instanceof ApiError &&

@@ -197,3 +197,51 @@ fn audio_is_resampled_to_the_output_rate() {
         .unwrap();
     assert_eq!(buf.samples, again.samples);
 }
+
+/// O grafo compilado é reaproveitado entre quadros, mas **nunca** serve um grafo antigo: editar,
+/// desfazer e refazer mudam a revisão e o quadro acompanha exatamente (o cache é só desempenho).
+#[test]
+fn graph_cache_never_serves_a_stale_graph_across_edit_undo_redo() {
+    let tc = need!();
+    let mut lab = Lab::new("gcache", &tc);
+    lab.seq("S", fps30());
+    lab.track("S", "V1", TrackKind::Visual);
+    lab.clip(
+        "V1",
+        "c1",
+        capia_model::ClipContent::Solid {
+            color: "#FF0000".into(),
+        },
+        0,
+        30 * F,
+        0,
+        capia_time::Rational::ONE,
+    );
+    let s = RenderSettings::new(16, 16);
+    let seq = "S".into();
+    let render = |lab: &Lab| {
+        frame_digest(
+            &lab.p()
+                .render_frame(&lab.services, &seq, Ticks(5 * F), &s)
+                .unwrap()
+                .image,
+        )
+    };
+    let red = render(&lab);
+    // mesmo quadro duas vezes: cache quente, mesmo resultado
+    assert_eq!(render(&lab), red);
+    lab.prop("c1", "opacity", 0.0);
+    let transparent = render(&lab);
+    assert_ne!(
+        transparent, red,
+        "edição precisa invalidar o grafo em cache"
+    );
+    lab.pm().undo(&capia_commands::Actor::user("lab")).unwrap();
+    assert_eq!(render(&lab), red, "undo precisa invalidar o grafo em cache");
+    lab.pm().redo(&capia_commands::Actor::user("lab")).unwrap();
+    assert_eq!(
+        render(&lab),
+        transparent,
+        "redo precisa invalidar o grafo em cache"
+    );
+}
