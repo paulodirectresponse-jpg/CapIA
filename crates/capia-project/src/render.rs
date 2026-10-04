@@ -91,6 +91,7 @@ pub struct ProjectSource {
     cache: CacheDir,
     entries: BTreeMap<AssetId, Entry>,
     opts: SourceOptions,
+    inflight: Mutex<Vec<capia_decode::FrameTicket>>,
     video: Mutex<HashMap<AssetId, Arc<VideoSource>>>,
     audio: Mutex<HashMap<AssetId, AudioSource>>,
     stills: Mutex<HashMap<AssetId, Arc<Image>>>,
@@ -212,7 +213,17 @@ impl MediaSource for ProjectSource {
             .services
             .decode()
             .request(&v, i, self.opts.priority, self.opts.lane);
-        let f = ticket.wait().map_err(|e| serr("MEDIA_DECODE_FAILED", e))?;
+        {
+            let mut g = lock(&self.inflight);
+            g.retain(|t| !t.is_done());
+            g.push(ticket.clone());
+        }
+        let f = ticket.wait().map_err(|e| match e {
+            capia_decode::DecodeError::Cancelled | capia_decode::DecodeError::Superseded => {
+                serr("DECODE_CANCELLED", e)
+            }
+            other => serr("MEDIA_DECODE_FAILED", other),
+        })?;
         let img = Image::from_rgba(f.width, f.height, f.bytes.clone())
             .map_err(|e| serr(e.code, e.message))?;
         Ok(Some(Arc::new(img)))
@@ -245,6 +256,12 @@ impl MediaSource for ProjectSource {
         );
         lock(&self.stills).insert(asset.clone(), Arc::clone(&img));
         Ok(img)
+    }
+
+    fn cancel_pending(&self) {
+        for t in lock(&self.inflight).drain(..) {
+            t.cancel();
+        }
     }
 
     fn audio(&self, asset: &AssetId, req: AudioRequest) -> Result<AudioBuffer, SourceError> {
@@ -342,6 +359,7 @@ impl Project {
             cache: self.cache_dir(),
             entries,
             opts,
+            inflight: Mutex::new(Vec::new()),
             video: Mutex::new(HashMap::new()),
             audio: Mutex::new(HashMap::new()),
             stills: Mutex::new(HashMap::new()),

@@ -54,4 +54,8 @@ pub trait MediaSource: Send + Sync {
 
     /// PCM f32 intercalado; o que passar do fim da mídia vem como silêncio (nunca erro).
     fn audio(&self, asset: &AssetId, req: AudioRequest) -> Result<AudioBuffer, SourceError>;
+
+    /// Dica: o chamador não precisa mais do que está em andamento (scrub rápido). Fontes com decode
+    /// assíncrono abortam os pedidos pendentes; o padrão não faz nada.
+    fn cancel_pending(&self) {}
 }

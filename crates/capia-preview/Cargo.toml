@@ -1,0 +1,18 @@
+[package]
+name = "capia-preview"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Preview headless: scheduler de render, FrameSink, playhead, cadência e descarte de quadros obsoletos (ADR-066)"
+
+[lints]
+workspace = true
+
+[dependencies]
+capia-time.workspace = true
+capia-model.workspace = true
+capia-render.workspace = true
+
+[dev-dependencies]
+capia-commands.workspace = true

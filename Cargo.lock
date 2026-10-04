@@ -322,6 +322,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-preview"
+version = "0.0.0"
+dependencies = [
+ "capia-commands",
+ "capia-model",
+ "capia-render",
+ "capia-time",
+]
+
+[[package]]
 name = "capia-project"
 version = "0.0.0"
 dependencies = [
@@ -331,6 +341,7 @@ dependencies = [
  "capia-jobs",
  "capia-media",
  "capia-model",
+ "capia-preview",
  "capia-project",
  "capia-render",
  "capia-store",

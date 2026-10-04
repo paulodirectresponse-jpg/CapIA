@@ -10,6 +10,7 @@ members = [
     "crates/capia-commands",
     "crates/capia-jobs",
     "crates/capia-render",
+    "crates/capia-preview",
     "crates/capia-media",
     "crates/capia-decode",
     "crates/capia-assets",
@@ -33,6 +34,7 @@ capia-model = { path = "crates/capia-model", version = "0.0.0" }
 capia-commands = { path = "crates/capia-commands", version = "0.0.0" }
 capia-jobs = { path = "crates/capia-jobs", version = "0.0.0" }
 capia-render = { path = "crates/capia-render", version = "0.0.0" }
+capia-preview = { path = "crates/capia-preview", version = "0.0.0" }
 capia-media = { path = "crates/capia-media", version = "0.0.0" }
 capia-decode = { path = "crates/capia-decode", version = "0.0.0" }
 capia-assets = { path = "crates/capia-assets", version = "0.0.0" }

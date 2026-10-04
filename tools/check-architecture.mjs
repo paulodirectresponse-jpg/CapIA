@@ -41,6 +41,14 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Preview headless (ADR-066): scheduler/sink sobre o render puro. Sem projeto, mídia nem SQLite.
+  "capia-preview": {
+    // `capia-commands` só como dev-dependency (testes montam documentos pelo Command Engine real)
+    workspace: ["capia-time", "capia-model", "capia-render", "capia-commands"],
+    normal: [],
+    build: [],
+    dev: [],
+  },
   // Serviço de decode persistente (ADR-059..061): sessões de ffmpeg + cache de quadros por bytes.
   // Só decodifica: não conhece modelo, assets, projeto nem SQLite. Fora do WASM.
   "capia-decode": {
@@ -83,6 +91,8 @@ export const RUST_RULES = {
       "capia-jobs",
       "capia-decode",
       "capia-render",
+      // só dev-dependency: os testes de paridade preview × export usam o scheduler headless
+      "capia-preview",
     ],
     normal: ["serde", "serde_json"],
     build: [],

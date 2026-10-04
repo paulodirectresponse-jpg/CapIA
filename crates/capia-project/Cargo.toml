@@ -26,5 +26,6 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+capia-preview.workspace = true
 # habilita `failpoints` nos testes de crash sem expor a feature no build normal
 capia-project = { path = ".", features = ["failpoints"] }
