@@ -276,6 +276,26 @@ fn import_render_thumbnail_and_export_work_end_to_end() {
         meta["warnings"]
     );
 
+    // monitoração de áudio: meio segundo de PCM f32 estéreo 48 kHz, não silencioso
+    let Reply::Binary { mime, bytes, meta } = s
+        .call(
+            "render.audio",
+            json!({"sequence":"s","from":0,"duration":705_600_000i64 / 2,"sample_rate":48_000}),
+        )
+        .unwrap()
+    else {
+        panic!("expected PCM bytes");
+    };
+    assert_eq!(mime, "application/x-f32le");
+    assert_eq!(meta["channels"], 2);
+    assert_eq!(meta["frames"], 24_000);
+    assert_eq!(bytes.len(), 24_000 * 2 * 4);
+    let peak = bytes
+        .chunks_exact(4)
+        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]).abs())
+        .fold(0.0f32, f32::max);
+    assert!(peak > 0.01, "o áudio do clip aparece no mix (pico {peak})");
+
     let Reply::Binary { mime, bytes, .. } = s
         .call("media.thumbnail", json!({"asset": asset_id, "max_dim": 96}))
         .unwrap()

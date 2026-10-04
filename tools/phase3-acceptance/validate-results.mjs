@@ -31,7 +31,7 @@ for (const f of files) {
     exported: r.exported_mp4_validated === true,
   });
 }
-const completed = rows.filter((r) => r.stepsDone === 10 && r.exported);
+const completed = rows.filter((r) => r.stepsDone === 10 && r.exported && r.withinTime);
 const distinct = new Set(completed.map((r) => r.participant)).size;
 const blockingTotal = rows.reduce((a, r) => a + r.blocking, 0);
 console.table(rows);

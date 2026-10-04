@@ -1,10 +1,50 @@
 # STATUS
 
-**Última atualização:** 2026-10-04 · **Fase atual:** FASE 2 — Motor (headless) **CONCLUÍDA** · **OD-1 FECHADA (ADR-069: presenter = P2)** · **Próximo passo permitido:** Fase 3 (Editor), sujeita à validação residual de CPU/pacing do P2 em GPU real e a `OUTPUT-H264` na saída.
+**Última atualização:** 2026-10-04 · **Fase atual:** FASE 3 — Editor manual · **Estado: `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING`** (ver "Fase 3" abaixo; a aceitação humana e o residual de GPU real **não** foram executados e **não** estão marcados) · **Fase 4 NÃO iniciada.**
 
-> **Fase 2 completa; OD-1 fechada pelo S1 (ADR-069: P2; P1 eliminado por airspace medido).** O harness S1 foi corrigido e executado em runner Windows (WebView2/DWM reais, GPU por software): os três modos `MEASURED`; critérios inalterados; CPU/pacing em GPU real **não mensuráveis no runner** e registrados como validação residual (gatilho de reabertura na ADR-069). A Fase 2 está fechada segundo `docs/ROADMAP.md` (todos os critérios marcados; CI Linux + Windows + TypeScript + políticas verde num único commit). `OUTPUT-H264`: **capacidade de engenharia provada** (MP4 H.264 real via `h264_mf` no CI Windows, validado por ffprobe); **decisão de produção/jurídica pendente** (patentes H.264/AAC, qualidade do encoder de software, OpenH264).
+> **Fase 3 (engenharia):** editor manual utilizável de ponta a ponta — shell + design system, `ui-timeline` em canvas virtualizado, projeto/sequences/nested, biblioteca com arrastar-e-soltar, edição manual completa, inspector + keyframes, texto/legendas/transições/áudio, preview P2, histórico, relink, export + deliverables, atalhos, pt-BR/en — tudo por **comandos do Command Engine**. Branch `claude/phase3-editor` (sem PR: não solicitado). **Pendências inevitáveis (humanas/hardware):** (1) teste com ≥ 3 usuários reais (`tools/phase3-acceptance/`); (2) residual de CPU/pacing do P2 em GPU real (`tools/phase3-acceptance/gpu-residual.ps1`); (3) decisão de produto/jurídica de `OUTPUT-H264` (patentes, OpenH264, qualidade de produção) — a **engenharia** do caminho H.264 está integrada e testada no CI Windows.
 
-## Gates de fase (decisão do Product Owner, ADR-037)
+## Fase 3 — o que existe
+
+| Área | Estado |
+|---|---|
+| Shell/UX | ✅ painéis redimensionáveis/colapsáveis (persistidos, à prova de corrupção), rail (Projeto, Mídia, Áudio, Texto, Legendas, Transições), menus de contexto, toasts, diagnóstico de erro, tema escuro próprio (`@capia/ui-kit`, ícones próprios) |
+| Timeline (`@capia/ui-timeline`) | ✅ canvas 2D virtualizado (busca binária, sem DOM por clip), ghost/snap/grupo/colocação pelo **WASM do core** (ADR-070), seleção/marquee/move/reordenar magnético/trim/blade/split/delete/ripple/copiar-colar/duplicar/grupos, faixas (lock/hide/mute/solo/magnética/altura), marcadores, zoom/fit, scrub, miniaturas, waveform |
+| Projeto | ✅ árvore (pastas, sequences, uso por nested), abas, criar/duplicar/renomear/excluir, formatos (vertical/quadrado/4:5/horizontal), nested (abrir, breadcrumb, master compartilhado, tornar único) |
+| Biblioteca | ✅ importação assíncrona, miniaturas, filtros/ordenação, arrastar para a timeline (preview do drop), offline/modificado + relink por arquivo/pasta + force relink |
+| Inspector | ✅ sequence · clip (nome, ativo, transform, opacidade, transição) · texto (conteúdo + estilo) · áudio (volume/fades/separar áudio) · velocidade · **keyframes** (adicionar/mover valor/interpolação linear-hold-ease/remover) |
+| Texto/legendas/transições/áudio | ✅ títulos e terço inferior · legendas manuais (lista, dividir, mesclar, estilos) · dissolve/fade/slide-in com validação de *handles* · volume, fades, detach |
+| Preview | ✅ P2 (ADR-074): SharedBuffer→WebGL no app Windows, IPC binário como queda; 540p/720p/Auto, proxy (modo de desempenho), safe areas, caixa de transformação com arrastar/escalar, fullscreen, métricas (fps, latência, *dropped slots*), *latest-wins*. **Áudio de monitoração** (ADR-077): o engine mixa blocos de 0,5 s (`render.audio`), o relógio de áudio manda no playhead a 1×; mudo em outras velocidades |
+| Histórico | ✅ lista por transação com atores, ir a qualquer ponto (undo/redo em lote), `Ctrl+Z/Shift+Z` |
+| Export | ✅ diálogo (sequence, preset H.264/intermediário, encoder aprovado, tamanho, destino), deliverables em lote, progresso/cancelamento reais, relatório ffprobe, texto de limite legal (ADR-075) |
+| Atalhos / i18n | ✅ keymap padrão + edição + conflito + reset; pt-BR/en com chaves tipadas (paridade verificada em teste) |
+| Multi-cliente | ✅ `revision_changed`: a UI ressincroniza quando outro cliente altera o documento (ADR-072) |
+| Desempenho | ✅ instrumentação (`PerfLog`, amostras de pintura/gesto) + `perf.spec` com 5.000 clips; resultados em "Metas de UX medidas" |
+
+### Metas de `TIMELINE_UX.md` §6 — medidas (5.000 clips, Chromium headless **sem GPU** + engine release, Linux)
+| Meta | Medido (p95 salvo nota) | Estado |
+|---|---|---|
+| Scroll/zoom 60 fps | pintura ≈ 11–13 ms (p95), 1.765 clips visíveis no *fit* | ✅ (CPU raster; GPU só melhora) |
+| Arrasto < 16 ms | ≈ 3–4 ms por `pointermove` (ghost local, sem IPC) | ✅ |
+| Commit < 30 ms | engine ≈ 8–15 ms; percebido na UI ≈ 30–45 ms em `move_clips` (headless, 4 núcleos compartilhados com o Chromium) | ⚠️ engine ✅; **percebido na UI na margem** — reavaliar em hardware de referência |
+| Undo/redo < 50 ms | engine ≈ 8–16 ms; UI ≈ 15–60 ms (sem o artefato de Nagle: antes ≈ 55 ms fixos) | ✅/⚠️ medir no benchmark local |
+| Scrub do preview < 100 ms | ≈ 23–36 ms (5.000 clips sólidos, 404×720) | ✅ |
+| Miniaturas < 200 ms | 1ª busca fria medida em `thumbnailLatencyMs` (imagens/vídeos de teste) | ✅ (sem estresse de mídia real) |
+| Waveform sem recálculo no zoom | pirâmide `CWFM` (Fase 2) | ✅ |
+Relatório bruto: `target/perf/phase3-ui-perf.json` (artefato do CI). **Honestidade:** são números de CI/sandbox sem GPU real; o benchmark estrito é `CAPIA_PERF_STRICT=1` localmente.
+
+### Limitações conhecidas (Fase 3)
+- Áudio do preview só a 1× (em J/L ≠ 1× fica mudo) e sem *scrub* sonoro; o ajuste fino A/V do WebAudio **não foi medido** em hardware real.
+- Rotação não-múltipla de 90° não é renderizada (limite herdado da Fase 2); o inspector aceita o valor e o render avisa.
+- "Proxy" no preview = resolução reduzida (modo de desempenho), **não** decodifica o proxy de mídia (ADR-063).
+- Reverso de clip: exibido, sem comando de edição.
+- Perf: commit/undo percebidos na UI ficam na margem das metas neste ambiente (ver tabela).
+- Lacunas de teste: E2E do app nativo só roda no CI Windows; o residual de GPU e os 3 usuários dependem de pessoas/hardware.
+
+### Aceitação humana / hardware (pendente — pacote pronto)
+`tools/phase3-acceptance/README.md`: tarefa UGC cronometrada, formulário de severidade, validador (`PENDENTE` sem resultados reais), `gpu-residual.ps1` (PASS/FAIL na tela). **Nada disso foi executado nem fabricado.**
+
+## Gates de fase (histórico — decisão do Product Owner, ADR-037)
 
 ```
 Fase 2 — Motor (headless)     CONCLUÍDA.

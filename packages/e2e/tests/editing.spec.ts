@@ -303,3 +303,59 @@ test("language switch (pt-BR/en), keymap remap with conflict warning and panel p
   // idioma também persistiu
   await expect(page.getByTestId("export-btn")).toHaveText("Exportar");
 });
+
+test("playback: play/pause, J/K/L, frame step and playhead follow the audio clock", async ({
+  editor,
+  page,
+}) => {
+  const { main } = await setup(editor);
+  await editor.importMedia("video_audio.mp4");
+  await expect.poll(async () => (await editor.snapshot()).assets.length).toBe(1);
+  const asset = await editor.assetIdByName("video_audio.mp4");
+  await editor.api("command.execute", {
+    label: "seed av",
+    commands: [0, 1, 2].map((i) => ({
+      operation_id: `av-${String(i)}`,
+      type: "insert_clip",
+      track: main,
+      start: i * 30 * F,
+      clip: {
+        name: `av${String(i)}`,
+        duration: 30 * F,
+        content: { type: "media", asset, has_video: true, has_audio: true },
+        source_in: 0,
+        speed: "1",
+        reversed: false,
+        properties: {},
+      },
+    })),
+  });
+  await editor.clipPoint((await editor.clips())[0]?.id ?? "");
+
+  const tc = async () => (await page.getByTestId("preview-timecode").textContent()) ?? "";
+  expect(await tc()).toBe("00:00:00:00");
+  await page.keyboard.press("Space");
+  await expect.poll(tc, { timeout: 8000 }).not.toBe("00:00:00:00");
+  await page.waitForTimeout(1200);
+  await page.keyboard.press("Space"); // pausa
+  const stopped = await tc();
+  await page.waitForTimeout(400);
+  expect(await tc()).toBe(stopped); // parou de fato
+  // o playhead andou aproximadamente em tempo real (≥ 0,8 s em ~1,2 s de reprodução)
+  const m = /(\d\d):(\d\d):(\d\d):(\d\d)/.exec(stopped);
+  const secs = Number(m?.[3] ?? 0) + Number(m?.[4] ?? 0) / 30;
+  expect(secs).toBeGreaterThan(0.6);
+
+  await page.getByTestId("go-start").click();
+  expect(await tc()).toBe("00:00:00:00");
+  await page.getByTestId("step-forward").click();
+  expect(await tc()).toBe("00:00:00:01");
+  await page.keyboard.press("Shift+ArrowRight"); // +10 quadros
+  expect(await tc()).toBe("00:00:00:11");
+  await page.keyboard.press("End");
+  expect(await tc()).toBe("00:00:03:00"); // fim: 3 clips de 1 s
+  // áudio do preview pode ser silenciado e a escolha persiste
+  const audio = page.getByTestId("preview-audio");
+  await audio.click();
+  await expect(audio).toHaveAttribute("aria-pressed", "false");
+});

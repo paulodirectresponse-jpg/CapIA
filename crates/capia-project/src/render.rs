@@ -106,6 +106,15 @@ pub struct FrameJob {
 }
 
 impl FrameJob {
+    /// Mix de áudio de `range` com o mesmo grafo/fonte do quadro (monitoração do preview).
+    pub fn render_audio(
+        &self,
+        range: TimeRange,
+        settings: &RenderSettings,
+    ) -> Result<(AudioBuffer, Vec<RenderWarning>), ProjectError> {
+        mix_audio_range(&self.graph, &self.seq, range, settings, &self.source).map_err(render_err)
+    }
+
     pub fn render(
         &self,
         time: Ticks,

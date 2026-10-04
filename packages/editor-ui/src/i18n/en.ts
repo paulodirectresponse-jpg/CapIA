@@ -192,6 +192,7 @@ export const en = {
   "preview.quality.auto": "Auto",
   "preview.quality.540": "540p",
   "preview.quality.720": "720p",
+  "preview.audio": "Preview audio",
   "preview.proxy": "Use proxies",
   "preview.safeAreas": "Safe areas",
   "preview.fullscreen": "Fullscreen",

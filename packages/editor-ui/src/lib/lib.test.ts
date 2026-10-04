@@ -77,7 +77,7 @@ describe("prefs", () => {
     expect(p.panels.rightWidth).toBe(640);
     expect(p.panels.timelineHeight).toBe(400);
     expect(p.keymap).toEqual({ split: ["X"] });
-    expect(p.preview).toEqual({ quality: "auto", proxy: true, safeAreas: false });
+    expect(p.preview).toEqual({ quality: "auto", proxy: true, safeAreas: false, audio: true });
     expect(p.timeline.pxPerSecond).toBe(2);
     expect(p.timeline.trackHeights).toEqual({ v: 240 });
     expect(sanitizePrefs(null)).toEqual(DEFAULT_PREFS);

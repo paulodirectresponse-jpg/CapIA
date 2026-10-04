@@ -360,6 +360,15 @@ export function PreviewPanel() {
           }}
         />
         <IconButton
+          icon={prefs.preview.audio ? "volume" : "mute"}
+          label={t("preview.audio")}
+          pressed={prefs.preview.audio}
+          data-testid="preview-audio"
+          onClick={() => {
+            c.setPreviewAudio(!prefs.preview.audio);
+          }}
+        />
+        <IconButton
           icon="safeArea"
           label={t("preview.safeAreas")}
           pressed={safeAreas}

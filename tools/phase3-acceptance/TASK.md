@@ -39,5 +39,5 @@ Tempo máximo: 45 min. Parou de avançar por 3 min? Anote como **trava**, dê a 
 
 ## Critério (ROADMAP, caixa humana)
 
-≥ 3 pessoas distintas completam os 10 passos; **zero bugs bloqueantes** não resolvidos; tempo e
-confusões registrados. Quem completar menos de 10 passos entra como *resultado real*, não é descartado.
+≥ 3 pessoas distintas completam os 10 passos (quem edita vídeo com frequência, em **≤ 15 min** — o
+ROADMAP fala em editor experiente); **zero bugs bloqueantes** não resolvidos; tempo e confusões registrados. Quem completar menos de 10 passos entra como *resultado real*, não é descartado.

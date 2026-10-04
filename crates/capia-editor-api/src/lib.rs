@@ -150,6 +150,16 @@ fn default_thumb() -> u32 {
 }
 
 #[derive(Deserialize)]
+struct AudioParams {
+    sequence: SequenceId,
+    from: i64,
+    /// Duração do trecho em Ticks.
+    duration: i64,
+    #[serde(default)]
+    sample_rate: Option<u32>,
+}
+
+#[derive(Deserialize)]
 struct FrameParams {
     sequence: SequenceId,
     at: i64,
@@ -314,6 +324,40 @@ impl Session {
                         "warnings": f.warnings.iter().map(|w| json!({"code": w.code, "message": w.message})).collect::<Vec<_>>(),
                     }),
                     bytes: f.image.data,
+                })
+            }))));
+        }
+        if method == "render.audio" {
+            let AudioParams {
+                sequence,
+                from,
+                duration,
+                sample_rate,
+            } = params(p)?;
+            let services = self.render_services()?;
+            let o = self.open_ref()?;
+            let frame = o.project.prepare_frame(&services, &sequence)?;
+            let mut settings = RenderSettings::new(2, 2);
+            settings.strict_sources = false;
+            settings.audio_sample_rate = sample_rate.unwrap_or(48_000);
+            settings.audio_channels = 2;
+            let range = capia_time::TimeRange::new(Ticks(from), Ticks(duration));
+            return Ok(Outcome::Later(Job(Box::new(move || {
+                let (buf, warnings) = frame.render_audio(range, &settings)?;
+                let frames = buf.samples.len() / buf.channels.max(1) as usize;
+                let mut bytes = Vec::with_capacity(buf.samples.len() * 4);
+                for s in &buf.samples {
+                    bytes.extend_from_slice(&s.to_le_bytes());
+                }
+                Ok(Reply::Binary {
+                    mime: "application/x-f32le",
+                    meta: json!({
+                        "sample_rate": buf.sample_rate,
+                        "channels": buf.channels,
+                        "frames": frames,
+                        "warnings": warnings.iter().map(|w| json!({"code": w.code, "message": w.message})).collect::<Vec<_>>(),
+                    }),
+                    bytes,
                 })
             }))));
         }

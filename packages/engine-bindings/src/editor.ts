@@ -384,6 +384,16 @@ export class EditorClient {
     return this.transport.callBinary("render.frame", { sequence, at, width, height });
   }
 
+  /** PCM f32le estéreo do mix de `[from, from+duration)` (ticks) — monitoração do preview. */
+  renderAudio(sequence: string, from: Ticks, duration: Ticks, sampleRate = 48_000) {
+    return this.transport.callBinary("render.audio", {
+      sequence,
+      from,
+      duration,
+      sample_rate: sampleRate,
+    });
+  }
+
   encoders() {
     return this.json<EncoderCapability[]>("export.encoders");
   }

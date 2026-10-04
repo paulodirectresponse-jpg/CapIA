@@ -74,6 +74,7 @@ import { MediaVisuals } from "./visuals";
 import { PerfLog } from "./perf";
 import { noPlatform, type PlatformServices } from "../platform";
 import { ipcFrameSource, type FrameSource } from "../preview/frames";
+import { AudioMonitor, pcmFromReply, webAudioContext, type AudioCtxLike } from "../preview/audio";
 
 export interface ToastItem {
   id: number;
@@ -143,6 +144,8 @@ export interface ControllerOptions {
   platform?: PlatformServices;
   /** Fonte dos quadros do preview (padrão: bytes pelo transporte; o desktop pode dar o SharedBuffer). */
   frames?: FrameSource;
+  /** Contexto de áudio (testes injetam um falso; `null` desliga a monitoração). */
+  audioContext?: () => AudioCtxLike | null;
   storage?: KeyValueStorage | null;
   loadCore?: () => Promise<TimelineCore | null>;
   pollMs?: number;
@@ -169,12 +172,17 @@ export class EditorController {
   readonly visuals: MediaVisuals;
   readonly perf = new PerfLog();
   readonly frames: FrameSource;
+  private readonly audio: AudioMonitor;
 
   constructor(
     readonly client: EditorClient,
     private readonly opts: ControllerOptions = {},
   ) {
     this.frames = opts.frames ?? ipcFrameSource(client);
+    this.audio = new AudioMonitor(async (seq, from, duration) => {
+      const r = await client.renderAudio(seq, from, duration);
+      return pcmFromReply(r.bytes, r.meta);
+    }, opts.audioContext ?? webAudioContext);
     this.visuals = new MediaVisuals(client, (ms) => {
       this.perf.record("thumb", ms);
     });
@@ -289,6 +297,7 @@ export class EditorController {
     this.flushPrefs();
     this.visuals.dispose();
     this.frames.dispose?.();
+    this.audio.dispose();
   }
 
   private startPolling(): void {
@@ -692,6 +701,11 @@ export class EditorController {
   }
 
   applyChangeSet(change: ChangeSet): void {
+    // o áudio já agendado reflete o documento antigo: reinicia a partir da posição atual
+    if (this.state.playing && this.audio.active)
+      queueMicrotask(() => {
+        this.syncAudio();
+      });
     this.store.set((s) => {
       const model = applyChange(s.model, change);
       // a seleção não pode apontar para clips que deixaram de existir
@@ -1235,6 +1249,7 @@ export class EditorController {
     const seq = this.activeSequence();
     const max = seq ? Math.max(this.sequenceDuration(), 0) : 0;
     this.store.set({ playhead: Math.max(0, Math.min(t, max > 0 ? Math.max(max, t) : t)) });
+    if (this.state.playing) this.syncAudio();
   }
 
   sequenceDuration(): Ticks {
@@ -1264,7 +1279,24 @@ export class EditorController {
     if (rate > 0 && this.state.playhead >= this.sequenceDuration()) this.seek(0);
     this.store.set({ playing: true, shuttle: rate });
     this.lastTick = performance.now();
+    this.syncAudio();
     if (this.raf === null) this.tick();
+  }
+
+  /** (Re)inicia a monitoração de áudio a 1× na posição atual; em outra velocidade fica mudo. */
+  private syncAudio(): void {
+    const s = this.state;
+    const id = s.active;
+    if (s.playing && s.shuttle === 1 && s.prefs.preview.audio && id) {
+      this.audio.start(id, s.playhead, this.sequenceDuration());
+    } else {
+      this.audio.stop();
+    }
+  }
+
+  setPreviewAudio(on: boolean): void {
+    this.setPreview({ audio: on });
+    this.syncAudio();
   }
 
   pause(): void {
@@ -1273,6 +1305,7 @@ export class EditorController {
       else clearTimeout(this.raf);
       this.raf = null;
     }
+    this.audio.stop();
     if (this.state.playing) this.store.set({ playing: false, shuttle: 1 });
   }
 
@@ -1303,8 +1336,15 @@ export class EditorController {
       const dt = now - this.lastTick;
       this.lastTick = now;
       const frame = this.frame();
-      const adv = Math.round((dt / 1000) * TICKS_PER_SECOND * s.shuttle);
-      const next = snapToFrame(s.playhead + adv, frame);
+      let next: Ticks;
+      if (this.audio.active && s.shuttle === 1) {
+        // relógio de áudio mestre; antes do 1º bloco agendado a imagem espera (alguns ms)
+        const pos = this.audio.position();
+        next = pos === null ? s.playhead : snapToFrame(Math.max(s.playhead, pos), frame);
+      } else {
+        const adv = Math.round((dt / 1000) * TICKS_PER_SECOND * s.shuttle);
+        next = snapToFrame(s.playhead + adv, frame);
+      }
       const dur = this.sequenceDuration();
       if ((s.shuttle > 0 && next >= dur) || (s.shuttle < 0 && next <= 0)) {
         this.store.set({ playhead: s.shuttle > 0 ? dur : 0 });

@@ -554,3 +554,50 @@ Proposta: Windows 10 22H2+ e Windows 11, x64 (ARM64 depois); GPU com D3D12 (feat
 
 ### OD-4 / OUTPUT-H264 — Caminho confiável de exportação MP4/H.264 no Windows
 **Estado (M04): ABERTA — não resolvida de propósito.** Precisa estar definida **antes da entrega do Editor** (saída da Fase 3). Requisitos: encoder de hardware quando disponível (NVENC/AMF/QSV); Media Foundation/FFmpeg quando adequado; fallback por software **legal e de qualidade aceitável**; **sem x264/x265 GPL** no build padrão (ADR-032). Fatos e incógnitas em `docs/STATUS.md` ("OUTPUT-H264"). Decide: Product Owner, com apoio jurídico para patentes (H.264/HEVC/AAC e binário OpenH264).
+
+---
+
+## Fase 3 — Editor manual (ADR-070..076)
+
+### ADR-070 — Ponte WASM da timeline: lógica de UX do core em `capia-timeline-wasm`
+**Estado:** Aceita (Fase 3) · aplica ADR-016/ADR-004.
+**Contexto:** o arrasto precisa de snap, movimento de grupo e colocação a < 16 ms **sem IPC**, e a regra de snap/colocação não pode existir duas vezes (JS e Rust divergiriam).
+**Decisão:** `crates/capia-timeline-wasm` compila `capia-time/model/commands` para `wasm32-unknown-unknown` e expõe uma ABI C mínima (`capia_alloc/free/call`; JSON entra e sai; réplica `thread_local` da sequence ativa mantida pelos mesmos *patches* que o engine devolve). Só `snap_clip`, `snap_point`, `group_move`, `placement`, `frame_align` — funções **puras** sobre a réplica; nenhuma escrita. É a **única** crate com `unsafe` além de `capia-webview-surface` (borda FFI); só existe `unsafe` em `wasm32` (testes nativos usam `call_bytes`). O front nunca recalcula snap em JS.
+**Alternativas:** reimplementar snap em TS (rejeitada: duas verdades); `wasm-bindgen` (rejeitada: dependência extra para 5 funções); IPC por quadro de arrasto (rejeitada: meta < 16 ms).
+**Consequências:** `pnpm build:wasm`/CI geram o `.wasm` (gitignored); testes do front carregam o módulo real; paridade nativo × WASM da ADR-016 continua valendo.
+
+### ADR-071 — Extensões do modelo e dos comandos para o editor
+**Estado:** Aceita (Fase 3) · **Não** altera nenhuma decisão `D-S7-*`.
+**Decisão:** (1) `Sequence.header` ganha `width/height` (padrão 1920×1080); (2) clips de **texto** (`ClipContent::Text` + `TextStyle`, tamanho em ‰ da altura do quadro) e **legendas** = clips de texto em trilhas de função `Captions`; (3) **transições** na entrada do clip (`transition_in`: dissolve/fade/slide_in; dissolve exige *handles* de fonte metade de cada lado); (4) **grupos** = rótulo `group` no clip; (5) **pastas** e **deliverables** no `Document` (com ops e comandos); (6) propriedades `fade_in/fade_out` (segundos); (7) comandos `reorder_clip` (reordenação magnética), `set_text`, `set_transition`, `detach_audio`, `group/ungroup`, pastas/deliverables; (8) `RenderSettings.design_size`: deslocamentos `position_x/y` são pixels **da sequence** e escalam para a saída — preview 540p/720p compõe como o export.
+**Compatibilidade de digest:** campos novos são serializados só quando diferem do padrão (resolução 1920×1080, `TextStyle` padrão, listas vazias): digests dourados e a cadeia do journal **não mudaram**.
+**Consequências:** schema do documento segue compatível; testes `capia-commands/tests/editor.rs`, `capia-render/tests/editor_render.rs`.
+
+### ADR-072 — `capia-editor-api`: fachada JSON única; devserver e Tauri são adaptadores finos
+**Estado:** Aceita (Fase 3) · aplica ADR-002/ADR-029.
+**Decisão:** `capia-editor-api::Session::call(método, JSON)` é **o** contrato UI↔engine (projeto, `sequence.get`, `command.execute/undo/redo`, histórico, assets, miniatura/peaks, `render.frame`, export em lote, `events.poll`). Respostas de escrita trazem *patches* (ops primitivas) que a UI aplica à réplica imutável (`applyChange`; `null` = remoção). Adaptadores: `apps/desktop` (Tauri: **dois** comandos IPC fixos, `editor_call`/`editor_call_binary`; método desconhecido ⇒ `UNKNOWN_METHOD`) e `capia-devserver` (HTTP em 127.0.0.1 **só** dev/E2E; HTTP/1.1 mínimo sobre `std::net` com `TCP_NODELAY` — o servidor anterior somava ~40 ms por Nagle+ACK atrasado). Todo comando/undo/redo publica `revision_changed`; clientes defasados (CLI, IA futura, outra janela) ressincronizam; quem emitiu ignora (revisão já aplicada).
+**Regra inegociável verificada por teste:** nenhum código da UI além de `store/controller.ts` chama métodos que escrevem (`architecture.test.ts`); componentes só leem quadros/codificadores.
+
+### ADR-073 — Render do preview fora do lock da sessão; grafo em cache por revisão
+**Estado:** Aceita (Fase 3) · aplica ADR-063/066.
+**Contexto:** um quadro (compositor + decode) segurava o lock da sessão e atrasava comandos/undo; o grafo era recompilado (O(clips)) a cada quadro.
+**Decisão:** `Session::begin` em duas fases — preparação sob o lock (`Project::prepare_frame` ⇒ `FrameJob` independente do projeto) e render **fora** dele (`Outcome::Later(Job)`). `Project::render_graph_cached` reaproveita o grafo enquanto `document.revision` não muda (muda em todo commit/undo/redo). O render continua **único** (`render_frame`) e a fonte é sempre o original.
+**Medido (5.000 clips, Linux, release):** preview 36 → 23 ms; undo/redo do engine ≈ 8–16 ms mesmo com render concorrente.
+
+### ADR-074 — Preview P2 no app: SharedBuffer em crate isolada, com queda explícita para IPC
+**Estado:** Aceita (Fase 3) · implementa o ADR-069 no produto.
+**Decisão:** `crates/capia-webview-surface` (Windows) cria o SharedBuffer do WebView2 (`CreateSharedBuffer` + `PostSharedBufferToScript`, mesma sequência medida no S1) e escreve `cabeçalho(64 B: "CAPF", seq, w, h) + RGBA8`. O comando `preview_render_shared` renderiza **dentro** dele (nenhum byte de quadro no IPC); o JS confirma `sharedbufferreceived`, lê uma visão sem cópia e sobe a textura WebGL (`texSubImage2D`). Um pedido em voo por vez (agendador *latest-wins*) ⇒ sem leitura rasgada. Sem WebView2 17/Windows/timeout ⇒ **mesmo** apresentador por IPC binário; o canvas expõe `data-transport` e o CI Windows **exige** `shared-buffer`. `unsafe` fica confinado em `win.rs`/`FrameRegion` (testado em Linux com memória comum); P1/airspace não existe. Qualidade 540p/720p/Auto (histerese por latência), proxy = modo de desempenho de resolução menor (o proxy **nunca** é fonte de decode — ADR-063), métrica de *dropped slots* (pedido substituído antes de renderizar), safe areas, caixa de transformação e fullscreen são overlays HTML que não alteram a saída.
+**Residual (humano/hardware):** CPU/pacing do P2 em GPU real — `tools/phase3-acceptance/gpu-residual.ps1` (gatilho de reabertura inalterado).
+
+### ADR-075 — `OUTPUT-H264`: integração de engenharia no fluxo real do editor
+**Estado:** Aceita (Fase 3) · aplica ADR-032/067/068. **Não resolve a decisão jurídica/de produto.**
+**Decisão:** o diálogo de exportação lista **apenas** as `EncoderCapability` aprovadas (nunca x264/x265; sem fallback silencioso), mostra o motivo quando não há H.264 aprovado e exporta pelo mesmo pipeline atômico (staging → ffprobe → rename). O relatório exibido é o do ffprobe pós-export (codec real, resolução, quadros). O CI Windows exporta MP4 H.264 real (`h264_mf`) pelo **app real** (WebView2 + IPC) e o E2E exige `h264` no relatório. Deliverables em lote (sequence + preset + destino + tamanho) vivem no documento; progresso e resultado por item; cancelamento real.
+**Continua pendente (produto/jurídico):** patentes H.264/AAC, qualidade/bitrate de produção do `h264_mf` em software, binário OpenH264. O texto do diálogo diz isso ao usuário.
+
+### ADR-076 — Estratégia de testes do editor: E2E real em vez de pirâmide de unitários de UI
+**Estado:** Aceita (Fase 3).
+**Decisão:** `packages/e2e` (Playwright) dirige a UI compilada contra o **engine real + FFmpeg real** (devserver no Linux; o **app Tauri real** no Windows por CDP/WebView2). Os 17 fluxos críticos, edição (seleção/marquee/grupo/copiar/ripple/faixas/keyframes/legendas/idioma/atalhos), crash/recuperação, smoke visual (sondas de pixel + capturas como artefato; sem goldens frágeis) e benchmark de UX da timeline (5.000 clips, JSON com passa/falha por meta; *smoke* no CI, estrito localmente). Unitários só onde há lógica (kit, edição pura, agendador, teclas, preferências, fronteira UI→engine).
+
+### ADR-077 — Monitoração de áudio do preview: mix no engine, relógio de áudio mestre
+**Estado:** Aceita (Fase 3).
+**Decisão:** `render.audio {sequence, from, duration}` devolve PCM f32le estéreo 48 kHz do **mesmo mixer** do export (mute/solo/volume/fades já aplicados), preparado sob o lock e mixado fora dele (ADR-073). O front agenda blocos contíguos de 0,5 s com ~1,5 s de folga no `AudioContext`; a 1× o playhead segue `currentTime` do contexto (imagem espera o 1º bloco, ~dezenas de ms); em outras velocidades, seek ou edição durante a reprodução o áudio reinicia/silencia. Falha do engine desliga só o áudio. Preferência `preview.audio` (persistida).
+**Fora do escopo:** *scrub* sonoro e A/V fino medido em hardware real (pendente de aceitação humana).

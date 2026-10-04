@@ -194,6 +194,7 @@ export const ptBR: Record<MessageKey, string> = {
   "preview.quality.auto": "Auto",
   "preview.quality.540": "540p",
   "preview.quality.720": "720p",
+  "preview.audio": "Áudio do preview",
   "preview.proxy": "Usar proxies",
   "preview.safeAreas": "Áreas seguras",
   "preview.fullscreen": "Tela cheia",

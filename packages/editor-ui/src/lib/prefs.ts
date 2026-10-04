@@ -18,7 +18,7 @@ export interface Prefs {
     rightCollapsed: boolean;
   };
   keymap: Record<string, string[]>;
-  preview: { quality: PreviewQuality; proxy: boolean; safeAreas: boolean };
+  preview: { quality: PreviewQuality; proxy: boolean; safeAreas: boolean; audio: boolean };
   timeline: { pxPerSecond: number; trackHeights: Record<string, number>; snapping: boolean };
 }
 
@@ -33,7 +33,7 @@ export const DEFAULT_PREFS: Prefs = {
     rightCollapsed: false,
   },
   keymap: {},
-  preview: { quality: "auto", proxy: false, safeAreas: false },
+  preview: { quality: "auto", proxy: false, safeAreas: false, audio: true },
   timeline: { pxPerSecond: 80, trackHeights: {}, snapping: true },
 };
 
@@ -94,6 +94,7 @@ export function sanitizePrefs(raw: unknown): Prefs {
         quality === "540" || quality === "720" || quality === "auto" ? quality : d.preview.quality,
       proxy: bool(preview.proxy, d.preview.proxy),
       safeAreas: bool(preview.safeAreas, d.preview.safeAreas),
+      audio: bool(preview.audio, d.preview.audio),
     },
     timeline: {
       pxPerSecond: num(timeline.pxPerSecond, d.timeline.pxPerSecond, 2, 4000),
