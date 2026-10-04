@@ -17,6 +17,7 @@ members = [
     "crates/capia-store",
     "crates/capia-project",
     "crates/capia-cli",
+    "crates/capia-editor-api",
     "apps/desktop/src-tauri",
 ]
 # Experimentos descartáveis e ferramentas com workspace próprio: fora do build principal.
@@ -40,6 +41,7 @@ capia-decode = { path = "crates/capia-decode", version = "0.0.0" }
 capia-assets = { path = "crates/capia-assets", version = "0.0.0" }
 capia-store = { path = "crates/capia-store", version = "0.0.0" }
 capia-project = { path = "crates/capia-project", version = "0.0.0" }
+capia-editor-api = { path = "crates/capia-editor-api", version = "0.0.0" }
 rusqlite = { version = "0.40", features = ["bundled"] }
 getrandom = "0.4"
 serde = { version = "1", features = ["derive", "rc"] }

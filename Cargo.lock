@@ -310,6 +310,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-editor-api"
+version = "0.0.0"
+dependencies = [
+ "capia-assets",
+ "capia-commands",
+ "capia-media",
+ "capia-model",
+ "capia-project",
+ "capia-store",
+ "capia-time",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "capia-jobs"
 version = "0.0.0"
 dependencies = [

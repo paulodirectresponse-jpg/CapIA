@@ -29,7 +29,8 @@ export const RUST_RULES = {
   "capia-render": {
     // `capia-commands` só como dev-dependency: os testes montam documentos pelo Command Engine real
     workspace: ["capia-time", "capia-model", "capia-commands"],
-    normal: [],
+    // `ab_glyph`: rasterização do texto determinístico (Fase 3; Apache-2.0, pura Rust, WASM-ok)
+    normal: ["ab_glyph"],
     build: [],
     dev: [],
   },
@@ -113,8 +114,24 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // API do editor (Fase 3): fachada JSON transport-agnóstica sobre capia-project; nenhuma regra de
+  // edição (tudo passa pelo Command Engine). Consumida pelo shell Tauri e pelo servidor de E2E.
+  "capia-editor-api": {
+    workspace: [
+      "capia-time",
+      "capia-model",
+      "capia-commands",
+      "capia-store",
+      "capia-project",
+      "capia-assets",
+      "capia-media",
+    ],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
+  },
   "capia-desktop": {
-    workspace: ["capia-project"],
+    workspace: ["capia-project", "capia-editor-api"],
     normal: ["tauri"],
     build: ["tauri-build"],
     dev: [],

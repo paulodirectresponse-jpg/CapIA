@@ -11,7 +11,7 @@ const base = () => [
   pkg("capia-model", [["capia-time"]]),
   pkg("capia-commands", [["capia-time"], ["capia-model"]]),
   pkg("capia-jobs", [["serde"], ["serde_json"]]),
-  pkg("capia-render", [["capia-time"], ["capia-model"], ["capia-commands", "dev"]]),
+  pkg("capia-render", [["capia-time"], ["capia-model"], ["capia-commands", "dev"], ["ab_glyph"]]),
   pkg("capia-media", [["capia-time"], ["serde"], ["serde_json"], ["sha2"], ["capia-media", "dev"]]),
   pkg("capia-preview", [["capia-time"], ["capia-model"], ["capia-render"]]),
   pkg("capia-decode", [["capia-time"], ["capia-media"]]),
@@ -46,7 +46,23 @@ const base = () => [
     ["serde_json"],
   ]),
   pkg("capia-cli", [["capia-project"], ["capia-commands"], ["capia-model"], ["serde_json"]]),
-  pkg("capia-desktop", [["capia-project"], ["tauri"], ["tauri-build", "build"]]),
+  pkg("capia-editor-api", [
+    ["capia-project"],
+    ["capia-commands"],
+    ["capia-model"],
+    ["capia-time"],
+    ["capia-store"],
+    ["capia-assets"],
+    ["capia-media"],
+    ["serde"],
+    ["serde_json"],
+  ]),
+  pkg("capia-desktop", [
+    ["capia-project"],
+    ["capia-editor-api"],
+    ["tauri"],
+    ["tauri-build", "build"],
+  ]),
 ];
 
 test("the approved layout passes", () => {
