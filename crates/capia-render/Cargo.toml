@@ -1,0 +1,17 @@
+[package]
+name = "capia-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Render headless determinístico: render graph, compositor CPU de referência e mixer de áudio (ADR-064..067)"
+
+[lints]
+workspace = true
+
+[dependencies]
+capia-time.workspace = true
+capia-model.workspace = true
+
+[dev-dependencies]
+capia-commands.workspace = true
