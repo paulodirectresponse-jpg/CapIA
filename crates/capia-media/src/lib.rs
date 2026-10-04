@@ -26,7 +26,7 @@ pub use audio_index::{
 pub use decode::{
     AudioPcm, AudioRequest, DEFAULT_MAX_FRAME_BYTES, DEFAULT_MAX_PCM_BYTES, DecodeLimits,
     PixelFormat, RawFrame, decode_audio, decode_audio_blocks, decode_frame_at,
-    decode_frame_by_index, decode_frame_range, samples_to_ticks, ticks_to_samples,
+    decode_frame_by_index, decode_frame_range, decode_still, samples_to_ticks, ticks_to_samples,
 };
 pub use error::{MediaError, MediaErrorCode};
 pub use ffprobe::{FfprobeBackend, MediaProbe};

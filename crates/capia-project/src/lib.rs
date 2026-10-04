@@ -13,6 +13,7 @@ mod error;
 mod force_relink;
 mod pipeline;
 mod project;
+mod render;
 
 pub use assets::{
     AssetView, ImportOutcome, ImportResult, RelinkResult, VerifyResult, expected_asset_id,
@@ -22,6 +23,7 @@ pub use error::ProjectError;
 pub use force_relink::{DependentClip, ForceRelinkResult};
 pub use pipeline::{ImportTicket, PipelineOptions, PumpEvent};
 pub use project::{ParseError, Project, parse_transaction};
+pub use render::{ProjectSource, RenderServices, SourceOptions};
 
 // tipos de jobs/tickets que os adaptadores precisam (a CLI não depende de `capia-jobs` direto)
 pub use capia_jobs::{

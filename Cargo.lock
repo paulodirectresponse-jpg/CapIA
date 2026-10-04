@@ -327,10 +327,12 @@ version = "0.0.0"
 dependencies = [
  "capia-assets",
  "capia-commands",
+ "capia-decode",
  "capia-jobs",
  "capia-media",
  "capia-model",
  "capia-project",
+ "capia-render",
  "capia-store",
  "capia-time",
  "serde",

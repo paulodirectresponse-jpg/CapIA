@@ -10,6 +10,7 @@
 
 use crate::decode::AudioPcm;
 use crate::error::{MediaError, MediaErrorCode};
+use crate::failpoints::fp;
 use crate::ffprobe::{checked_input_path, file_url_arg};
 use crate::process::{Flow, StreamLimits, run_streaming};
 use crate::toolchain::MediaToolchain;
@@ -324,6 +325,9 @@ pub fn build_audio_index(
         &StreamLimits::new(timeout),
         cancel,
         &mut |chunk| {
+            if entries.is_empty() && carry.is_empty() {
+                fp!("audio_index_running");
+            }
             carry.push_str(&String::from_utf8_lossy(chunk));
             while let Some(nl) = carry.find('\n') {
                 let line: String = carry.drain(..=nl).collect();

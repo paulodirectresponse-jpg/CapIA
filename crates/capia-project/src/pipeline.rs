@@ -775,6 +775,39 @@ impl Project {
         )
     }
 
+    pub fn submit_audio_index(
+        &self,
+        id: &AssetId,
+        priority: Priority,
+    ) -> Result<Submitted, ProjectError> {
+        let (rec, file) = self.online_source(id)?;
+        Self::require_stream(&rec, false)?;
+        let dedup = derive::dedup_key_audio_index(&rec);
+        self.submit_derived(
+            JobKind::AudioIndex,
+            priority,
+            format!("audio index {id}"),
+            dedup,
+            json!({ "asset_id": id.as_str() }),
+            move |ctx, tc, cache| {
+                let env = Env {
+                    toolchain: tc,
+                    cache,
+                };
+                let out = derive::ensure_audio_index(
+                    &env,
+                    &rec,
+                    &file,
+                    &|| ctx.is_cancelled(),
+                    &mut |d, t| {
+                        ctx.set_progress(d, t);
+                    },
+                )?;
+                Ok(derived_result("audio_index", &out))
+            },
+        )
+    }
+
     pub fn submit_proxy(
         &self,
         id: &AssetId,

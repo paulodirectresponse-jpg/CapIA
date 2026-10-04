@@ -20,6 +20,8 @@ capia-store.workspace = true
 capia-assets.workspace = true
 capia-media.workspace = true
 capia-jobs.workspace = true
+capia-decode.workspace = true
+capia-render.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

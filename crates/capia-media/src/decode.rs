@@ -367,6 +367,70 @@ pub fn decode_frame_at(
     decode_frame_by_index(tc, path, index, width, height, i, limits, cancel)
 }
 
+/// Decodifica uma imagem estática (PNG/JPEG/…) para RGBA8 nas dimensões **codificadas** (sem
+/// auto-rotação; `width × height` vêm do probe). O arquivo é entrada hostil: limites verificados.
+pub fn decode_still(
+    tc: &MediaToolchain,
+    path: &Path,
+    width: u32,
+    height: u32,
+    limits: &DecodeLimits,
+    cancel: &dyn Fn() -> bool,
+) -> Result<RawFrame, MediaError> {
+    let ffmpeg = ffmpeg_of(tc)?;
+    let len = frame_len(width, height, limits)?;
+    let abs = checked_input_path(path)?;
+    let mut args: Vec<OsString> = [
+        "-v",
+        "error",
+        "-nostdin",
+        "-noautorotate",
+        "-protocol_whitelist",
+        "file",
+        "-i",
+    ]
+    .iter()
+    .map(OsString::from)
+    .collect();
+    args.push(file_url_arg(&abs));
+    for a in [
+        "-an",
+        "-sn",
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgba",
+        "pipe:1",
+    ] {
+        args.push(a.into());
+    }
+    let out = run_collect(
+        ffmpeg,
+        &args,
+        &StreamLimits::new(limits.timeout),
+        len,
+        cancel,
+    )?;
+    if !out.status.success() || out.stdout.len() != len {
+        return Err(MediaError::new(
+            MediaErrorCode::MediaDecodeFailed,
+            "the image could not be decoded to the probed dimensions",
+        ));
+    }
+    Ok(RawFrame {
+        width,
+        height,
+        stride: width as usize * 4,
+        pixel_format: PixelFormat::Rgba8,
+        pts: 0,
+        index: 0,
+        time: Ticks(0),
+        bytes: out.stdout,
+    })
+}
+
 // ---------------------------------------------------------------------------------------------
 // Áudio
 // ---------------------------------------------------------------------------------------------

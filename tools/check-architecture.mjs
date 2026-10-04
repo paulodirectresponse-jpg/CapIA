@@ -81,6 +81,8 @@ export const RUST_RULES = {
       "capia-assets",
       "capia-media",
       "capia-jobs",
+      "capia-decode",
+      "capia-render",
     ],
     normal: ["serde", "serde_json"],
     build: [],

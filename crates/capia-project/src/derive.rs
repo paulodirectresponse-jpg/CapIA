@@ -7,9 +7,10 @@ use capia_assets::{
     fingerprint_file,
 };
 use capia_media::{
-    AudioPcm, DecodeLimits, FrameIndex, INDEX_PRODUCER, IndexOptions, MediaToolchain,
-    PROXY_PRODUCER, ProxyProfileV1, RawFrame, WAVEFORM_PRODUCER, Waveform, build_frame_index,
-    decode_frame_at, decode_frame_by_index, generate_proxy, generate_waveform,
+    AUDIO_INDEX_PRODUCER, AudioIndex, AudioPcm, DecodeLimits, FrameIndex, INDEX_PRODUCER,
+    IndexOptions, MediaToolchain, PROXY_PRODUCER, ProxyProfileV1, RawFrame, WAVEFORM_PRODUCER,
+    Waveform, build_audio_index, build_frame_index, container_supports_exact_seek, decode_frame_at,
+    decode_frame_by_index, generate_proxy, generate_waveform,
 };
 use capia_time::Ticks;
 use std::path::{Path, PathBuf};
@@ -95,6 +96,15 @@ fn waveform_key(
     )
 }
 
+fn audio_index_key(env: &Env<'_>, rec: &AssetRecord, stream: u32) -> Result<CacheKey, AssetError> {
+    CacheKey::new(
+        &rec.content_hash,
+        "audio-index",
+        &[("stream", &stream.to_string())],
+        &format!("{AUDIO_INDEX_PRODUCER};{}", env.toolchain.version),
+    )
+}
+
 fn proxy_key(
     env: &Env<'_>,
     rec: &AssetRecord,
@@ -114,6 +124,10 @@ pub(crate) fn dedup_key_index(rec: &AssetRecord) -> String {
 
 pub(crate) fn dedup_key_waveform(rec: &AssetRecord) -> String {
     format!("waveform:{}", rec.content_hash)
+}
+
+pub(crate) fn dedup_key_audio_index(rec: &AssetRecord) -> String {
+    format!("audio-index:{}", rec.content_hash)
 }
 
 pub(crate) fn dedup_key_proxy(rec: &AssetRecord, profile: &ProxyProfileV1) -> String {
@@ -245,6 +259,75 @@ pub(crate) fn ensure_waveform(
             .map_err(media_err)?;
             unchanged_since(file, stamp)?;
             std::fs::write(tmp, w.encode()).map_err(|e| io("cannot write the waveform", e))
+        },
+    )
+}
+
+// ---- índice de áudio -------------------------------------------------------------------------
+
+pub(crate) fn load_audio_index(path: &Path) -> Result<AudioIndex, AssetError> {
+    let bytes = std::fs::read(path).map_err(|e| io("cannot read the audio index", e))?;
+    AudioIndex::decode(&bytes).map_err(media_err)
+}
+
+fn audio_of(rec: &AssetRecord) -> Result<&capia_media::AudioStream, AssetError> {
+    rec.media.audio().ok_or_else(|| {
+        AssetError::new(
+            AssetErrorCode::Media(capia_media::MediaErrorCode::MediaUnsupportedFormat),
+            format!("asset {} has no audio stream", rec.asset_id),
+        )
+    })
+}
+
+pub(crate) fn ensure_audio_index(
+    env: &Env<'_>,
+    rec: &AssetRecord,
+    file: &Path,
+    cancel: Cancel<'_>,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<Produced, AssetError> {
+    let a = audio_of(rec)?;
+    let tb = a.time_base.ok_or_else(|| {
+        AssetError::new(
+            AssetErrorCode::Media(capia_media::MediaErrorCode::MediaMetadataInvalid),
+            "the audio stream has no time base",
+        )
+    })?;
+    let key = audio_index_key(env, rec, a.index)?;
+    if let Some(path) = env
+        .cache
+        .get_valid(&key, "aix", &|p| load_audio_index(p).map(|_| ()))
+    {
+        return Ok(Produced { path, hit: true });
+    }
+    check_source(rec, file)?;
+    let stamp = file_stamp(file)?;
+    let fast = container_supports_exact_seek(&rec.media.container.formats);
+    let total_hint = a
+        .duration
+        .map_or(0, |d| capia_media::ticks_to_samples(d, a.sample_rate));
+    let progress = std::cell::RefCell::new(progress);
+    env.cache.produce(
+        &key,
+        "aix",
+        cancel,
+        &|p| load_audio_index(p).map(|_| ()),
+        &|tmp| {
+            let ix = build_audio_index(
+                env.toolchain,
+                file,
+                a.index,
+                a.sample_rate,
+                a.channels,
+                tb,
+                fast,
+                Duration::from_secs(6 * 3600),
+                cancel,
+                &mut |done| (progress.borrow_mut())(done, total_hint),
+            )
+            .map_err(media_err)?;
+            unchanged_since(file, stamp)?;
+            std::fs::write(tmp, ix.encode()).map_err(|e| io("cannot write the audio index", e))
         },
     )
 }
