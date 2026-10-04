@@ -151,7 +151,8 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  height: 36px;
+  flex-wrap: wrap;
+  min-height: 36px;
   padding: 0 var(--sp-4);
   border-top: 1px solid var(--border);
   background: var(--surface-1);

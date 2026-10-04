@@ -90,7 +90,7 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
     const from = await editor.clipPoint(img.id, 0.5, 0.5);
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
-    await page.mouse.move(from.x + 90, from.y, { steps: 8 });
+    await page.mouse.move(from.x + 260, from.y, { steps: 16 });
     await page.mouse.up();
     await expect
       .poll(async () => (await editor.clips()).find((c) => c.id === img.id)?.start)

@@ -149,6 +149,7 @@ export class Editor {
   async goto(): Promise<void> {
     if (TAURI) {
       // mesma origem do app (http://tauri.localhost no Windows): habilita os ganchos `?e2e=1`
+      await expect.poll(() => this.page.url(), { timeout: 30_000 }).toMatch(/^https?:/);
       const origin = new URL(this.page.url()).origin;
       await this.page.goto(`${origin}/?e2e=1`);
     } else {

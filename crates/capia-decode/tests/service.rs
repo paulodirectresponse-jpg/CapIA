@@ -448,7 +448,7 @@ fn idle_sessions_are_evicted_and_the_pool_is_bounded_under_pressure() {
     );
     let sv = svc(&tc, |cfg| {
         cfg.max_sessions = 2;
-        cfg.idle_timeout = Duration::from_millis(300);
+        cfg.idle_timeout = Duration::from_secs(3);
     });
     sv.get_frame(&a, 3, Priority::Interactive).unwrap();
     sv.get_frame(&b, 3, Priority::Interactive).unwrap();
