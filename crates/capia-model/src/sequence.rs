@@ -95,6 +95,31 @@ pub struct SequenceHeader {
     pub frame_rate: FrameRate,
     #[serde(default = "default_sample_rate")]
     pub sample_rate: u32,
+    /// Formato de quadro da sequence (preset 9:16/1:1/4:5/16:9). O export pode sobrescrever.
+    #[serde(default = "default_width", skip_serializing_if = "is_default_width")]
+    pub width: u32,
+    #[serde(default = "default_height", skip_serializing_if = "is_default_height")]
+    pub height: u32,
+    /// Pasta no painel Project (`None` = raiz).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<crate::ids::FolderId>,
+}
+
+// O padrão não é serializado: projetos anteriores mantêm o mesmo digest (cadeia do journal).
+fn is_default_width(v: &u32) -> bool {
+    *v == default_width()
+}
+
+fn is_default_height(v: &u32) -> bool {
+    *v == default_height()
+}
+
+fn default_width() -> u32 {
+    1920
+}
+
+fn default_height() -> u32 {
+    1080
 }
 
 fn default_sample_rate() -> u32 {
@@ -479,6 +504,9 @@ mod tests {
             name: "s".into(),
             frame_rate: FrameRate::FPS_30,
             sample_rate: 48_000,
+            width: 1920,
+            height: 1080,
+            folder: None,
         }
     }
 
@@ -497,6 +525,8 @@ mod tests {
             speed: capia_time::Rational::ONE,
             reversed: false,
             properties: Default::default(),
+            group: None,
+            transition_in: None,
         }
     }
 

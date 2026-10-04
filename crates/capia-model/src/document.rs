@@ -1,6 +1,6 @@
 use crate::clip::Clip;
 use crate::error::ErrorCode;
-use crate::ids::{AssetId, ClipId, SequenceId};
+use crate::ids::{AssetId, ClipId, DeliverableId, FolderId, SequenceId};
 use crate::sequence::{Sequence, SequenceHeader};
 use capia_time::Ticks;
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,33 @@ pub struct Asset {
     pub has_audio: bool,
     #[serde(default)]
     pub offline: bool,
+}
+
+/// Pasta do painel Project (organização; as abas de sequences só navegam, não organizam).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Folder {
+    pub id: FolderId,
+    pub name: String,
+    #[serde(default)]
+    pub parent: Option<FolderId>,
+}
+
+/// Entregável: referencia uma sequence, um preset de export e o destino. A execução (export) é
+/// do `capia-project`; o documento só guarda a **definição**.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Deliverable {
+    pub id: DeliverableId,
+    pub name: String,
+    pub sequence: SequenceId,
+    /// Nome do preset de export (`h264-mp4`, `intermediate`, ...).
+    pub preset: String,
+    /// Caminho de saída (relativo à pasta do projeto ou absoluto).
+    pub path: String,
+    /// Largura/altura de saída; `None` ⇒ as da sequence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
 }
 
 /// Erro de aplicação de uma operação primitiva.
@@ -60,6 +87,10 @@ pub struct Document {
     pub revision: u64,
     pub(crate) sequences: BTreeMap<SequenceId, Arc<Sequence>>,
     pub(crate) assets: BTreeMap<AssetId, Asset>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) folders: BTreeMap<FolderId, Folder>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) deliverables: BTreeMap<DeliverableId, Deliverable>,
 }
 
 impl Default for Document {
@@ -75,7 +106,25 @@ impl Document {
             revision: 0,
             sequences: BTreeMap::new(),
             assets: BTreeMap::new(),
+            folders: BTreeMap::new(),
+            deliverables: BTreeMap::new(),
         }
+    }
+
+    pub fn folder(&self, id: &FolderId) -> Option<&Folder> {
+        self.folders.get(id)
+    }
+
+    pub fn folders(&self) -> impl Iterator<Item = &Folder> {
+        self.folders.values()
+    }
+
+    pub fn deliverable(&self, id: &DeliverableId) -> Option<&Deliverable> {
+        self.deliverables.get(id)
+    }
+
+    pub fn deliverables(&self) -> impl Iterator<Item = &Deliverable> {
+        self.deliverables.values()
     }
 
     pub fn sequence(&self, id: &SequenceId) -> Option<&Sequence> {
@@ -153,6 +202,20 @@ impl Document {
                 Ok(header)
             }
         }
+    }
+
+    pub(crate) fn put_folder_raw(&mut self, id: &FolderId, f: Option<Folder>) {
+        match f {
+            Some(f) => self.folders.insert(id.clone(), f),
+            None => self.folders.remove(id),
+        };
+    }
+
+    pub(crate) fn put_deliverable_raw(&mut self, id: &DeliverableId, d: Option<Deliverable>) {
+        match d {
+            Some(d) => self.deliverables.insert(id.clone(), d),
+            None => self.deliverables.remove(id),
+        };
     }
 
     pub(crate) fn put_asset_raw(&mut self, id: &AssetId, asset: Option<Asset>) -> Option<Asset> {

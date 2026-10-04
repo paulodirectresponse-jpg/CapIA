@@ -51,6 +51,9 @@ impl W {
                 name: format!("seq {i}"),
                 frame_rate: FrameRate::FPS_30,
                 sample_rate: None,
+                width: None,
+                height: None,
+                folder: None,
             });
             for (p, kind, magnetic) in [
                 ("t", TrackKind::Visual, false),
@@ -398,6 +401,9 @@ fn duplicate_errors_are_structured_and_atomic() {
         name: "c".into(),
         frame_rate: FrameRate::FPS_30,
         sample_rate: None,
+        width: None,
+        height: None,
+        folder: None,
     })
     .unwrap();
     let before2 = w.sem();
@@ -692,6 +698,9 @@ fn flatten_refuses_a_nested_clip_with_its_own_properties_and_different_frame_rat
         name: "24".into(),
         frame_rate: FrameRate::FPS_24,
         sample_rate: None,
+        width: None,
+        height: None,
+        folder: None,
     })
     .unwrap();
     w.cmd(Command::AddTrack {

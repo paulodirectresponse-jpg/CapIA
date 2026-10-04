@@ -58,6 +58,14 @@ string_id!(
     /// Identificador de marcador.
     MarkerId
 );
+string_id!(
+    /// Identificador de pasta do painel Project.
+    FolderId
+);
+string_id!(
+    /// Identificador de deliverable (sequence + preset + destino).
+    DeliverableId
+);
 
 /// Tipo + id de uma entidade do documento (conjunto `affected`, conflitos, erros).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -74,6 +82,8 @@ pub enum EntityKind {
     Clip,
     Marker,
     Asset,
+    Folder,
+    Deliverable,
 }
 
 impl EntityRef {

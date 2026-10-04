@@ -108,6 +108,9 @@ fn place(p: &mut Project, asset: &AssetId, clip: &str, dur_ticks: i64, audio: bo
                         name: "S".into(),
                         frame_rate: FrameRate::FPS_30,
                         sample_rate: None,
+                        width: None,
+                        height: None,
+                        folder: None,
                     },
                 ),
                 env(

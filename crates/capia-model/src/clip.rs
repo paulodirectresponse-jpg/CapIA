@@ -8,6 +8,141 @@ pub fn speed_in_range(speed: Rational) -> bool {
     speed >= Rational::new(1, 100).unwrap_or(Rational::ONE) && speed <= Rational::from_int(100)
 }
 
+/// Alinhamento horizontal do texto.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextAlign {
+    Left,
+    #[default]
+    Center,
+    Right,
+}
+
+/// Estilo de texto determinístico (um único renderizador serve preview e export). Tudo inteiro/
+/// string: o tamanho é relativo à **altura do quadro** (`size_permille` = 1/1000 da altura), então o
+/// mesmo estilo rende igual em qualquer resolução.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextStyle {
+    /// `sans` (padrão, fonte embutida) — famílias desconhecidas caem em `sans` com aviso.
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
+    /// 10..=500 (‰ da altura do quadro).
+    #[serde(default = "default_size_permille")]
+    pub size_permille: u32,
+    /// 100..=900 (`>= 600` usa a variante negrito).
+    #[serde(default = "default_weight")]
+    pub weight: u16,
+    #[serde(default)]
+    pub align: TextAlign,
+    /// `#RRGGBB` ou `#RRGGBBAA`.
+    #[serde(default = "default_text_color")]
+    pub color: String,
+    /// Caixa de fundo opcional (`#RRGGBB[AA]`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<String>,
+    /// Contorno opcional (`#RRGGBB[AA]`) com `stroke_permille` (‰ da altura; 1..=50).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stroke: Option<String>,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub stroke_permille: u32,
+}
+
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
+}
+
+fn default_font_family() -> String {
+    "sans".to_owned()
+}
+
+fn default_size_permille() -> u32 {
+    60
+}
+
+fn default_weight() -> u16 {
+    400
+}
+
+fn default_text_color() -> String {
+    "#FFFFFF".to_owned()
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            font_family: default_font_family(),
+            size_permille: default_size_permille(),
+            weight: default_weight(),
+            align: TextAlign::Center,
+            color: default_text_color(),
+            background: None,
+            stroke: None,
+            stroke_permille: 0,
+        }
+    }
+}
+
+fn valid_hex_color(s: &str) -> bool {
+    let b = s.as_bytes();
+    (b.len() == 7 || b.len() == 9) && b[0] == b'#' && b[1..].iter().all(u8::is_ascii_hexdigit)
+}
+
+impl TextStyle {
+    /// Estilo padrão (não é serializado: mantém o digest de projetos anteriores).
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// `Err` com o motivo se algum campo estiver fora da faixa.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if !(10..=500).contains(&self.size_permille) {
+            return Err("size_permille must be within 10..=500");
+        }
+        if !(100..=900).contains(&self.weight) {
+            return Err("weight must be within 100..=900");
+        }
+        if self.font_family.is_empty() || self.font_family.len() > 64 {
+            return Err("font_family must have 1..=64 characters");
+        }
+        for c in [
+            Some(&self.color),
+            self.background.as_ref(),
+            self.stroke.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !valid_hex_color(c) {
+                return Err("colors must be #RRGGBB or #RRGGBBAA");
+            }
+        }
+        if self.stroke_permille > 50 || (self.stroke.is_some() && self.stroke_permille == 0) {
+            return Err("stroke needs stroke_permille within 1..=50");
+        }
+        Ok(())
+    }
+}
+
+/// Transição **na entrada** de um clip (no corte com o clip anterior da mesma track).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionKind {
+    /// Cross dissolve centrado no corte (precisa de *handles* de mídia nos dois lados: metade da
+    /// duração além do fim do anterior e antes do início deste).
+    Dissolve,
+    /// Mergulho: o anterior some e este surge, sem handles (cada metade fica do seu lado do corte).
+    Fade,
+    /// Este clip entra deslizando da direita sobre o que está abaixo, durante `duration`.
+    SlideIn,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Transition {
+    pub kind: TransitionKind,
+    /// Duração total (> 0), alinhada ao tick; limitada pela validação do comando.
+    pub duration: Ticks,
+}
+
 /// O que o clip contém (docs/TIMELINE_ENGINE.md §3). Conteúdos ainda não implementados no motor
 /// (`Caption`) entram em missões futuras.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +160,8 @@ pub enum ClipContent {
     },
     Text {
         text: String,
+        #[serde(default, skip_serializing_if = "TextStyle::is_default")]
+        style: TextStyle,
     },
     Solid {
         color: String,
@@ -80,6 +217,12 @@ pub struct Clip {
     pub reversed: bool,
     #[serde(default)]
     pub properties: PropertySet,
+    /// Grupo de clips (movem juntos; rótulo livre único por sequence).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// Transição na entrada deste clip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transition_in: Option<Transition>,
 }
 
 fn default_true() -> bool {
@@ -145,6 +288,8 @@ mod tests {
             speed,
             reversed,
             properties: PropertySet::new(),
+            group: None,
+            transition_in: None,
         }
     }
 

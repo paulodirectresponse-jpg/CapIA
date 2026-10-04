@@ -402,7 +402,7 @@ fn hidden_tracks_disabled_clips_and_unsupported_content_behave() {
     d.clip(
         "V1",
         "late",
-        ClipContent::Text { text: "hi".into() },
+        ClipContent::Text { text: "hi".into() , style: Default::default() },
         31 * F,
         5 * F,
         0,

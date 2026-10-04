@@ -182,6 +182,9 @@ fn run_case(seed: u64, steps: usize, tally: &mut Tally) {
                         name: "S".into(),
                         frame_rate: FrameRate::FPS_30,
                         sample_rate: None,
+                        width: None,
+                        height: None,
+                        folder: None,
                     },
                 },
                 CommandEnvelope {

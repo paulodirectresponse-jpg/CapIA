@@ -140,6 +140,9 @@ impl Lab {
             name: id.into(),
             frame_rate: fr,
             sample_rate: None,
+            width: None,
+            height: None,
+            folder: None,
         });
     }
 

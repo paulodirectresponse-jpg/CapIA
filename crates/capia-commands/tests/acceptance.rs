@@ -118,6 +118,9 @@ fn build_world(s: &Value) -> World {
             name: "seq".into(),
             frame_rate: fr,
             sample_rate: 48_000,
+            width: 1920,
+            height: 1080,
+            folder: None,
         }),
     })
     .unwrap();
@@ -165,6 +168,7 @@ fn content_for(c: &Value, track_kind: TrackKind, asset: &str) -> ClipContent {
     match c["content"].as_str() {
         Some("text") => ClipContent::Text {
             text: "text".into(),
+            style: Default::default(),
         },
         Some("solid") => ClipContent::Solid {
             color: "#000000".into(),
@@ -231,6 +235,8 @@ fn given_clip(w: &World, track: &str, kind: TrackKind, c: &Value, doc: &mut Docu
         speed: c.get("speed").map_or(Rational::ONE, rational),
         reversed: c["reversed"].as_bool().unwrap_or(false),
         properties,
+        group: None,
+        transition_in: None,
     }
 }
 

@@ -156,7 +156,21 @@ pub(crate) fn create_sequence(
     name: &str,
     frame_rate: FrameRate,
     sample_rate: Option<u32>,
+    size: (Option<u32>, Option<u32>),
+    folder: Option<&capia_model::FolderId>,
 ) -> Result<CommandOutput> {
+    let (width, height) = (size.0.unwrap_or(1920), size.1.unwrap_or(1080));
+    if !(16..=16_384).contains(&width) || !(16..=16_384).contains(&height) {
+        return Err(CommandError::new(
+            ErrorCode::OutOfRange,
+            "width/height must be within 16..=16384",
+        ));
+    }
+    if let Some(f) = folder {
+        if ctx.doc.folder(f).is_none() {
+            return Err(CommandError::not_found("folder", f));
+        }
+    }
     let id = id
         .cloned()
         .unwrap_or_else(|| SequenceId(ctx.derive_id("seq")));
@@ -176,6 +190,9 @@ pub(crate) fn create_sequence(
         name: name.to_owned(),
         frame_rate,
         sample_rate,
+        width,
+        height,
+        folder: folder.cloned(),
     };
     ctx.emit(PrimitiveOp::Sequence {
         id: id.clone(),
@@ -521,6 +538,7 @@ pub(crate) fn delete_sequence(ctx: &mut Ctx, sequence: &SequenceId) -> Result<Co
             new: None,
         })?;
     }
+    super::editor::drop_deliverables_of(ctx, sequence)?;
     ctx.emit(PrimitiveOp::Sequence {
         id: sequence.clone(),
         old: Some(header),

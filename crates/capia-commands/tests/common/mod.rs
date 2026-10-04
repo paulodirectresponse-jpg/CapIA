@@ -89,6 +89,9 @@ pub fn base_engine() -> Engine {
         name: "S".into(),
         frame_rate: FPS,
         sample_rate: None,
+        width: None,
+        height: None,
+        folder: None,
     }];
     for (id, kind, magnetic) in [
         ("V3", TrackKind::Visual, false),
@@ -177,7 +180,10 @@ pub fn random_command(rng: &mut Rng, e: &Engine, counter: &mut u32) -> Command {
                 )
             };
             let content = match rng.below(8) {
-                0 if !audio => ClipContent::Text { text: "hi".into() },
+                0 if !audio => ClipContent::Text {
+                    text: "hi".into(),
+                    style: Default::default(),
+                },
                 1 if !audio => ClipContent::Solid {
                     color: "#fff".into(),
                 },

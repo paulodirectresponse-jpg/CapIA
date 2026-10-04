@@ -39,6 +39,9 @@ pub fn base_tx() -> Transaction {
                 FrameRate::FPS_24
             },
             sample_rate: None,
+            width: None,
+            height: None,
+            folder: None,
         });
         for (prefix, magnetic) in [("t", false), ("m", true)] {
             push(Command::AddTrack {

@@ -98,6 +98,9 @@ pub(crate) fn setup_tx(prefix: &str) -> Transaction {
             name: "S".into(),
             frame_rate: FrameRate::FPS_30,
             sample_rate: None,
+            width: None,
+            height: None,
+            folder: None,
         },
     )];
     for id in ["V1", "V2"] {

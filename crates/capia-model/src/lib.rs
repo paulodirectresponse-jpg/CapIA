@@ -17,10 +17,14 @@ pub mod sequence;
 pub mod validate;
 
 pub use capia_time::Ticks;
-pub use clip::{Clip, ClipContent, speed_in_range};
-pub use document::{Asset, DOCUMENT_SCHEMA_VERSION, Document, OpError};
+pub use clip::{
+    Clip, ClipContent, TextAlign, TextStyle, Transition, TransitionKind, speed_in_range,
+};
+pub use document::{Asset, DOCUMENT_SCHEMA_VERSION, Deliverable, Document, Folder, OpError};
 pub use error::ErrorCode;
-pub use ids::{AssetId, ClipId, EntityKind, EntityRef, MarkerId, SequenceId, TrackId};
+pub use ids::{
+    AssetId, ClipId, DeliverableId, EntityKind, EntityRef, FolderId, MarkerId, SequenceId, TrackId,
+};
 pub use ops::{PrimitiveOp, TrackSlot};
 pub use property::{
     Animatable, Interp, Keyframe, PropertySet, PropertySpec, property_spec, property_specs,

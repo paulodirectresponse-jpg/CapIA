@@ -66,6 +66,8 @@ pub(crate) fn insert_clip(
         speed: nc.speed,
         reversed: nc.reversed,
         properties: nc.properties.clone(),
+        group: None,
+        transition_in: None,
     };
     if let ClipContent::Nested {
         sequence: target, ..

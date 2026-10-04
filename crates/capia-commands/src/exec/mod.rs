@@ -3,6 +3,7 @@
 mod check;
 mod clips;
 mod compose;
+mod editor;
 mod keyframes;
 mod nested;
 mod ripple;
@@ -60,7 +61,67 @@ pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<Comman
             name,
             frame_rate,
             sample_rate,
-        } => structure::create_sequence(ctx, id.as_ref(), name, *frame_rate, *sample_rate),
+            width,
+            height,
+            folder,
+        } => structure::create_sequence(
+            ctx,
+            id.as_ref(),
+            name,
+            *frame_rate,
+            *sample_rate,
+            (*width, *height),
+            folder.as_ref(),
+        ),
+        Command::SetSequenceFormat {
+            sequence,
+            width,
+            height,
+        } => editor::set_sequence_format(ctx, sequence, *width, *height),
+        Command::SetSequenceFolder { sequence, folder } => {
+            editor::set_sequence_folder(ctx, sequence, folder.as_ref())
+        }
+        Command::CreateFolder { id, name, parent } => {
+            editor::create_folder(ctx, id.as_ref(), name, parent.as_ref())
+        }
+        Command::RenameFolder { folder, name } => editor::rename_folder(ctx, folder, name),
+        Command::MoveFolder { folder, parent } => editor::move_folder(ctx, folder, parent.as_ref()),
+        Command::DeleteFolder { folder } => editor::delete_folder(ctx, folder),
+        Command::CreateDeliverable {
+            id,
+            name,
+            sequence,
+            preset,
+            path,
+            width,
+            height,
+        } => editor::create_deliverable(
+            ctx,
+            id.as_ref(),
+            name,
+            sequence,
+            preset,
+            path,
+            *width,
+            *height,
+        ),
+        Command::UpdateDeliverable { deliverable } => editor::update_deliverable(ctx, deliverable),
+        Command::DeleteDeliverable { deliverable } => editor::delete_deliverable(ctx, deliverable),
+        Command::RenameClip { clip, name } => editor::rename_clip(ctx, clip, name),
+        Command::SetClipEnabled { clip, enabled } => editor::set_clip_enabled(ctx, clip, *enabled),
+        Command::SetText { clip, text, style } => {
+            editor::set_text(ctx, clip, text.as_deref(), style.as_ref())
+        }
+        Command::GroupClips { clips, group } => editor::group_clips(ctx, clips, group.as_deref()),
+        Command::Ungroup { clips } => editor::ungroup(ctx, clips),
+        Command::SetTransition { clip, transition } => {
+            editor::set_transition(ctx, clip, transition.as_ref())
+        }
+        Command::DetachAudio {
+            clip,
+            audio_track,
+            audio_clip_id,
+        } => editor::detach_audio(ctx, clip, audio_track.as_ref(), audio_clip_id.as_ref()),
         Command::AddTrack {
             sequence,
             id,

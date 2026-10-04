@@ -52,6 +52,9 @@ impl World {
                 name: format!("seq {i}"),
                 frame_rate: FrameRate::FPS_30,
                 sample_rate: None,
+                width: None,
+                height: None,
+                folder: None,
             });
             for (prefix, magnetic) in [("t", false), ("m", true)] {
                 cmds.push(Command::AddTrack {
@@ -683,6 +686,9 @@ fn follow_length_propagates_through_two_levels_and_across_frame_rates() {
             name: "mid".into(),
             frame_rate: FrameRate::FPS_30,
             sample_rate: None,
+            width: None,
+            height: None,
+            folder: None,
         },
         Command::AddTrack {
             sequence: sid(1),
@@ -698,6 +704,9 @@ fn follow_length_propagates_through_two_levels_and_across_frame_rates() {
             name: "leaf".into(),
             frame_rate: FrameRate::FPS_24,
             sample_rate: None,
+            width: None,
+            height: None,
+            folder: None,
         },
         Command::AddTrack {
             sequence: sid(2),

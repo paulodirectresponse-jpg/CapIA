@@ -84,6 +84,9 @@ fn doc(frames: i64) -> (Arc<RenderGraph>, SequenceId) {
         name: "S".into(),
         frame_rate: FrameRate::FPS_30,
         sample_rate: None,
+        width: None,
+        height: None,
+        folder: None,
     });
     run(Command::AddTrack {
         sequence: "S".into(),

@@ -28,6 +28,9 @@ fn big_document() -> Document {
             name: "S".into(),
             frame_rate: FrameRate::FPS_30,
             sample_rate: 48_000,
+            width: 1920,
+            height: 1080,
+            folder: None,
         }),
     })
     .unwrap();
@@ -78,6 +81,8 @@ fn big_document() -> Document {
                     speed: Rational::ONE,
                     reversed: false,
                     properties: Default::default(),
+                    group: None,
+                    transition_in: None,
                 }),
             })
             .unwrap();

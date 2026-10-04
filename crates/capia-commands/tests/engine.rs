@@ -78,6 +78,9 @@ fn engine_with(config: EngineConfig) -> Engine {
             name: "S".into(),
             frame_rate: FrameRate::FPS_30,
             sample_rate: None,
+            width: None,
+            height: None,
+            folder: None,
         },
     )];
     for (id, magnetic) in [("V3", false), ("V2", false), ("V1", true)] {
@@ -563,6 +566,9 @@ fn symbolic_refs_chain_commands_and_unresolved_refs_fail() {
             name: "S".into(),
             frame_rate: FrameRate::FPS_30,
             sample_rate: None,
+            width: None,
+            height: None,
+            folder: None,
         },
     );
     seq.reference = Some("$seq".into());

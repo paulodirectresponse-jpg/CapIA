@@ -135,6 +135,9 @@ mod tests {
             name: "s".into(),
             frame_rate: FrameRate::FPS_30,
             sample_rate: 48_000,
+            width: 1920,
+            height: 1080,
+            folder: None,
         };
         let tracks: Vec<Track> = tracks
             .iter()

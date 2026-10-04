@@ -1065,6 +1065,37 @@ fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()
             sub(&mut clip.0, refs)?;
             sub_scope(scope, refs)?;
         }
+        Command::SetSequenceFormat { sequence, .. }
+        | Command::SetSequenceFolder { sequence, .. } => sub(&mut sequence.0, refs)?,
+        Command::CreateFolder { .. }
+        | Command::RenameFolder { .. }
+        | Command::MoveFolder { .. }
+        | Command::DeleteFolder { .. }
+        | Command::CreateDeliverable { .. }
+        | Command::UpdateDeliverable { .. }
+        | Command::DeleteDeliverable { .. } => {}
+        Command::RenameClip { clip, .. }
+        | Command::SetClipEnabled { clip, .. }
+        | Command::SetText { clip, .. }
+        | Command::SetTransition { clip, .. } => sub(&mut clip.0, refs)?,
+        Command::DetachAudio {
+            clip,
+            audio_track,
+            audio_clip_id,
+        } => {
+            sub(&mut clip.0, refs)?;
+            if let Some(t) = audio_track {
+                sub(&mut t.0, refs)?;
+            }
+            if let Some(c) = audio_clip_id {
+                sub(&mut c.0, refs)?;
+            }
+        }
+        Command::GroupClips { clips, .. } | Command::Ungroup { clips } => {
+            for c in clips {
+                sub(&mut c.0, refs)?;
+            }
+        }
         Command::SplitClip { clip, .. }
         | Command::SetProperty { clip, .. }
         | Command::AddKeyframe { clip, .. }

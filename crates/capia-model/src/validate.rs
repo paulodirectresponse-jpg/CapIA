@@ -15,6 +15,8 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const MAX_TRACKS_PER_SEQUENCE: usize = 1_000;
 pub const MAX_CLIPS_PER_SEQUENCE: usize = 100_000;
 pub const MAX_NESTING_DEPTH: usize = 16;
+/// Teto da duração de uma transição (30 s em ticks).
+pub const MAX_TRANSITION_TICKS: Ticks = Ticks(30 * capia_time::TICKS_PER_SECOND);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Violation {
@@ -185,6 +187,42 @@ pub fn validate_clip(doc: &Document, seq: &Sequence, clip: &Clip) -> Vec<Violati
         out.push(Violation::new(
             ErrorCode::OutOfRange,
             format!("clip {} speed {} outside [1/100, 100]", clip.id, clip.speed),
+            me.clone(),
+        ));
+    }
+    if let ClipContent::Text { style, .. } = &clip.content {
+        if let Err(why) = style.validate() {
+            out.push(Violation::new(
+                ErrorCode::OutOfRange,
+                format!("clip {} text style: {why}", clip.id),
+                me.clone(),
+            ));
+        }
+    }
+    if let Some(tr) = &clip.transition_in {
+        if track.kind != TrackKind::Visual {
+            out.push(Violation::new(
+                ErrorCode::WrongTrackKind,
+                format!("clip {} has a transition on a non-visual track", clip.id),
+                me.clone(),
+            ));
+        }
+        if tr.duration <= Ticks::ZERO || tr.duration > MAX_TRANSITION_TICKS {
+            out.push(Violation::new(
+                ErrorCode::OutOfRange,
+                format!("clip {} transition duration outside (0, 30s]", clip.id),
+                me.clone(),
+            ));
+        }
+    }
+    if clip
+        .group
+        .as_ref()
+        .is_some_and(|g| g.is_empty() || g.len() > 64)
+    {
+        out.push(Violation::new(
+            ErrorCode::OutOfRange,
+            format!("clip {} group label must have 1..=64 characters", clip.id),
             me.clone(),
         ));
     }
@@ -470,12 +508,94 @@ pub fn validate_nested_graph(doc: &Document) -> Vec<Violation> {
     out
 }
 
-/// Valida o documento inteiro (todas as sequences + grafo de nested).
+/// Valida pastas, deliverables e a pasta de cada sequence.
+fn validate_organization(doc: &Document) -> Vec<Violation> {
+    let mut out = Vec::new();
+    for f in doc.folders() {
+        let me = vec![EntityRef::new(EntityKind::Folder, f.id.as_str())];
+        if f.name.trim().is_empty() || f.name.len() > 128 {
+            out.push(Violation::new(
+                ErrorCode::OutOfRange,
+                format!("folder {} name must have 1..=128 characters", f.id),
+                me.clone(),
+            ));
+        }
+        // pai existente e sem ciclo (a cadeia termina na raiz em ≤ nº de pastas passos)
+        let mut cur = f.parent.clone();
+        let mut steps = 0usize;
+        while let Some(p) = cur {
+            steps += 1;
+            match doc.folder(&p) {
+                None => {
+                    out.push(Violation::new(
+                        ErrorCode::DanglingReference,
+                        format!("folder {} references missing parent {p}", f.id),
+                        me.clone(),
+                    ));
+                    break;
+                }
+                Some(pf) => cur = pf.parent.clone(),
+            }
+            if steps > doc.folders.len() {
+                out.push(Violation::new(
+                    ErrorCode::InvariantViolation,
+                    format!("folder {} is part of a parent cycle", f.id),
+                    me.clone(),
+                ));
+                break;
+            }
+        }
+    }
+    for (id, seq) in doc.sequences() {
+        let h = &seq.header;
+        let me = vec![EntityRef::new(EntityKind::Sequence, id.as_str())];
+        if let Some(fid) = &h.folder {
+            if doc.folder(fid).is_none() {
+                out.push(Violation::new(
+                    ErrorCode::DanglingReference,
+                    format!("sequence {id} references missing folder {fid}"),
+                    me.clone(),
+                ));
+            }
+        }
+        if !(16..=16_384).contains(&h.width) || !(16..=16_384).contains(&h.height) {
+            out.push(Violation::new(
+                ErrorCode::OutOfRange,
+                format!("sequence {id} frame size must be within 16..=16384"),
+                me,
+            ));
+        }
+    }
+    for d in doc.deliverables() {
+        let me = vec![EntityRef::new(EntityKind::Deliverable, d.id.as_str())];
+        if doc.sequence(&d.sequence).is_none() {
+            out.push(Violation::new(
+                ErrorCode::DanglingReference,
+                format!(
+                    "deliverable {} references missing sequence {}",
+                    d.id, d.sequence
+                ),
+                me.clone(),
+            ));
+        }
+        if d.path.trim().is_empty() || d.name.trim().is_empty() || d.preset.trim().is_empty() {
+            out.push(Violation::new(
+                ErrorCode::InvalidArgument,
+                format!("deliverable {} needs name, preset and path", d.id),
+                me,
+            ));
+        }
+    }
+    out
+}
+
+/// Valida o documento inteiro (todas as sequences + grafo de nested + organização).
 pub fn validate_document(doc: &Document) -> Vec<Violation> {
     let mut out: Vec<Violation> = doc
         .sequences()
         .flat_map(|(id, seq)| validate_sequence(doc, id, seq))
         .collect();
     out.extend(validate_nested_graph(doc));
+    out.extend(validate_organization(doc));
     out
 }

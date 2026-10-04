@@ -6,9 +6,11 @@
 //! entidade para detecção de conflitos.
 
 use crate::clip::Clip;
-use crate::document::{Asset, Document, OpError};
+use crate::document::{Asset, Deliverable, Document, Folder, OpError};
 use crate::error::ErrorCode;
-use crate::ids::{AssetId, ClipId, EntityKind, EntityRef, MarkerId, SequenceId, TrackId};
+use crate::ids::{
+    AssetId, ClipId, DeliverableId, EntityKind, EntityRef, FolderId, MarkerId, SequenceId, TrackId,
+};
 use crate::sequence::{Marker, SequenceHeader, Track};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -50,6 +52,16 @@ pub enum PrimitiveOp {
         id: AssetId,
         old: Option<Asset>,
         new: Option<Asset>,
+    },
+    Folder {
+        id: FolderId,
+        old: Option<Folder>,
+        new: Option<Folder>,
+    },
+    Deliverable {
+        id: DeliverableId,
+        old: Option<Deliverable>,
+        new: Option<Deliverable>,
     },
 }
 
@@ -114,6 +126,16 @@ impl PrimitiveOp {
                 old: new,
                 new: old,
             },
+            Self::Folder { id, old, new } => Self::Folder {
+                id,
+                old: new,
+                new: old,
+            },
+            Self::Deliverable { id, old, new } => Self::Deliverable {
+                id,
+                old: new,
+                new: old,
+            },
         }
     }
 
@@ -124,7 +146,7 @@ impl PrimitiveOp {
             | Self::Track { sequence, .. }
             | Self::Marker { sequence, .. } => Some(sequence),
             Self::Sequence { id, .. } => Some(id),
-            Self::Asset { .. } => None,
+            Self::Asset { .. } | Self::Folder { .. } | Self::Deliverable { .. } => None,
         }
     }
 
@@ -150,6 +172,12 @@ impl PrimitiveOp {
             }
             Self::Asset { id, .. } => {
                 set.insert(EntityRef::new(EntityKind::Asset, id.as_str()));
+            }
+            Self::Folder { id, .. } => {
+                set.insert(EntityRef::new(EntityKind::Folder, id.as_str()));
+            }
+            Self::Deliverable { id, .. } => {
+                set.insert(EntityRef::new(EntityKind::Deliverable, id.as_str()));
             }
         }
         set
@@ -187,6 +215,20 @@ impl Document {
                     return Err(mismatch("asset", id.as_str()));
                 }
                 self.put_asset_raw(id, new.clone());
+                Ok(())
+            }
+            PrimitiveOp::Folder { id, old, new } => {
+                if self.folders.get(id) != old.as_ref() {
+                    return Err(mismatch("folder", id.as_str()));
+                }
+                self.put_folder_raw(id, new.clone());
+                Ok(())
+            }
+            PrimitiveOp::Deliverable { id, old, new } => {
+                if self.deliverables.get(id) != old.as_ref() {
+                    return Err(mismatch("deliverable", id.as_str()));
+                }
+                self.put_deliverable_raw(id, new.clone());
                 Ok(())
             }
             PrimitiveOp::Clip {

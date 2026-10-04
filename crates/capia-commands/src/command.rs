@@ -2,8 +2,8 @@
 //! UI, IA (tools), CLI e API usam exatamente estes tipos.
 
 use capia_model::{
-    Asset, AssetId, ClipContent, ClipId, Interp, MarkerId, PropertySet, SequenceId, TrackId,
-    TrackKind, TrackRole,
+    Asset, AssetId, ClipContent, ClipId, Deliverable, DeliverableId, FolderId, Interp, MarkerId,
+    PropertySet, SequenceId, TextStyle, TrackId, TrackKind, TrackRole, Transition,
 };
 use capia_time::{FrameRate, Rational, Ticks};
 use serde::{Deserialize, Serialize};
@@ -117,6 +117,64 @@ pub enum Command {
         frame_rate: FrameRate,
         #[serde(default)]
         sample_rate: Option<u32>,
+        /// Formato de quadro (padrão 1920×1080).
+        #[serde(default)]
+        width: Option<u32>,
+        #[serde(default)]
+        height: Option<u32>,
+        /// Pasta do painel Project (padrão: raiz).
+        #[serde(default)]
+        folder: Option<FolderId>,
+    },
+    /// Formato de quadro da sequence (preset 9:16 / 1:1 / 4:5 / 16:9).
+    SetSequenceFormat {
+        sequence: SequenceId,
+        width: u32,
+        height: u32,
+    },
+    /// Move a sequence para uma pasta (`None` = raiz).
+    SetSequenceFolder {
+        sequence: SequenceId,
+        #[serde(default)]
+        folder: Option<FolderId>,
+    },
+    CreateFolder {
+        #[serde(default)]
+        id: Option<FolderId>,
+        name: String,
+        #[serde(default)]
+        parent: Option<FolderId>,
+    },
+    RenameFolder {
+        folder: FolderId,
+        name: String,
+    },
+    MoveFolder {
+        folder: FolderId,
+        #[serde(default)]
+        parent: Option<FolderId>,
+    },
+    /// `IN_USE` se a pasta tem subpastas ou sequences.
+    DeleteFolder {
+        folder: FolderId,
+    },
+    CreateDeliverable {
+        #[serde(default)]
+        id: Option<DeliverableId>,
+        name: String,
+        sequence: SequenceId,
+        preset: String,
+        path: String,
+        #[serde(default)]
+        width: Option<u32>,
+        #[serde(default)]
+        height: Option<u32>,
+    },
+    UpdateDeliverable {
+        deliverable: Deliverable,
+    },
+    DeleteDeliverable {
+        deliverable: DeliverableId,
     },
     AddTrack {
         sequence: SequenceId,
@@ -316,6 +374,48 @@ pub enum Command {
         scope: RippleScope,
     },
 
+    // --- campos de clip do editor ---------------------------------------------------------
+    RenameClip {
+        clip: ClipId,
+        name: String,
+    },
+    SetClipEnabled {
+        clip: ClipId,
+        enabled: bool,
+    },
+    /// Texto e/ou estilo de um clip de texto/legenda (`None` mantém o valor atual).
+    SetText {
+        clip: ClipId,
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        style: Option<TextStyle>,
+    },
+    /// Agrupa clips da mesma sequence (movem juntos). `group` omitido ⇒ rótulo derivado.
+    GroupClips {
+        clips: Vec<ClipId>,
+        #[serde(default)]
+        group: Option<String>,
+    },
+    /// Desfaz o(s) grupo(s) a que os clips pertencem.
+    Ungroup {
+        clips: Vec<ClipId>,
+    },
+    /// Define/remove a transição de entrada do clip.
+    SetTransition {
+        clip: ClipId,
+        #[serde(default)]
+        transition: Option<Transition>,
+    },
+    /// Separa o áudio de um clip de mídia com vídeo+áudio num clip de áudio alinhado.
+    DetachAudio {
+        clip: ClipId,
+        #[serde(default)]
+        audio_track: Option<TrackId>,
+        #[serde(default)]
+        audio_clip_id: Option<ClipId>,
+    },
+
     // --- propriedades e keyframes ---------------------------------------------------------
     SetProperty {
         clip: ClipId,
@@ -363,6 +463,22 @@ impl Command {
             Self::CreateNestedFromSelection { .. } => "create_nested_from_selection",
             Self::GenerateVariants { .. } => "generate_variants",
             Self::CreateSequence { .. } => "create_sequence",
+            Self::SetSequenceFormat { .. } => "set_sequence_format",
+            Self::SetSequenceFolder { .. } => "set_sequence_folder",
+            Self::CreateFolder { .. } => "create_folder",
+            Self::RenameFolder { .. } => "rename_folder",
+            Self::MoveFolder { .. } => "move_folder",
+            Self::DeleteFolder { .. } => "delete_folder",
+            Self::CreateDeliverable { .. } => "create_deliverable",
+            Self::UpdateDeliverable { .. } => "update_deliverable",
+            Self::DeleteDeliverable { .. } => "delete_deliverable",
+            Self::RenameClip { .. } => "rename_clip",
+            Self::SetClipEnabled { .. } => "set_clip_enabled",
+            Self::SetText { .. } => "set_text",
+            Self::GroupClips { .. } => "group_clips",
+            Self::Ungroup { .. } => "ungroup",
+            Self::SetTransition { .. } => "set_transition",
+            Self::DetachAudio { .. } => "detach_audio",
             Self::AddTrack { .. } => "add_track",
             Self::SetTrackFlags { .. } => "set_track_flags",
             Self::DeleteTrack { .. } => "delete_track",
