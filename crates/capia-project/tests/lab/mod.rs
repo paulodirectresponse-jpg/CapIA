@@ -281,4 +281,47 @@ impl Lab {
         ]);
         out
     }
+
+    /// Clipe com um "flash" (quadro branco + beep de 1 kHz) de 1,0 s a 1,2 s: o instante do flash
+    /// no vídeo e o do beep no áudio medem o sincronismo A/V de ponta a ponta.
+    pub fn gen_flash(&self, name: &str, fps: &str, secs: u32, rate: u32) -> PathBuf {
+        let out = self.dir.join(name);
+        self.ffmpeg(&[
+            "-f", "lavfi", "-i",
+            &format!("color=c=black:s=64x48:r={fps}:d={secs},drawbox=x=0:y=0:w=64:h=48:color=white:t=fill:enable='between(t,1,1.2)'"),
+            "-f", "lavfi", "-i",
+            &format!("aevalsrc=if(between(t\\,1\\,1.2)\\,0.8*sin(2*PI*1000*t)\\,0)|if(between(t\\,1\\,1.2)\\,0.8*sin(2*PI*1000*t)\\,0):s={rate}:d={secs}:c=stereo"),
+            "-c:v", "mpeg4", "-g", "12", "-qscale:v", "2", "-c:a", "aac", "-b:a", "128k",
+            "-shortest", out.to_str().unwrap(),
+        ]);
+        out
+    }
+
+    /// `.mov` com vídeo (testsrc2) e áudio PCM s16 (chirp): áudio exato por amostra, seek rápido.
+    pub fn gen_mov_pcm(&self, name: &str, fps: &str, secs: &str, rate: u32) -> PathBuf {
+        let out = self.dir.join(name);
+        self.ffmpeg(&[
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("testsrc2=size=64x48:rate={fps}:duration={secs}"),
+            "-f",
+            "lavfi",
+            "-i",
+            &format!(
+                "aevalsrc=sin(2*PI*t*(300+40*t))|sin(2*PI*t*(500+25*t)):s={rate}:d={secs}:c=stereo"
+            ),
+            "-c:v",
+            "mpeg4",
+            "-g",
+            "12",
+            "-qscale:v",
+            "3",
+            "-c:a",
+            "pcm_s16le",
+            "-shortest",
+            out.to_str().unwrap(),
+        ]);
+        out
+    }
 }
