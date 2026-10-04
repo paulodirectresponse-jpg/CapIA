@@ -107,30 +107,31 @@ export const test = base.extend<{ server: Server; editor: Editor }, object>({
     await use({ url, dir, child });
     child.kill();
   },
-  page: async ({ page, server }, use) => {
-    if (!TAURI) {
-      await use(page);
-      return;
-    }
-    // WebView2 expõe CDP; o primeiro contexto/página é a janela do app
-    let browser = null;
-    for (let i = 0; i < 150 && !browser; i++) {
-      try {
-        browser = await chromium.connectOverCDP(server.url);
-      } catch {
-        await new Promise((r) => setTimeout(r, 200));
+  // No app nativo a "página" é a janela do WebView2 (CDP): não depende do `page` do Playwright, que
+  // lançaria um Chromium que não existe (nem é necessário) nesse alvo.
+  ...(TAURI
+    ? {
+        page: async ({ server }: { server: Server }, use: (p: Page) => Promise<void>) => {
+          let browser = null;
+          for (let i = 0; i < 150 && !browser; i++) {
+            try {
+              browser = await chromium.connectOverCDP(server.url);
+            } catch {
+              await new Promise((r) => setTimeout(r, 200));
+            }
+          }
+          if (!browser) throw new Error("não foi possível conectar ao WebView2 por CDP");
+          let tauriPage: Page | undefined;
+          for (let i = 0; i < 100 && !tauriPage; i++) {
+            tauriPage = browser.contexts()[0]?.pages()[0];
+            if (!tauriPage) await new Promise((r) => setTimeout(r, 200));
+          }
+          if (!tauriPage) throw new Error("janela do app não encontrada");
+          await use(tauriPage);
+          await browser.close();
+        },
       }
-    }
-    if (!browser) throw new Error("não foi possível conectar ao WebView2 por CDP");
-    let tauriPage: Page | undefined;
-    for (let i = 0; i < 100 && !tauriPage; i++) {
-      tauriPage = browser.contexts()[0]?.pages()[0];
-      if (!tauriPage) await new Promise((r) => setTimeout(r, 200));
-    }
-    if (!tauriPage) throw new Error("janela do app não encontrada");
-    await use(tauriPage);
-    await browser.close();
-  },
+    : {}),
   editor: async ({ page, server }, use) => {
     await use(new Editor(page, server));
   },
