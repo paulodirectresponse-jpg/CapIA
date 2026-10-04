@@ -14,6 +14,9 @@ use std::time::Duration;
 pub const PCM_BACKEND_VERSION: u32 = 1;
 /// Amostras por canal de um bloco de cache (≈ 0,34 s a 48 kHz).
 pub const PCM_BLOCK_FRAMES: u64 = 16_384;
+/// Blocos extras decodificados à frente quando a corrida ausente chega ao fim do pedido: leitura
+/// sequencial (reprodução) paga uma chamada ao decoder a cada ~8 blocos em vez de a cada pedido.
+pub const PCM_READ_AHEAD_BLOCKS: u64 = 7;
 
 #[derive(Clone, Debug)]
 pub struct AudioSource {
@@ -139,7 +142,14 @@ impl PcmCache {
             let first_block = b0 + i as u64;
             let last_block = b0 + j as u64;
             let from = first_block * PCM_BLOCK_FRAMES;
-            let to = ((last_block + 1) * PCM_BLOCK_FRAMES).min(total);
+            // read-ahead: se a corrida vai até o fim do pedido, decodifica alguns blocos a mais
+            let ahead = if j + 1 == blocks.len() {
+                PCM_READ_AHEAD_BLOCKS
+            } else {
+                0
+            };
+            let last_cached = last_block + ahead;
+            let to = ((last_cached + 1) * PCM_BLOCK_FRAMES).min(total);
             self.decode_calls.fetch_add(1, Ordering::SeqCst);
             let pcm = decode_audio_indexed(
                 &self.toolchain,
@@ -163,7 +173,10 @@ impl PcmCache {
             }
             self.decoded_frames.fetch_add(pcm.frames, Ordering::SeqCst);
             let mut c = self.lock();
-            for (k, b) in (first_block..=last_block).enumerate() {
+            for (k, b) in (first_block..=last_cached).enumerate() {
+                if b * PCM_BLOCK_FRAMES >= to {
+                    break;
+                }
                 let lo = (b * PCM_BLOCK_FRAMES - from) as usize * ch as usize;
                 let hi = (((b + 1) * PCM_BLOCK_FRAMES).min(to) - from) as usize * ch as usize;
                 let data = Arc::new(pcm.samples[lo..hi].to_vec());
@@ -172,7 +185,9 @@ impl PcmCache {
                     Arc::clone(&data),
                     (data.len() * 4) as u64,
                 );
-                blocks[i + k] = Some(data);
+                if b <= last_block {
+                    blocks[i + k] = Some(data);
+                }
             }
             i = j + 1;
         }

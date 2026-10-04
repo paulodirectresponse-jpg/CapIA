@@ -216,9 +216,15 @@ fn repeated_reads_hit_the_cache_without_decoding_again() {
     assert_eq!(a.samples, b.samples);
     assert_eq!(m2.decode_calls, m1.decode_calls);
     assert!(m2.cache.hits > m1.cache.hits);
-    // um pedido contíguo reaproveita os blocos já lidos e decodifica só os novos, numa chamada
+    // um pedido contíguo reaproveita os blocos já lidos (e o read-ahead): no máx. uma chamada nova
     cache.read(&src, 10_000, 100_000, &|| false).unwrap();
-    assert_eq!(cache.metrics().decode_calls, m1.decode_calls + 1);
+    assert!(cache.metrics().decode_calls <= m1.decode_calls + 1);
+    // leitura sequencial: o read-ahead faz vários pedidos seguidos custarem UMA chamada
+    let seq = PcmCache::new(tc.clone(), 64 << 20);
+    for k in 0..4u64 {
+        seq.read(&src, k * 40_000, 40_000, &|| false).unwrap();
+    }
+    assert!(seq.metrics().decode_calls <= 2, "{:?}", seq.metrics());
 }
 
 #[test]
