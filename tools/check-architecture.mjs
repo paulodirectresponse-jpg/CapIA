@@ -145,8 +145,16 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Superfície P2 (SharedBuffer do WebView2, ADR-069): borda COM mínima, só Windows; única crate de
+  // produto com `unsafe` além do WASM da timeline. Não conhece engine, projeto nem UI.
+  "capia-webview-surface": {
+    workspace: [],
+    normal: ["tauri", "webview2-com", "windows"],
+    build: [],
+    dev: [],
+  },
   "capia-desktop": {
-    workspace: ["capia-project", "capia-editor-api"],
+    workspace: ["capia-project", "capia-editor-api", "capia-webview-surface"],
     normal: ["tauri", "tauri-plugin-dialog", "serde_json"],
     build: ["tauri-build"],
     dev: [],

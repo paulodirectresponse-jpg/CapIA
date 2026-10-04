@@ -73,16 +73,9 @@ export function PreviewPanel() {
     if (!canvas) return;
     const presenter = new CanvasPresenter(canvas);
     const sched = new FrameScheduler(
-      async (req) => {
-        if (!c.state.active) throw new Error("no sequence");
-        const r = await c.client.renderFrame(c.state.active, req.at, req.width, req.height);
-        const w = r.meta.warnings;
-        return {
-          width: Number(r.meta.width),
-          height: Number(r.meta.height),
-          rgba: new Uint8Array(r.bytes),
-          warnings: Array.isArray(w) ? w.length : 0,
-        };
+      (req) => {
+        if (!c.state.active) return Promise.reject(new Error("no sequence"));
+        return c.frames.render(c.state.active, req);
       },
       presenter,
       (m) => {
@@ -236,6 +229,7 @@ export function PreviewPanel() {
             data-testid="preview-canvas"
             data-mode={metrics.mode}
             data-presented={metrics.presented}
+            data-transport={c.frames.kind}
             width={size.width}
             height={size.height}
           />

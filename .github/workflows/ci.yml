@@ -76,6 +76,7 @@ jobs:
         env:
           CAPIA_E2E_TARGET: tauri
           CAPIA_REQUIRE_H264: "1"
+          CAPIA_REQUIRE_SHARED_BUFFER: "1"
           CAPIA_DESKTOP_EXE: ${{ github.workspace }}\target\release\capia-desktop.exe
       - name: Artefatos do E2E Windows (falhas)
         if: failure()

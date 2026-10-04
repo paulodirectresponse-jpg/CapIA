@@ -73,6 +73,7 @@ import { createStore, type Store } from "./createStore";
 import { MediaVisuals } from "./visuals";
 import { PerfLog } from "./perf";
 import { noPlatform, type PlatformServices } from "../platform";
+import { ipcFrameSource, type FrameSource } from "../preview/frames";
 
 export interface ToastItem {
   id: number;
@@ -140,6 +141,8 @@ const MAX_TOASTS = 4;
 
 export interface ControllerOptions {
   platform?: PlatformServices;
+  /** Fonte dos quadros do preview (padrão: bytes pelo transporte; o desktop pode dar o SharedBuffer). */
+  frames?: FrameSource;
   storage?: KeyValueStorage | null;
   loadCore?: () => Promise<TimelineCore | null>;
   pollMs?: number;
@@ -165,11 +168,13 @@ export class EditorController {
   private frameHeight = 1080;
   readonly visuals: MediaVisuals;
   readonly perf = new PerfLog();
+  readonly frames: FrameSource;
 
   constructor(
     readonly client: EditorClient,
     private readonly opts: ControllerOptions = {},
   ) {
+    this.frames = opts.frames ?? ipcFrameSource(client);
     this.visuals = new MediaVisuals(client, (ms) => {
       this.perf.record("thumb", ms);
     });
@@ -283,6 +288,7 @@ export class EditorController {
     if (this.prefsTimer) clearTimeout(this.prefsTimer);
     this.flushPrefs();
     this.visuals.dispose();
+    this.frames.dispose?.();
   }
 
   private startPolling(): void {

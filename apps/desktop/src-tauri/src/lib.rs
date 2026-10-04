@@ -8,6 +8,7 @@
 use capia_editor_api::{Outcome, Reply, Session, SessionConfig};
 use capia_project::EngineInfo;
 use serde_json::{Value, json};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Comando IPC legado do scaffold (contrato em `@capia/engine-bindings`).
@@ -20,12 +21,29 @@ fn get_engine_info() -> EngineInfo {
 #[derive(Debug)]
 pub struct EditorState {
     session: Arc<Mutex<Session>>,
+    /// Superfície P2 (SharedBuffer do WebView2), criada sob demanda pelo front.
+    surface: Arc<Mutex<Option<Held>>>,
+    seq: AtomicU32,
+}
+
+/// O que mantém a superfície viva: no Windows o SharedBuffer; nos demais sistemas nada (o front
+/// usa o caminho por IPC binário).
+#[cfg(windows)]
+type Held = capia_webview_surface::SharedSurface;
+#[cfg(not(windows))]
+type Held = ();
+
+#[cfg(windows)]
+fn held_region(h: &Held) -> &capia_webview_surface::FrameRegion {
+    h.region()
 }
 
 impl EditorState {
     pub fn new(cfg: SessionConfig) -> Self {
         Self {
             session: Arc::new(Mutex::new(Session::new(cfg))),
+            surface: Arc::new(Mutex::new(None)),
+            seq: AtomicU32::new(0),
         }
     }
 }
@@ -118,6 +136,101 @@ async fn editor_call_binary(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
+/// Maior quadro do preview (720p em vertical/horizontal cabe em 1280×1280).
+#[cfg_attr(not(windows), allow(dead_code))]
+const SURFACE_MAX_SIDE: u32 = 1280;
+
+/// Cria o SharedBuffer P2 e o posta à página. O front confirma o recebimento
+/// (`sharedbufferreceived`) antes de usar; qualquer falha devolve `UNSUPPORTED`/`SURFACE` e o
+/// front segue pelo IPC binário (nunca fica sem preview).
+#[tauri::command]
+async fn preview_surface_init(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, EditorState>,
+) -> Result<Value, Value> {
+    #[cfg(windows)]
+    {
+        let size = capia_webview_surface::HEADER_BYTES
+            + (SURFACE_MAX_SIDE as usize) * (SURFACE_MAX_SIDE as usize) * 4;
+        let meta = json!({"kind": "capia-preview", "max_side": SURFACE_MAX_SIDE}).to_string();
+        let surface = capia_webview_surface::SharedSurface::create(&window, size, &meta)
+            .map_err(|e| json!({"code": "SURFACE", "message": e.to_string()}))?;
+        if let Ok(mut slot) = state.surface.lock() {
+            *slot = Some(surface);
+        }
+        Ok(json!({"bytes": size, "header": capia_webview_surface::HEADER_BYTES}))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (&window, &state);
+        Err(
+            json!({"code": "UNSUPPORTED", "message": "SharedBuffer is a WebView2 (Windows) feature"}),
+        )
+    }
+}
+
+/// Renderiza o quadro **dentro** do SharedBuffer (sem bytes no IPC): o front só recebe o cabeçalho.
+#[tauri::command]
+async fn preview_render_shared(
+    state: tauri::State<'_, EditorState>,
+    sequence: String,
+    at: i64,
+    width: u32,
+    height: u32,
+) -> Result<Value, Value> {
+    let session = Arc::clone(&state.session);
+    let surface = Arc::clone(&state.surface);
+    let seq = state.seq.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+    tauri::async_runtime::spawn_blocking(move || {
+        render_into_surface(&session, &surface, seq, &sequence, at, width, height)
+    })
+    .await
+    .map_err(|e| json!({"code": "JOIN", "message": e.to_string()}))?
+}
+
+fn render_into_surface(
+    session: &Mutex<Session>,
+    surface: &Mutex<Option<Held>>,
+    seq: u32,
+    sequence: &str,
+    at: i64,
+    width: u32,
+    height: u32,
+) -> Result<Value, Value> {
+    let reply = run_call(
+        session,
+        "render.frame",
+        json!({"sequence": sequence, "at": at, "width": width, "height": height}),
+    )?;
+    let Reply::Binary { bytes, meta, .. } = reply else {
+        return Err(json!({"code": "JSON_REPLY", "message": "render.frame must return bytes"}));
+    };
+    let guard = surface
+        .lock()
+        .map_err(|_| json!({"code": "POISONED", "message": "surface lock poisoned"}))?;
+    #[cfg(windows)]
+    {
+        let held = guard
+            .as_ref()
+            .ok_or_else(|| json!({"code": "SURFACE", "message": "surface not initialised"}))?;
+        let (w, h) = (
+            meta["width"].as_u64().unwrap_or(0) as u32,
+            meta["height"].as_u64().unwrap_or(0) as u32,
+        );
+        held_region(held)
+            .write_frame(seq, w, h, &bytes)
+            .map_err(|e| json!({"code": "SURFACE", "message": e.to_string()}))?;
+        Ok(json!({"seq": seq, "width": w, "height": h, "warnings": meta["warnings"]}))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (&guard, &bytes, &meta, seq);
+        Err(
+            json!({"code": "UNSUPPORTED", "message": "SharedBuffer is a WebView2 (Windows) feature"}),
+        )
+    }
+}
+
 /// Inicia a aplicação desktop.
 pub fn run() {
     tauri::Builder::default()
@@ -126,7 +239,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_engine_info,
             editor_call,
-            editor_call_binary
+            editor_call_binary,
+            preview_surface_init,
+            preview_render_shared
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o CapIA desktop");

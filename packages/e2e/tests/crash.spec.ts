@@ -29,7 +29,7 @@ test("kill -9 after edits: reopen keeps every committed edit and the file valida
         headers: { "content-type": "application/json" },
         body: JSON.stringify(p),
       });
-      expect(r.ok, `${m}: ${r.status}`).toBe(true);
+      expect(r.ok, `${m}: ${String(r.status)}`).toBe(true);
       return (await r.json()) as Record<string, unknown>;
     };
     const snap = (await call("project.open", { path: join(server.dir, "project.capia") })) as {

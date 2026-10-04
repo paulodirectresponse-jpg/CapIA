@@ -36,6 +36,12 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
   const video = await editor.assetIdByName("video_audio.mp4");
   const image = await editor.assetIdByName("image.jpg");
 
+  await test.step("3b. preview transport (P2 SharedBuffer no app real)", async () => {
+    const transport = await page.getByTestId("preview-canvas").getAttribute("data-transport");
+    if (process.env.CAPIA_REQUIRE_SHARED_BUFFER === "1") expect(transport).toBe("shared-buffer");
+    else expect(["ipc", "shared-buffer"]).toContain(transport);
+  });
+
   await test.step("4. drag to timeline", async () => {
     const to = await editor.rowPoint(main.id, 120);
     await editor.dragAssetTo(video, to);

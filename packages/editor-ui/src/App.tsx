@@ -7,6 +7,7 @@ import { ControllerProvider, useUi } from "./context";
 import { I18nProvider } from "./i18n";
 import type { KeyValueStorage } from "./lib/prefs";
 import type { PlatformServices } from "./platform";
+import type { FrameSource } from "./preview/frames";
 import { EditorController } from "./store/controller";
 import "@capia/ui-kit/styles.css";
 import "./app.css";
@@ -14,6 +15,7 @@ import "./app.css";
 export interface AppProps {
   client: EditorClient;
   platform?: PlatformServices;
+  frames?: FrameSource;
   /** Carrega o núcleo WASM da timeline (ghost/snap). Sem ele o editor ainda funciona. */
   loadCore?: () => Promise<TimelineCore | null>;
   storage?: KeyValueStorage | null;
@@ -40,11 +42,12 @@ function Root() {
  * Raiz do editor. O controlador é criado uma vez por montagem; o `dispose` é adiado para o fim
  * do tick para sobreviver ao ciclo mount→unmount→mount do StrictMode sem perder o estado.
  */
-export function App({ client, platform, loadCore, storage, pollMs }: AppProps) {
+export function App({ client, platform, frames, loadCore, storage, pollMs }: AppProps) {
   const [controller] = useState(
     () =>
       new EditorController(client, {
         ...(platform ? { platform } : {}),
+        ...(frames ? { frames } : {}),
         ...(loadCore ? { loadCore } : {}),
         ...(storage !== undefined ? { storage } : {}),
         ...(pollMs !== undefined ? { pollMs } : {}),

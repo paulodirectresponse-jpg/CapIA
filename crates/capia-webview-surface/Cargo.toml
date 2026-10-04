@@ -1,0 +1,26 @@
+[package]
+name = "capia-webview-surface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Apresentador P2 (ADR-069) no app real: região de memória compartilhada com o WebView2 (SharedBuffer). Única crate de produto com `unsafe` além do WASM da timeline (borda COM mínima, só Windows)."
+
+# Esta crate NÃO herda `unsafe_code = forbid`: a borda COM do WebView2 exige `unsafe` (isolado em
+# `win.rs`, documentado, sem lógica de produto). O restante do workspace segue proibido.
+[lints.rust]
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+unused_must_use = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+tauri = { version = "2", features = [] }
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation"] }

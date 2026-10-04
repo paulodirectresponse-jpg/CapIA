@@ -306,6 +306,7 @@ version = "0.0.0"
 dependencies = [
  "capia-editor-api",
  "capia-project",
+ "capia-webview-surface",
  "serde_json",
  "tauri",
  "tauri-build",
@@ -436,6 +437,15 @@ dependencies = [
  "capia-time",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "capia-webview-surface"
+version = "0.0.0"
+dependencies = [
+ "tauri",
+ "webview2-com",
+ "windows",
 ]
 
 [[package]]

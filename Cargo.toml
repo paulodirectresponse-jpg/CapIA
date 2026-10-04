@@ -20,6 +20,7 @@ members = [
     "crates/capia-editor-api",
     "crates/capia-devserver",
     "crates/capia-timeline-wasm",
+    "crates/capia-webview-surface",
     "apps/desktop/src-tauri",
 ]
 # Experimentos descartáveis e ferramentas com workspace próprio: fora do build principal.
@@ -45,6 +46,7 @@ capia-store = { path = "crates/capia-store", version = "0.0.0" }
 capia-project = { path = "crates/capia-project", version = "0.0.0" }
 capia-timeline-wasm = { path = "crates/capia-timeline-wasm", version = "0.0.0" }
 capia-editor-api = { path = "crates/capia-editor-api", version = "0.0.0" }
+capia-webview-surface = { path = "crates/capia-webview-surface", version = "0.0.0" }
 rusqlite = { version = "0.40", features = ["bundled"] }
 getrandom = "0.4"
 serde = { version = "1", features = ["derive", "rc"] }
