@@ -34,6 +34,7 @@ pub fn synthetic_info(kind: MediaKind, seconds: i64) -> MediaInfo {
         sample_rate: 48000,
         bit_rate: None,
         duration: Some(d),
+        time_base: Rational::new(1, 48000).ok(),
     });
     let (streams, dv, da, dur) = match kind {
         MediaKind::Video => (vec![video, audio], Some(0), Some(1), Some(d)),

@@ -250,6 +250,9 @@ fn parse_stream(s: &Value, warnings: &mut Vec<String>) -> Result<StreamInfo, Med
                         sample_rate: r,
                         bit_rate,
                         duration,
+                        time_base: text(s, "time_base")
+                            .and_then(|r| parse_ratio(r, '/'))
+                            .filter(Rational::is_positive),
                     }))
                 }
                 _ => Ok(other(
