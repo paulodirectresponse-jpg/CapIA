@@ -158,6 +158,8 @@ jobs:
           cache: pnpm
       - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
+      # os testes do ui-timeline carregam o núcleo WASM gerado (ADR-070)
+      - run: node tools/build-wasm.mjs
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
