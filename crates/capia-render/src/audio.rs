@@ -1,4 +1,4 @@
-//! Buffers de áudio f32 e reamostragem determinística (ADR-066).
+//! Buffers de áudio f32 e reamostragem determinística (ADR-064).
 //!
 //! Só `+ − × ÷` e comparações IEEE em `f64`, mais `sin`/`cos` na construção do *sinc* e da janela
 //! (diferença entre libms < 1e-15 — muito abaixo da tolerância dos goldens de áudio, 1e-4).

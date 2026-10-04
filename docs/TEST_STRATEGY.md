@@ -128,3 +128,19 @@ Regressões > 10% falham o CI de benchmark (rodado em máquina dedicada, não em
 - **Propriedade** (`properties_media.rs`): sequências aleatórias importar/derivar/decodificar/cancelar/offline/relink em lote/reabrir contra um modelo independente; `CAPIA_MEDIA_PROP_CASES` (6 por padrão; 40 no Linux/release; 2 no Windows).
 - **Mutação manual** (`tools/mutation-m08.py`): 13 mutações com o teste que as mata (ver STATUS).
 - **Medições** (`#[ignore]`, release): `capia-jobs/tests/perf.rs`, `capia-assets/tests/perf_hash.rs`, `capia-project/tests/perf_media.rs`.
+
+## Fase 2 — conclusão (render, decode, áudio, preview, export)
+
+| Área | Testes |
+|---|---|
+| Compositor/mixer | `capia-render/tests/golden_video.rs` (10 goldens: tela cheia, 2 sobrepostos, 50% de opacidade, scale+position, imagem transparente sobre vídeo, nested, nested multinível, VFR, retime, z-order de 2 tracks) e `golden_audio.rs` (8, tolerância documentada); digests em `tests/golden/*.json` (bless com `BLESS=1`) |
+| Decode | `capia-decode/tests/service.rs` (13: LRU por bytes, hit, conteúdo trocado, multi-stream, concorrência, sem contaminação entre projetos, prefetch, prioridade, supersession, cancelamento, ociosidade, shutdown) |
+| Áudio | `capia-media/tests/audio_seek.rs` (PCM bit-exato 44,1/48 kHz, AAC por posição exata, offset não zero, custo independente do início), `capia-decode/tests/audio.rs` (fronteiras de bloco, curto, além do fim, blocos adjacentes, orçamento, invalidação) |
+| Render do projeto | `capia-project/tests/render_project.rs`, `parity.rs` (preview × export, reabrir, frio/quente, proxy, ordem), `properties_render.rs` (timelines aleatórias × **oráculo** de decode direto; `CAPIA_RENDER_PROP_CASES`) |
+| A/V | `capia-project/tests/av_drift.rs`: flash × beep **medidos no MP4 exportado** (23,976/29,97/59,94/25/30 × 44,1/48 kHz), VFR por tempo, timeline sintética de 10 min |
+| Export | `capia-project/tests/export.rs` (atômico, cancelamento, staging órfão, encoders, GPL recusado, MP4 de referência), `capia-media` `encoder::tests` |
+| Preview | `capia-preview/tests/scheduler.rs` (seek, scrub t1→t4, cadência, quadro atrasado, fim, seek durante reprodução) |
+| Crash real | `capia-project/tests/crash_phase2.rs`: kill com sessão de decode ativa, no render de range, no índice de áudio, no export intermediário (2 pontos) e no MP4 (2 pontos) |
+| Aceitação | `capia-cli/tests/phase2_e2e.rs`: `HOOK_A`, `HOOK_B`, `BODY_MASTER` (nested) pelo binário real |
+| Mutação | `tools/mutation-phase2.py` — 16 mutações, 16/16 detectadas |
+| Desempenho | `capia-render/tests/perf.rs`, `capia-decode/tests/perf.rs`, `capia-project/tests/perf_render.rs` (`--ignored`; só medem) |

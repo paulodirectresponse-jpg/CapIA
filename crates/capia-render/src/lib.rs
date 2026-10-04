@@ -1,9 +1,9 @@
-//! Render **headless e determinístico** (ADR-064..067): `Document/Sequence → RenderGraph →
+//! Render **headless e determinístico** (ADR-063..065): `Document/Sequence → RenderGraph →
 //! plano por instante → decode (via trait) → compositor CPU / mixer`. Sem IO, sem FFmpeg, sem UI:
 //! a mídia decodificada entra por [`MediaSource`] e o mesmo caminho serve preview e export
 //! (PREVIEW_RENDER §4). O compositor CPU é a **referência semântica** do futuro compositor GPU.
 //!
-//! Semântica fixada (ADR-065/066): RGBA8 com alpha **reto** (não pré-multiplicado); `source-over`
+//! Semântica fixada (ADR-064/065): RGBA8 com alpha **reto** (não pré-multiplicado); `source-over`
 //! em inteiros com arredondamento half-up; amostragem bilinear em ponto fixo 8 bits; tela do
 //! quadro final começa em preto opaco; áudio f32 com *hard clip* em [-1, 1] no fim.
 

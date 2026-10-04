@@ -166,3 +166,7 @@ Implementado em `capia-store` conforme ADR-042..044. **Divergências deliberadas
 ## Schema 2 — catálogo de mídia (M07)
 
 Migration v1→v2 (aditiva, com backup): `media_assets(asset_id PK, kind, content_hash UNIQUE, size_bytes, display_name, location_json, known_paths_json, media_info_json, status, status_checked_ms, imported_ms)` e `asset_events(seq, asset_id, kind, detail_json, at_ms)` (append-only). O catálogo **não** é parte do documento (nem do digest nem do undo): o documento guarda só o `Asset` lógico (`id`, nome, duração, flags); onde está o arquivo, o hash, os metadados normalizados e o estado online/offline/modified são fatos do ambiente (ADR-046/048). O arquivo de mídia nunca entra no `.capia`. Detalhes: ADR-048.
+
+## Render e export (Fase 2 — conclusão): sem mudança de schema
+
+O schema permanece **3**. Novidades **fora do documento e do undo**: (a) derivado `aix` (índice de frames de áudio `CAIX` v1: cabeçalho 64 B com taxa, canais, *time base*, total de amostras, stream e o flag `fast_seek`; entradas de 24 B `(pts, amostra inicial, nº de amostras)`; rodapé SHA-256) no cache v2, chave `(hash, "audio-index", stream, produtor+ffprobe)`; (b) `JobKind::AudioIndex` (`audio_index`) na tabela de jobs (texto livre, sem migration); (c) saída `capia-intermediate-v1` (`video.rgba`, `audio.wav` float32, `manifest.json` com digests por quadro) — **artefato do usuário, nunca guardado no `.capia`**. O render lê o documento e o catálogo e **não escreve em nenhum dos dois**.

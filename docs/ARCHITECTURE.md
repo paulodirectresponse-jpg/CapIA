@@ -200,3 +200,16 @@ Time/tracks/clips/nested → `TIMELINE_ENGINE.md` · UX → `TIMELINE_UX.md` · 
 ## Mídia e assets (M07)
 
 `capia-media` (probe/ffprobe atrás de `MediaProbe`, processos limitados) e `capia-assets` (identidade por conteúdo, hash em streaming, import, verify, relink, cache) ficam **abaixo** de `capia-store`, que persiste o catálogo (schema 2); `capia-project` orquestra o import atômico (catálogo + `register_asset` na mesma transação) e a CLI traduz argumentos. Dependências: `capia-time → capia-media`; `{capia-model, capia-media} → capia-assets`; `{capia-commands, capia-assets} → capia-store`. O núcleo puro (`time/model/commands`) segue sem IO e sem FFmpeg (ADR-046..049; matriz em `tools/check-architecture.mjs`).
+
+## Render, decode, preview e export (Fase 2 — conclusão)
+
+```
+capia-time → capia-model → capia-commands            (núcleo puro, WASM)
+capia-time/model → capia-render      (grafo + compositor CPU + mixer; puro, WASM; ADR-063..065)
+capia-time/model/render → capia-preview   (scheduler headless + FrameSink + Clock; ADR-066)
+capia-time → capia-media             (probe, índices CIDX/CAIX, decode, FrameStream, encoders, EncodeSession)
+{time, media} → capia-decode         (DecodeService + ByteLru + PcmCache; ADR-059..062)
+{commands, assets, jobs, decode, render} → capia-store → capia-project → {capia-cli, apps/desktop}
+```
+
+`capia-render` recebe a mídia por um trait (`MediaSource`) e nunca faz IO. `capia-project` fornece o adaptador (`ProjectSource`): índice de quadros e de áudio vindos do cache derivado, decode pelo `DecodeService` e PCM pelo `PcmCache`, **sempre do arquivo original** (o proxy nunca é fonte de decode nem de export). `Project::render_frame/render_range/render_audio_range` e `export_intermediate/export_mp4` são a fachada que a CLI usa. `capia-preview` não conhece projeto: opera sobre `Arc<RenderGraph>` + `Arc<dyn MediaSource>` e é testado contra o export. Matriz em `tools/check-architecture.mjs` (novos crates: `capia-render`, `capia-decode`, `capia-preview`).

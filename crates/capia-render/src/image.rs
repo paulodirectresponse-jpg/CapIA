@@ -1,4 +1,4 @@
-//! Imagem RGBA8 (alpha reto) e o compositor CPU de referência (ADR-065).
+//! Imagem RGBA8 (alpha reto) e o compositor CPU de referência (ADR-064/065).
 //!
 //! **Convenções (normativas):**
 //! * Coordenadas de saída: origem no canto superior esquerdo, x → direita, y → baixo; o pixel

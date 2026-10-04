@@ -1,4 +1,4 @@
-//! Mixer de áudio determinístico (ADR-066). f32; soma com ganho e **hard clip** em [-1, 1] no
+//! Mixer de áudio determinístico (ADR-064). f32; soma com ganho e **hard clip** em [-1, 1] no
 //! fim (sem limiter, EQ, compressão ou loudness na Fase 2). NaN/inf viram silêncio.
 //!
 //! Semântica: amostra de timeline `n` (na taxa de saída) ↔ clip por arredondamento half-up do início

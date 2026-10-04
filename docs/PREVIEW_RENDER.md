@@ -113,3 +113,9 @@ Proxies são gerados em background após import (prioridade a clips já na timel
 - Cadeia: clip (gain keyframed, pan, fades) → track (volume, mute/solo) → master (limiter opcional, loudness no export).
 - Ducking automático (música sob voz) como **propriedade/automação explícita** gerada por comando (a IA pode criar), nunca um efeito "mágico" invisível.
 - Sincronia validada por testes com mídia de claquete sintética (`TEST_STRATEGY.md`).
+
+## 12. O que a Fase 2 entregou (e o que não)
+
+- **Entregue (headless):** render graph e compositor CPU **de referência** determinístico (`capia-render`, ADR-063..065), decode persistente + cache de quadros (ADR-059/060), seek de áudio por índice + cache de PCM (ADR-061/062), preview headless (scheduler, `FrameSink`, playhead, cadência por relógio injetável, descarte de quadros obsoletos — ADR-066), export intermediário atômico e MP4 por `EncoderCapability` aprovado (ADR-067/068).
+- **Equivalência preview ↔ export:** o preview chama o **mesmo** `render_frame`; testes comparam digests SHA-256 quadro a quadro (tocando e em scrub), depois de reabrir, com cache frio/quente/minúsculo e com proxy presente — todos idênticos.
+- **Não entregue (de propósito):** compositor wgpu/RGBA16F (Fase 3; a referência CPU é o oráculo dele), texto, transições, efeitos, máscaras, rotação arbitrária, apresentação na janela (OD-1 aberta), H.264 de produção (`OUTPUT-H264` aberta).

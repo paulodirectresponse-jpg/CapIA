@@ -1,4 +1,4 @@
-//! Render graph (ADR-064): a sequence compilada para uma forma imutável e extensível, e o plano de
+//! Render graph (ADR-063): a sequence compilada para uma forma imutável e extensível, e o plano de
 //! layers de um instante. `Document → RenderGraph → plano(t) → decode → composição`.
 
 use crate::error::{RenderError, RenderWarning};
