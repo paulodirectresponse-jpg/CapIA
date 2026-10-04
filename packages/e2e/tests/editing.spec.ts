@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { test, expect, type ClipJson, type Editor } from "./fixtures";
 
 /** Cria um projeto com N clips sólidos em faixas livres (via comandos do engine, como um import). */
@@ -5,7 +6,6 @@ async function seedSolids(
   editor: Editor,
   specs: { track: string; start: number; duration: number; name: string; color?: string }[],
 ): Promise<void> {
-  const seq = await editor.sequence();
   await editor.api("command.execute", {
     label: "seed",
     commands: specs.map((s, i) => ({
@@ -24,7 +24,6 @@ async function seedSolids(
       },
     })),
   });
-  void seq;
 }
 
 const F = 23_520_000; // 1 frame a 30 fps
@@ -42,7 +41,7 @@ async function setup(editor: Editor): Promise<{ overlay: string; text: string; m
   return { overlay: by("overlay"), text: by("text"), main: by("main") };
 }
 
-async function editorOriginX(page: import("@playwright/test").Page): Promise<number> {
+async function editorOriginX(page: Page): Promise<number> {
   return (await page.evaluate(() => window.__capiaTimeline?.canvasOrigin().x)) ?? 0;
 }
 
