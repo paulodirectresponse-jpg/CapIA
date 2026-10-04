@@ -93,6 +93,7 @@ export const ptBR: Record<MessageKey, string> = {
   "media.importPrompt": "Caminhos dos arquivos a importar (um por linha)",
   "media.importHint":
     "Vídeos, áudios e imagens. A mídia fica onde está; só a referência é guardada no projeto.",
+  "media.importByPath": "Por caminho…",
   "media.importing": "Importando…",
   "media.search": "Buscar mídia",
   "media.filter.all": "Tudo",

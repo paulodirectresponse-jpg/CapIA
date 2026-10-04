@@ -169,6 +169,19 @@ export function MediaPanel({ initialFilter = "all" }: { initialFilter?: Filter }
         >
           <Icon name="import" /> {t("media.import")}
         </Button>
+        {c.platform.native && (
+          <Button
+            variant="ghost"
+            disabled={!mediaOk}
+            data-testid="import-by-path"
+            title={t("media.importByPath")}
+            onClick={() => {
+              setImportOpen(true);
+            }}
+          >
+            {t("media.importByPath")}
+          </Button>
+        )}
       </div>
       <div style={{ display: "flex", gap: 6, padding: 8, flexWrap: "wrap" }}>
         <TextInput

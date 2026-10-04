@@ -39,6 +39,8 @@ jobs:
           ffprobe -version | Select-Object -First 1
           ffmpeg -version | Select-Object -First 1
       - run: pnpm install --frozen-lockfile
+      # Núcleo da timeline em WASM (ADR-070): o front importa o .wasm gerado.
+      - run: node tools/build-wasm.mjs
       # O Tauri embute apps/desktop/dist em tempo de compilação: o front precisa existir antes do cargo.
       - run: pnpm --filter @capia/desktop build
       - run: cargo fmt --all -- --check
@@ -66,6 +68,22 @@ jobs:
           CAPIA_REQUIRE_FFMPEG: "1"
       - name: Build do aplicativo desktop (sem instalador)
         run: pnpm desktop:build
+      # E2E dos 17 fluxos críticos no APP REAL (WebView2 via CDP, IPC do Tauri, engine e FFmpeg reais),
+      # incluindo export MP4 H.264 por encoder aprovado (h264_mf) validado por ffprobe (OUTPUT-H264).
+      - name: E2E Windows do aplicativo (17 fluxos, H.264 real)
+        shell: pwsh
+        run: pnpm --filter @capia/e2e e2e --grep-invert "targets with 5k clips"
+        env:
+          CAPIA_E2E_TARGET: tauri
+          CAPIA_REQUIRE_H264: "1"
+          CAPIA_DESKTOP_EXE: ${{ github.workspace }}\target\release\capia-desktop.exe
+      - name: Artefatos do E2E Windows (falhas)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-windows-results
+          path: target/e2e-results
+          if-no-files-found: ignore
 
   # Testes headless rápidos do núcleo (sem dependências de sistema do Tauri) + regra WASM (ADR-016).
   core-linux:
@@ -130,7 +148,7 @@ jobs:
   web:
     name: TypeScript (lint, typecheck, testes, build)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -138,6 +156,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm format:check
@@ -145,6 +164,46 @@ jobs:
       - run: pnpm test
       - run: pnpm test:tools
       - run: pnpm build
+
+  # E2E do editor no navegador contra o engine REAL (capia-devserver + FFmpeg) e metas de UX da timeline
+  # com 5.000 clips (smoke: limites folgados; o benchmark estrito é local, GPU real — tools/phase3-acceptance).
+  e2e-linux:
+    name: E2E do editor + desempenho da timeline (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CAPIA_REQUIRE_FFMPEG: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: Swatinem/rust-cache@v2
+      - name: Instalar FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffprobe -version | head -1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: cargo build --release -p capia-devserver
+      - name: Chromium do Playwright
+        run: pnpm --filter @capia/e2e exec playwright install --with-deps chromium
+      - name: E2E (17 fluxos) e desempenho (5k clips)
+        run: pnpm --filter @capia/e2e e2e
+      - name: Relatório de desempenho
+        if: always()
+        run: cat target/perf/phase3-ui-perf.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-linux-results
+          path: |
+            target/perf
+            target/e2e-results
+          if-no-files-found: ignore
 
   # Política: fronteiras arquiteturais, licenças (docs/PROVENANCE.md) e segredos. Não substitui auditoria humana.
   policy:

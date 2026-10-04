@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, chromium, expect, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, existsSync } from "node:fs";
 import { createServer } from "node:net";
@@ -37,12 +37,38 @@ function devserverBinary(): string {
 export interface Server {
   url: string;
   dir: string;
+  child: ChildProcess;
+}
+
+/** `CAPIA_E2E_TARGET=tauri`: dirige o app Tauri real (WebView2) por CDP, em vez do devserver. */
+const TAURI = process.env.CAPIA_E2E_TARGET === "tauri";
+
+function tauriBinary(): string {
+  const exe = process.platform === "win32" ? "capia-desktop.exe" : "capia-desktop";
+  const p = process.env.CAPIA_DESKTOP_EXE ?? join(ROOT, "target", "release", exe);
+  if (!existsSync(p)) throw new Error(`app desktop não compilado: ${p} (rode pnpm desktop:build)`);
+  return p;
 }
 
 export const test = base.extend<{ server: Server; editor: Editor }, object>({
   server: async ({}, use) => {
-    const port = await freePort();
     const dir = mkdtempSync(join(tmpdir(), "capia-e2e-"));
+    if (TAURI) {
+      const port = await freePort();
+      const child: ChildProcess = spawn(tauriBinary(), [], {
+        stdio: "ignore",
+        cwd: ROOT,
+        env: {
+          ...process.env,
+          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${String(port)}`,
+          WEBVIEW2_USER_DATA_FOLDER: join(dir, "webview2"),
+        },
+      });
+      await use({ url: `http://127.0.0.1:${String(port)}`, dir, child });
+      child.kill();
+      return;
+    }
+    const port = await freePort();
     const child: ChildProcess = spawn(
       devserverBinary(),
       ["--port", String(port), "--static", join(ROOT, "apps/desktop/dist")],
@@ -58,8 +84,32 @@ export const test = base.extend<{ server: Server; editor: Editor }, object>({
       }
       await new Promise((r) => setTimeout(r, 100));
     }
-    await use({ url, dir });
+    await use({ url, dir, child });
     child.kill();
+  },
+  page: async ({ page, server }, use) => {
+    if (!TAURI) {
+      await use(page);
+      return;
+    }
+    // WebView2 expõe CDP; o primeiro contexto/página é a janela do app
+    let browser = null;
+    for (let i = 0; i < 150 && !browser; i++) {
+      try {
+        browser = await chromium.connectOverCDP(server.url);
+      } catch {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+    if (!browser) throw new Error("não foi possível conectar ao WebView2 por CDP");
+    let tauriPage: Page | undefined;
+    for (let i = 0; i < 100 && !tauriPage; i++) {
+      tauriPage = browser.contexts()[0]?.pages()[0];
+      if (!tauriPage) await new Promise((r) => setTimeout(r, 200));
+    }
+    if (!tauriPage) throw new Error("janela do app não encontrada");
+    await use(tauriPage);
+    await browser.close();
   },
   editor: async ({ page, server }, use) => {
     await use(new Editor(page, server));
@@ -76,7 +126,13 @@ export class Editor {
   ) {}
 
   async goto(): Promise<void> {
-    await this.page.goto(`${this.server.url}/?e2e=1`);
+    if (TAURI) {
+      // mesma origem do app (http://tauri.localhost no Windows): habilita os ganchos `?e2e=1`
+      const origin = new URL(this.page.url()).origin;
+      await this.page.goto(`${origin}/?e2e=1`);
+    } else {
+      await this.page.goto(`${this.server.url}/?e2e=1`);
+    }
     await expect(this.page.getByTestId("welcome")).toBeVisible();
   }
 
@@ -88,6 +144,18 @@ export class Editor {
 
   /** Chama o engine direto (a verdade persistida, independente do que a UI mostra). */
   async api<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    if (TAURI) {
+      // IPC fixo do shell: o mesmo `editor_call` que a UI usa
+      return this.page.evaluate(
+        async ([m, p]) => {
+          const w = window as unknown as {
+            __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<unknown> };
+          };
+          return w.__TAURI_INTERNALS__.invoke("editor_call", { method: m, params: p });
+        },
+        [method, params] as const,
+      ) as Promise<T>;
+    }
     const r = await fetch(`${this.server.url}/api/${method}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -169,9 +237,16 @@ export class Editor {
     await this.page.mouse.up();
   }
 
+  /** No app nativo "Importar" abre o diálogo do SO (não automatizável): usa "Por caminho…". */
+  async openImportByPath(): Promise<void> {
+    const byPath = this.page.getByTestId("import-by-path");
+    if (await byPath.count()) await byPath.click();
+    else await this.page.getByTestId("import-media").click();
+  }
+
   async importMedia(...files: string[]): Promise<void> {
     await this.page.getByTestId("rail-media").click();
-    await this.page.getByTestId("import-media").click();
+    await this.openImportByPath();
     await this.page.getByTestId("import-paths").fill(files.map((f) => join(MEDIA, f)).join("\n"));
     await this.page.getByTestId("import-confirm").click();
   }

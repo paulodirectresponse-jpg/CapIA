@@ -91,6 +91,7 @@ export const en = {
   "media.importPrompt": "File paths to import (one per line)",
   "media.importHint":
     "Videos, audio and images. Media stays where it is; only the project reference is stored.",
+  "media.importByPath": "By path…",
   "media.importing": "Importing…",
   "media.search": "Search media",
   "media.filter.all": "All",

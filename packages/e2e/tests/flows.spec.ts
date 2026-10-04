@@ -214,7 +214,7 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
     const copy = join(server.dir, "tone_copy.wav");
     copyFileSync(join(MEDIA, "audio.wav"), copy);
     await page.getByTestId("rail-media").click();
-    await page.getByTestId("import-media").click();
+    await editor.openImportByPath();
     await page.getByTestId("import-paths").fill(copy);
     await page.getByTestId("import-confirm").click();
     await expect.poll(async () => (await editor.snapshot()).assets.length).toBe(4);
@@ -249,6 +249,9 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
       await page.getByTestId("export-path").fill(join(server.dir, "out.mp4"));
       await page.getByTestId("export-start").click();
       await expect(page.getByTestId("export-report")).toBeVisible({ timeout: 120_000 });
+      // codec real reportado pelo ffprobe pós-export (nunca x264/x265: o catálogo os proíbe)
+      await expect(page.getByTestId("export-report")).toContainText("h264");
+      await expect(page.getByTestId("export-report")).not.toContainText("libx26");
       expect(existsSync(join(server.dir, "out.mp4"))).toBe(true);
     } else {
       await expect(page.getByTestId("export-no-encoder")).toBeVisible();
