@@ -57,6 +57,7 @@ const base = () => [
     ["serde"],
     ["serde_json"],
   ]),
+  pkg("capia-devserver", [["capia-editor-api"], ["serde_json"], ["tiny_http"]]),
   pkg("capia-desktop", [
     ["capia-project"],
     ["capia-editor-api"],

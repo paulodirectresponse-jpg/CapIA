@@ -1,0 +1,19 @@
+[package]
+name = "capia-devserver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Servidor HTTP local SÓ para desenvolvimento e E2E: expõe capia-editor-api e serve o front compilado. Não é distribuído com o produto."
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "capia-devserver"
+path = "src/main.rs"
+
+[dependencies]
+capia-editor-api.workspace = true
+serde_json.workspace = true
+tiny_http = "0.12"
