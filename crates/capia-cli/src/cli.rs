@@ -42,6 +42,16 @@ ASSETS E MÍDIA:
   capia cache info  <projeto.capia> [--json]           uso do cache derivado (arquivos/bytes por tipo)
   capia cache clean <projeto.capia> [--all]            remove derivados órfãos/temporários (ou tudo com --all)
   capia media probe   <arquivo> [--json]               metadados normalizados (ffprobe)
+  capia media encoders [--json]                        encoders detectados (NVENC/QSV/AMF/h264_mf/OpenH264…) e a política (nunca x264/x265)
+
+RENDER E EXPORT (headless; a fonte é sempre o original, nunca o proxy):
+  capia render frame <projeto.capia> --sequence ID [--at SEG | --frame N] [--width W --height H] [--out quadro.ppm]
+  capia render audio <projeto.capia> --sequence ID [--start SEG] [--duration SEG] [--rate HZ] [--channels N] --out audio.wav
+  capia export intermediate <projeto.capia> --sequence ID --out PASTA [--start SEG] [--duration SEG | --frames N]
+        [--width W --height H] [--overwrite]           RGBA cru + WAV + manifesto; staging → validação → rename atômico
+  capia export mp4 <projeto.capia> --sequence ID --out arquivo.mp4 [--codec h264|mpeg4-reference] [--encoder NOME]
+        [--start SEG] [--duration SEG | --frames N] [--width W --height H] [--overwrite]
+                                                       H.264 só por encoder aprovado (sem fallback silencioso)
         [--ffprobe CAMINHO] [--ffmpeg CAMINHO] [--timeout-ms N]
 
 OPÇÕES GLOBAIS:
@@ -78,6 +88,18 @@ pub(crate) struct Args {
     pub(crate) all: bool,
     pub(crate) is_async: bool,
     pub(crate) progress: bool,
+    pub(crate) sequence: Option<String>,
+    pub(crate) frame: Option<String>,
+    pub(crate) start: Option<String>,
+    pub(crate) duration: Option<String>,
+    pub(crate) frames: Option<String>,
+    pub(crate) width: Option<String>,
+    pub(crate) height: Option<String>,
+    pub(crate) codec: Option<String>,
+    pub(crate) encoder: Option<String>,
+    pub(crate) rate: Option<String>,
+    pub(crate) channels: Option<String>,
+    pub(crate) overwrite: bool,
 }
 
 fn parse_args(raw: &[String]) -> Result<Args, String> {
@@ -106,6 +128,18 @@ fn parse_args(raw: &[String]) -> Result<Args, String> {
             "--max-depth" => a.max_depth = Some(value("--max-depth")?),
             "--max-files" => a.max_files = Some(value("--max-files")?),
             "--priority" => a.priority = Some(value("--priority")?),
+            "--sequence" => a.sequence = Some(value("--sequence")?),
+            "--frame" => a.frame = Some(value("--frame")?),
+            "--start" => a.start = Some(value("--start")?),
+            "--duration" => a.duration = Some(value("--duration")?),
+            "--frames" => a.frames = Some(value("--frames")?),
+            "--width" => a.width = Some(value("--width")?),
+            "--height" => a.height = Some(value("--height")?),
+            "--codec" => a.codec = Some(value("--codec")?),
+            "--encoder" => a.encoder = Some(value("--encoder")?),
+            "--rate" => a.rate = Some(value("--rate")?),
+            "--channels" => a.channels = Some(value("--channels")?),
+            "--overwrite" => a.overwrite = true,
             "--follow-links" => a.follow_links = true,
             "--no-audio" => a.no_audio = true,
             "--dry-run" => a.dry_run = true,
@@ -265,6 +299,9 @@ pub(crate) fn run(raw: &[String], out: &mut dyn Write, err: &mut dyn Write) -> i
         Ok(o) => o,
         Err(m) => return usage(&mut io, &m),
     };
+    if matches!(cmd.as_str(), "render" | "export") {
+        return crate::render_cmd::run(cmd, &args, &opts, &mut io);
+    }
     if matches!(cmd.as_str(), "job" | "cache") {
         return crate::media_cmd::run(cmd, &args, &opts, &mut io);
     }

@@ -5,6 +5,7 @@
 mod assets_cmd;
 mod cli;
 mod media_cmd;
+mod render_cmd;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

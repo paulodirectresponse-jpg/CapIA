@@ -94,6 +94,9 @@ pub(crate) fn run(cmd: &str, args: &Args, opts: &StoreOptions, io: &mut Io<'_>) 
     if cmd == "asset" && sub == "import" && args.is_async {
         return crate::media_cmd::import_async(rest, args, opts, io);
     }
+    if cmd == "media" && sub == "encoders" {
+        return crate::render_cmd::encoders(args, io);
+    }
     if cmd == "media" {
         if sub != "probe" || rest.len() != 1 {
             return usage(io, "usage: capia media probe <arquivo>");

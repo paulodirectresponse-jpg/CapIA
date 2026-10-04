@@ -213,14 +213,38 @@ impl ExportCodec {
     }
 }
 
+/// A causa útil do erro do ffmpeg: ignora as frases genéricas de fim ("Nothing was written…").
 fn first_line(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
-    let line = text
+    let generic = |l: &str| {
+        l.contains("Nothing was written")
+            || l.contains("Conversion failed")
+            || l.contains("Error while opening encoder")
+            || l.contains("Error initializing output stream")
+            || l.contains("Task finished with error")
+    };
+    let useful: Vec<&str> = text
         .lines()
-        .rev()
-        .find(|l| !l.trim().is_empty())
-        .unwrap_or("encoder test failed")
-        .trim();
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !generic(l))
+        .collect();
+    let key = [
+        "annot",
+        "ailed",
+        "o device",
+        "nknown",
+        "not found",
+        "rror",
+        "nsupported",
+    ];
+    let line = useful
+        .iter()
+        .find(|l| key.iter().any(|k| l.contains(k)))
+        .or_else(|| useful.last())
+        .copied()
+        .unwrap_or("encoder test failed");
+    // tira o prefixo `[componente @ 0x…]`, que muda a cada execução
+    let line = line.rsplit_once("] ").map_or(line, |(_, r)| r);
     line.chars().take(240).collect()
 }
 
@@ -313,6 +337,16 @@ pub fn detect_encoders(tc: &MediaToolchain) -> Result<Vec<EncoderCapability>, Me
                             ""
                         }
                     )),
+                    Vec::new(),
+                )
+            } else if e.name == "h264_vaapi" && compiled_in {
+                (
+                    false,
+                    Some(
+                        "VA-API needs a hardware-upload pipeline (-vaapi_device + hwupload), \
+                         which the Phase 2 export does not implement"
+                            .to_owned(),
+                    ),
                     Vec::new(),
                 )
             } else if !compiled_in {

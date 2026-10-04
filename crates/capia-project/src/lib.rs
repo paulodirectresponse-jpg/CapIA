@@ -20,6 +20,7 @@ mod render;
 pub use assets::{
     AssetView, ImportOutcome, ImportResult, RelinkResult, VerifyResult, expected_asset_id,
 };
+pub use capia_render::{Image, RenderSettings, frame_digest};
 pub use derive::FrameSource;
 pub use error::ProjectError;
 pub use export::{
