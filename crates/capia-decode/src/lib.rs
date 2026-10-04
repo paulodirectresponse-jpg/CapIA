@@ -5,7 +5,9 @@ mod audio;
 mod cache;
 mod service;
 
-pub use audio::{AudioSource, PCM_BACKEND_VERSION, PCM_BLOCK_FRAMES, PcmCache, PcmMetrics};
+pub use audio::{
+    AudioSource, PCM_BACKEND_VERSION, PCM_BLOCK_FRAMES, PCM_READ_AHEAD_BLOCKS, PcmCache, PcmMetrics,
+};
 pub use cache::{ByteLru, CacheStats};
 pub use service::{
     DECODE_BACKEND_VERSION, DecodeConfig, DecodeError, DecodeMetrics, DecodeService, Direction,

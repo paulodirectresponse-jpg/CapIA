@@ -53,6 +53,17 @@ jobs:
           CAPIA_IO_PROP_CASES: "100"
           # pipeline de mídia (FFmpeg real): propriedade em orçamento smoke; crash/cancel/mutação reais seguem
           CAPIA_MEDIA_PROP_CASES: "2"
+          # render (oráculo × projeto): smoke no Windows; o orçamento pesado roda no Linux (release)
+          CAPIA_RENDER_PROP_CASES: "2"
+      - name: Detecção de encoders (NVENC/QSV/AMF/Media Foundation/OpenH264; nunca x264/x265)
+        shell: pwsh
+        run: cargo run -q -p capia-cli -- media encoders
+      - name: Aceitação da Fase 2 (CLI ponta a ponta, MP4 + ffprobe) e goldens de render
+        run: |
+          cargo test -p capia-cli --test phase2_e2e -- --nocapture
+          cargo test -p capia-render --test golden_video --test golden_audio
+        env:
+          CAPIA_REQUIRE_FFMPEG: "1"
       - name: Build do aplicativo desktop (sem instalador)
         run: pnpm desktop:build
 
@@ -75,9 +86,9 @@ jobs:
           ffmpeg -version | head -1
       - run: cargo fmt --all -- --check
       - name: Clippy do núcleo, jobs, mídia, assets, store, projeto e CLI
-        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-media -p capia-assets -p capia-store -p capia-project -p capia-cli --all-targets -- -D warnings
+        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli --all-targets -- -D warnings
       - name: Testes (núcleo, nested/compose, jobs, mídia, assets, migrations, crash, concorrência, CLI)
-        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-media -p capia-assets -p capia-store -p capia-project -p capia-cli
+        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli
       - name: "Propriedades com IO ampliadas (release) — salvar/reabrir e assets"
         run: |
           cargo test --release -p capia-store --test properties -- --nocapture
@@ -88,6 +99,15 @@ jobs:
         run: cargo test --release -p capia-project --test properties_media -- --nocapture
         env:
           CAPIA_MEDIA_PROP_CASES: "40"
+      - name: "Render ampliado (release) — timelines aleatórias × oráculo de decode direto"
+        run: cargo test --release -p capia-project --test properties_render -- --nocapture
+        env:
+          CAPIA_RENDER_PROP_CASES: "80"
+      - name: Desempenho do render, decode e áudio (release; medições)
+        run: |
+          cargo test --release -p capia-render --test perf -- --ignored --nocapture
+          cargo test --release -p capia-decode --test perf -- --ignored --nocapture --test-threads=1
+          cargo test --release -p capia-project --test perf_render -- --ignored --nocapture --test-threads=1
       - name: Desempenho dos jobs, do hash e do pipeline de mídia (release; medições)
         run: |
           cargo test --release -p capia-jobs --test perf -- --ignored --nocapture
@@ -99,8 +119,8 @@ jobs:
         run: cargo test --release -p capia-project --test perf_assets -- --ignored --nocapture --test-threads=1
       - name: Metas de desempenho do núcleo (release)
         run: cargo test --release -p capia-commands --test perf -- --ignored --nocapture
-      - name: Núcleo sem IO compila para WASM (ADR-016)
-        run: cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands
+      - name: Núcleo sem IO (e o compositor puro) compila para WASM (ADR-016)
+        run: cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands -p capia-render
       - uses: actions/setup-node@v4
         with:
           node-version: 22
