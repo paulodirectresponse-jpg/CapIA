@@ -64,12 +64,17 @@ if (-not $SkipBuild) {
   if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Fail "Rust nao encontrado. Instale com:  winget install Rustlang.Rustup   e tambem 'Visual Studio Build Tools' com a carga 'Desktop development with C++' (winget install Microsoft.VisualStudio.2022.BuildTools --override '--add Microsoft.VisualStudio.Workload.VCTools --passive'). Reabra o terminal e rode de novo."
   }
-  $host_triple = (& rustc -vV | Select-String '^host:').ToString()
+  $host_triple = ((& rustc -vV) | Select-String '^host:' | Select-Object -First 1).ToString()
   Say "Rust: $((& rustc --version)) ($host_triple)"
   if ($host_triple -notmatch "msvc") { Write-Host "[s1] AVISO: o toolchain nao e MSVC; o alvo do projeto e x86_64-pc-windows-msvc." -ForegroundColor Yellow }
   Say "Compilando o harness (release). A primeira compilacao leva alguns minutos..."
-  & cargo build --release 2>&1 | Tee-Object -FilePath $BuildLog | Select-Object -Last 3
-  if ($LASTEXITCODE -ne 0) { Fail "cargo build falhou; veja $BuildLog" }
+  # Windows PowerShell 5.1: com ErrorActionPreference=Stop, QUALQUER linha em stderr de um programa nativo
+  # (o cargo escreve o progresso em stderr) vira erro terminante. Relaxa so durante a chamada nativa.
+  $prevEap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+  & cargo build --release 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $BuildLog | Select-Object -Last 3
+  $cargoExit = $LASTEXITCODE
+  $ErrorActionPreference = $prevEap
+  if ($cargoExit -ne 0) { Write-Host (Get-Content $BuildLog -Tail 25 | Out-String); Fail "cargo build falhou (codigo $cargoExit); veja $BuildLog" }
 }
 $Exe = Join-Path $Here "target\release\capia-s1-harness.exe"
 if (-not (Test-Path $Exe)) { Fail "Executavel nao encontrado: $Exe" }
