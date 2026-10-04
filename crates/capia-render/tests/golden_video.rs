@@ -395,14 +395,16 @@ fn g10_track_order_defines_z_order() {
 
 #[test]
 fn hidden_tracks_disabled_clips_and_unsupported_content_behave() {
-    use capia_render::RenderWarning;
     let mut d = Dsl::new();
     full_frame_setup(&mut d, "red");
     d.media("V1", "c", "red", 0, 30 * F, true, false);
     d.clip(
         "V1",
         "late",
-        ClipContent::Text { text: "hi".into() , style: Default::default() },
+        ClipContent::Text {
+            text: "hi".into(),
+            style: Default::default(),
+        },
         31 * F,
         5 * F,
         0,
@@ -410,17 +412,17 @@ fn hidden_tracks_disabled_clips_and_unsupported_content_behave() {
     );
     let src = Synth::default().solid_video("red", 16, 16, RED);
     let g = RenderGraph::compile(d.doc(), &"S".into()).unwrap();
-    assert_eq!(
-        g.warnings(),
-        vec![RenderWarning::new(
-            "TEXT_NOT_RENDERED",
-            "clip late is text; text rendering is not part of Phase 2"
-        )]
+    assert!(
+        g.warnings().is_empty(),
+        "text with the default font is supported"
     );
-    // texto em t = 32 frames: aviso, nada desenhado
+    // texto em t = 32 frames: renderizado (a Fase 3 tem texto): algum pixel deixa de ser preto
     let f = render_frame(&g, &"S".into(), Ticks(32 * F), &settings(), &src).unwrap();
-    assert_eq!(f.warnings.len(), 1);
-    assert_eq!(px(&f.image, 3, 3), BLACK);
+    assert!(f.warnings.is_empty());
+    assert!(
+        f.image.data.chunks(4).any(|p| p[..3] != [0, 0, 0]),
+        "the text clip must paint something"
+    );
     // fonte ausente: erro no modo estrito, aviso + layer pulado no modo preview
     let empty = Synth::default();
     assert_eq!(

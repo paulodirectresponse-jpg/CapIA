@@ -15,6 +15,7 @@ mod mixer;
 mod render;
 mod settings;
 mod source;
+mod text;
 
 pub use audio::{AudioBuffer, resample_linear_position, resample_sinc};
 pub use error::{RenderError, RenderWarning};
@@ -27,3 +28,4 @@ pub use mixer::mix_audio_range;
 pub use render::{RenderedFrame, frame_digest, frame_time, render_frame, render_video_range};
 pub use settings::RenderSettings;
 pub use source::{AudioRequest, MediaSource, SourceError};
+pub use text::{KNOWN_FAMILIES, render_text};

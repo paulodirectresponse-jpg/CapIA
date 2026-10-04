@@ -82,9 +82,9 @@ fn big_document() -> Document {
                     speed: Rational::ONE,
                     reversed: false,
                     properties: Default::default(),
-        group: None,
-        transition_in: None,
-}),
+                    group: None,
+                    transition_in: None,
+                }),
             })
             .unwrap();
         }

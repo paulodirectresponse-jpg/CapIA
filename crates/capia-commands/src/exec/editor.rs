@@ -50,10 +50,10 @@ pub(crate) fn set_sequence_folder(
     sequence: &SequenceId,
     folder: Option<&FolderId>,
 ) -> Result<CommandOutput> {
-    if let Some(f) = folder {
-        if ctx.doc.folder(f).is_none() {
-            return Err(CommandError::not_found("folder", f));
-        }
+    if let Some(f) = folder
+        && ctx.doc.folder(f).is_none()
+    {
+        return Err(CommandError::not_found("folder", f));
     }
     let old = ctx.sequence(sequence)?.header.clone();
     let mut new = old.clone();
@@ -87,10 +87,10 @@ pub(crate) fn create_folder(
     parent: Option<&FolderId>,
 ) -> Result<CommandOutput> {
     check_folder_name(name)?;
-    if let Some(p) = parent {
-        if ctx.doc.folder(p).is_none() {
-            return Err(CommandError::not_found("folder", p));
-        }
+    if let Some(p) = parent
+        && ctx.doc.folder(p).is_none()
+    {
+        return Err(CommandError::not_found("folder", p));
     }
     let id = id
         .cloned()
@@ -500,9 +500,8 @@ pub(crate) fn set_transition(
         }
         let prev = seq
             .track_clips(&old.track)
-            .filter(|c| c.end() == old.start)
-            .cloned()
-            .next();
+            .find(|c| c.end() == old.start)
+            .cloned();
         match tr.kind {
             TransitionKind::SlideIn => {
                 if tr.duration > old.duration {

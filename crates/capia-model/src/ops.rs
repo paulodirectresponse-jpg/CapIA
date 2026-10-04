@@ -22,6 +22,8 @@ pub struct TrackSlot {
     pub track: Track,
 }
 
+// `Clip` carrega o clip inteiro (old/new): a diferença de tamanho é intencional (ops são raras).
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum PrimitiveOp {

@@ -31,7 +31,7 @@ impl PropertySpec {
     }
 }
 
-const PROPERTY_SPECS: [PropertySpec; 6] = [
+const PROPERTY_SPECS: [PropertySpec; 8] = [
     PropertySpec {
         name: "opacity",
         min: 0.0,
@@ -66,6 +66,19 @@ const PROPERTY_SPECS: [PropertySpec; 6] = [
         name: "volume_db",
         min: -120.0,
         max: 24.0,
+        default: 0.0,
+    },
+    // Fades de clip (segundos): rampa linear de opacidade (visual) e de ganho (áudio) nas bordas.
+    PropertySpec {
+        name: "fade_in",
+        min: 0.0,
+        max: 60.0,
+        default: 0.0,
+    },
+    PropertySpec {
+        name: "fade_out",
+        min: 0.0,
+        max: 60.0,
         default: 0.0,
     },
 ];

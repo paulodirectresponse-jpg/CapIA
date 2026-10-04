@@ -166,10 +166,10 @@ pub(crate) fn create_sequence(
             "width/height must be within 16..=16384",
         ));
     }
-    if let Some(f) = folder {
-        if ctx.doc.folder(f).is_none() {
-            return Err(CommandError::not_found("folder", f));
-        }
+    if let Some(f) = folder
+        && ctx.doc.folder(f).is_none()
+    {
+        return Err(CommandError::not_found("folder", f));
     }
     let id = id
         .cloned()

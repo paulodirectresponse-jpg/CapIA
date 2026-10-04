@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 capia-time.workspace = true
 capia-model.workspace = true
+ab_glyph = "0.2.32"
 
 [dev-dependencies]
 capia-commands.workspace = true

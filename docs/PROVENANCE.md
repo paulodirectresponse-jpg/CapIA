@@ -40,6 +40,8 @@ Obrigatória para todo o repositório (ADR-031). Objetivo: o CapIA nasce **apto 
 | # | Repositório | Commit/tag | Arquivo original | Arquivo no CapIA | Licença | Alterações | Aviso de copyright preservado | Data |
 |---|---|---|---|---|---|---|---|---|
 | — | *(nenhum código de terceiros foi incorporado até a M03)* | | | | | | | |
+| `crates/capia-render/assets/fonts/LiberationSans-{Regular,Bold}.ttf` | fonte (ativo) | Liberation Fonts 2.x (pacote `fonts-liberation`, github.com/liberationfonts) | SIL OFL 1.1 | Embutida **sem modificação** para o renderizador de texto (Fase 3); texto da licença em `LICENSE-LiberationSans.txt` (incluir em `THIRD_PARTY_LICENSES`) | Nome reservado "Liberation": não renomear/derivar | 2026-10-04 | — | — |
+| crates `ab_glyph` 0.2, `ab_glyph_rasterizer`, `owned_ttf_parser`, `ttf-parser` | dependência | crates.io | Apache-2.0 / MIT | Rasterização de glifos do texto determinístico (Fase 3); puros Rust, compilam para WASM | Verificadas por `cargo-deny` | 2026-10-04 | — | — |
 
 Candidatos já avaliados (decisão arquivo a arquivo **na Fase 2**, só após testes dourados próprios; **não** copiados): `OpenCut-app/opencut-classic@cf5e79e9` — `rust/crates/compositor/src/shaders/blend.wgsl` e `rust/crates/masks/**` (MIT). Ver `docs/spikes/S6-compositor.md`.
 

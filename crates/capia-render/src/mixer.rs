@@ -8,7 +8,9 @@
 
 use crate::audio::{AudioBuffer, resample_linear_position};
 use crate::error::{RenderError, RenderWarning};
-use crate::graph::{GraphClip, GraphClipKind, GraphSequence, MAX_NEST_DEPTH, RenderGraph};
+use crate::graph::{
+    GraphClip, GraphClipKind, GraphSequence, MAX_NEST_DEPTH, RenderGraph, fade_factor,
+};
 use crate::settings::RenderSettings;
 use crate::source::{AudioRequest, MediaSource};
 use capia_model::{Animatable, SequenceId, property_spec};
@@ -163,7 +165,7 @@ fn mix_seq(
                             / i128::from(rate)) as i64,
                 );
                 let content_t = gc.clip.content_time(t_local).unwrap_or(gc.clip.source_in);
-                let g = gain_at(gc, content_t);
+                let g = gain_at(gc, content_t) * fade_factor(&gc.clip, t_local);
                 for f in 0..n as usize {
                     let fi = done as usize + f;
                     for c in 0..ch {

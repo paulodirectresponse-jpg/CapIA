@@ -190,14 +190,14 @@ pub fn validate_clip(doc: &Document, seq: &Sequence, clip: &Clip) -> Vec<Violati
             me.clone(),
         ));
     }
-    if let ClipContent::Text { style, .. } = &clip.content {
-        if let Err(why) = style.validate() {
-            out.push(Violation::new(
-                ErrorCode::OutOfRange,
-                format!("clip {} text style: {why}", clip.id),
-                me.clone(),
-            ));
-        }
+    if let ClipContent::Text { style, .. } = &clip.content
+        && let Err(why) = style.validate()
+    {
+        out.push(Violation::new(
+            ErrorCode::OutOfRange,
+            format!("clip {} text style: {why}", clip.id),
+            me.clone(),
+        ));
     }
     if let Some(tr) = &clip.transition_in {
         if track.kind != TrackKind::Visual {
@@ -549,14 +549,14 @@ fn validate_organization(doc: &Document) -> Vec<Violation> {
     for (id, seq) in doc.sequences() {
         let h = &seq.header;
         let me = vec![EntityRef::new(EntityKind::Sequence, id.as_str())];
-        if let Some(fid) = &h.folder {
-            if doc.folder(fid).is_none() {
-                out.push(Violation::new(
-                    ErrorCode::DanglingReference,
-                    format!("sequence {id} references missing folder {fid}"),
-                    me.clone(),
-                ));
-            }
+        if let Some(fid) = &h.folder
+            && doc.folder(fid).is_none()
+        {
+            out.push(Violation::new(
+                ErrorCode::DanglingReference,
+                format!("sequence {id} references missing folder {fid}"),
+                me.clone(),
+            ));
         }
         if !(16..=16_384).contains(&h.width) || !(16..=16_384).contains(&h.height) {
             out.push(Violation::new(

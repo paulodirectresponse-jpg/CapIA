@@ -6,6 +6,7 @@ use crate::graph::{LayerKind, LayerPlan, MAX_NEST_DEPTH, RenderGraph};
 use crate::image::{Image, blit_layer, parse_color};
 use crate::settings::RenderSettings;
 use crate::source::MediaSource;
+use crate::text::render_text;
 use capia_model::SequenceId;
 use capia_time::{FrameRate, Ticks, TimeRange};
 
@@ -70,8 +71,15 @@ fn draw_layers(
             rotation = 0.0;
         }
         let draw = |canvas: &mut Image, img: &Image| -> Result<(), RenderError> {
+            let slide_px = layer.slide_x * f64::from(canvas.width);
             blit_layer(
-                canvas, img, tr.opacity, tr.scale, tr.pos_x, tr.pos_y, rotation,
+                canvas,
+                img,
+                tr.opacity,
+                tr.scale,
+                tr.pos_x + slide_px,
+                tr.pos_y,
+                rotation,
             )
             .map(|_| ())
         };
@@ -114,10 +122,15 @@ fn draw_layers(
                 draw_layers(&mut child, inner, settings, source, warnings, depth + 1)?;
                 draw(canvas, &child)?;
             }
+            LayerKind::Text { text, style } => {
+                let (img, w) = render_text(canvas.width, canvas.height, text, style)?;
+                warnings.extend(w);
+                draw(canvas, &img)?;
+            }
             LayerKind::Unsupported { what } => {
                 warnings.push(RenderWarning::new(
-                    "TEXT_NOT_RENDERED",
-                    format!("clip {} ({what}) is not rendered in Phase 2", layer.clip),
+                    "CONTENT_NOT_RENDERED",
+                    format!("clip {} ({what}) has no renderer", layer.clip),
                 ));
             }
         }
