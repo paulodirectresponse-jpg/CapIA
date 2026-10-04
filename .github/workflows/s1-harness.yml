@@ -41,6 +41,12 @@ jobs:
           .\run.ps1 -Quick -SteadySecs 3
         continue-on-error: true
         id: run
+      - name: Executar P2 em 1280x720 (criterio de 720p da regra de decisao)
+        shell: powershell
+        working-directory: tools/s1-preview-spike
+        run: .\run.ps1 -Quick -SteadySecs 10 -Modes p2 -P2Res 1280x720 -Label p2-720p
+        continue-on-error: true
+        id: run720
       - name: Log do harness e resumo
         if: always()
         shell: powershell
@@ -62,6 +68,7 @@ jobs:
             foreach ($m in $j.modes.PSObject.Properties) {
               foreach ($ph in @($m.Value.phases)) {
                 if ($ph.name -eq "steady_latency") { Write-Host "=== $($m.Name) steady_latency.screen_latency"; $ph.result.screen_latency | ConvertTo-Json -Depth 5 -Compress }
+                if ($ph.name -in @("steady_cpu","resize","fullscreen","input")) { $t = ($ph.result | ConvertTo-Json -Depth 6 -Compress); if ($t.Length -gt 2500) { $t = $t.Substring(0,2500) }; Write-Host "=== $($m.Name) $($ph.name)"; $t }
                 if ($ph.name -eq "probe_static") { Write-Host "=== $($m.Name) probe_static"; $ph.result | ConvertTo-Json -Depth 6 -Compress }
               }
               Write-Host "=== $($m.Name) engine_stats"; $m.Value.engine_stats_whole_mode | ConvertTo-Json -Depth 4 -Compress
@@ -74,6 +81,6 @@ jobs:
           path: tools/s1-preview-spike/reports/*.zip
           if-no-files-found: warn
       - name: Falhar se o run.ps1 falhou
-        if: steps.run.outcome != 'success'
+        if: steps.run.outcome != 'success' || steps.run720.outcome != 'success'
         shell: powershell
         run: exit 1
