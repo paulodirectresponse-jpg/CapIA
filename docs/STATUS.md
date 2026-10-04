@@ -1,14 +1,14 @@
 # STATUS
 
-**Última atualização:** 2026-10-04 · **Fase atual:** FASE 2 — Motor (headless) **CONCLUÍDA** · **Fase 3: BLOQUEADA por OD-1** · **Próximo passo permitido:** executar o spike S1 em Windows 11 + GPU (`tools/s1-preview-spike`) para fechar OD-1; só depois a Fase 3.
+**Última atualização:** 2026-10-04 · **Fase atual:** FASE 2 — Motor (headless) **CONCLUÍDA** · **OD-1 FECHADA (ADR-069: presenter = P2)** · **Próximo passo permitido:** Fase 3 (Editor), sujeita à validação residual de CPU/pacing do P2 em GPU real e a `OUTPUT-H264` na saída.
 
-> **Fase 2 completa; Fase 3 bloqueada por OD-1.** A Fase 2 está fechada segundo `docs/ROADMAP.md` (todos os critérios marcados; CI Linux + Windows + TypeScript + políticas verde num único commit). O S1 (apresentação do preview na janela Tauri/WebView2) **não foi medido** — exige Windows 11 + GPU reais — e **não foi fabricado**. `OUTPUT-H264`: **capacidade de engenharia provada** (MP4 H.264 real via `h264_mf` no CI Windows, validado por ffprobe); **decisão de produção/jurídica pendente** (patentes H.264/AAC, qualidade do encoder de software, OpenH264).
+> **Fase 2 completa; OD-1 fechada pelo S1 (ADR-069: P2; P1 eliminado por airspace medido).** O harness S1 foi corrigido e executado em runner Windows (WebView2/DWM reais, GPU por software): os três modos `MEASURED`; critérios inalterados; CPU/pacing em GPU real **não mensuráveis no runner** e registrados como validação residual (gatilho de reabertura na ADR-069). A Fase 2 está fechada segundo `docs/ROADMAP.md` (todos os critérios marcados; CI Linux + Windows + TypeScript + políticas verde num único commit). `OUTPUT-H264`: **capacidade de engenharia provada** (MP4 H.264 real via `h264_mf` no CI Windows, validado por ffprobe); **decisão de produção/jurídica pendente** (patentes H.264/AAC, qualidade do encoder de software, OpenH264).
 
 ## Gates de fase (decisão do Product Owner, ADR-037)
 
 ```
 Fase 2 — Motor (headless)     CONCLUÍDA.
-Fase 3 — Editor / Preview     NÃO pode iniciar sem OD-1 fechado (S1 medido em Windows).
+Fase 3 — Editor / Preview     OD-1 FECHADA (ADR-069, P2). Pode iniciar; residual: CPU/pacing do P2 em GPU real.
 ```
 
 ## Estado
@@ -105,7 +105,7 @@ O compositor CPU é a **referência determinística**, não o caminho de tempo r
 
 ## Próxima missão (proposta; **não iniciada**)
 
-Spike S1 em Windows 11 + GPU (`tools/s1-preview-spike`, `powershell -ExecutionPolicy Bypass -File .\run.ps1`; harness corrigido e validado no CI Windows/WARP, ver `docs/spikes/S1-preview-surface.md` §0) → fecha OD-1 → ADR do presenter → só então Fase 3. Em paralelo (não bloqueia): decisão de produto sobre `OUTPUT-H264`.
+S1 concluído (ADR-069, P2). Fase 3 pode iniciar; na primeira entrega de preview, rodar `tools/s1-preview-spike` (`powershell -ExecutionPolicy Bypass -File .\run.ps1 -P2Res 1280x720`) em PC com GPU real como critério de aceitação. Em paralelo (não bloqueia): decisão de produto sobre `OUTPUT-H264`.
 
 ## O que existe (M08)
 

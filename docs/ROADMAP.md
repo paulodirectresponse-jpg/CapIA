@@ -23,7 +23,7 @@ Missões (numeração real das sessões):
 3. ✅ **M03 — Fechamento da fundação e spikes de risco** (`docs/spikes/`; ADR-029..036). Resultado: S2, S3, S4, S5, S6 e S7 **medidos/concluídos**; **S1 não mensurável no ambiente de nuvem** (sem Windows/GPU).
 4. ✅ **M04 — Scaffold, CI e preparação** (workspace Rust+pnpm, shell Tauri, CI, verificação de licenças e de fronteiras, pacote S1 para Windows; ADR-037/038). Pendências remanescentes:
    - **Primeira execução do CI em runner real** (workflow escrito e validado com `actionlint`, ainda não executado: depende do push);
-   - **S1 em Windows 11** (`tools/s1-preview-spike`, `.\run.ps1`) → fecha **OD-1** — **hard gate da Fase 3, não da Fase 2** (ADR-037).
+   - ✅ **S1 medido** (runner Windows; `tools/s1-preview-spike`) → **OD-1 fechada: P2** (ADR-069); residual: CPU/pacing em GPU real.
 
 Spikes da Fase 1 (relatórios em `docs/spikes/`): S1 preview surface · S2 decode frame-exato/VFR · S3 FFmpeg LGPL · S4 core em WASM · S5 timeline em canvas · S6 compositor OpenCut (`REIMPLEMENT_WITH_REFERENCE`) · S7 suíte de aceitação de timeline.
 
@@ -71,7 +71,7 @@ Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, 
 
 **Objetivo:** editor utilizável de ponta a ponta sem IA, com fluidez próxima ao CapCut Desktop.
 
-**Gates de entrada (hard):** **OD-1 fechado** — S1 executado em Windows (`tools/s1-preview-spike`), relatório em `docs/spikes/`, presenter decidido por ADR segundo a regra de `S1-preview-surface.md` §4. Sem isso, **nenhum** trabalho de preview/editor visual começa.
+**Gates de entrada (hard):** **OD-1 fechado ✅** — S1 executado em Windows (`tools/s1-preview-spike`), relatório em `docs/spikes/S1-preview-surface.md` §6, presenter decidido pela ADR-069 (**P2**) segundo a regra de §4. Residual: validar CPU/pacing do P2 em GPU real na primeira entrega de preview (gatilho de reabertura na ADR-069).
 **Gate de saída:** `OUTPUT-H264` — caminho confiável de exportação MP4/H.264 no Windows (hardware quando disponível; Media Foundation/FFmpeg quando adequado; fallback por software legal e de qualidade aceitável; sem x264/x265 GPL) definido e validado **antes da entrega do Editor**.
 
 Escopo: shell UI + design system, `ui-timeline` (canvas), painel Project (árvore) + abas de sequence + `+`, biblioteca (projeto/global), drag-and-drop, trim/split/snapping/zoom/ripple/grupos/copy-paste, tracks (lock/mute/solo/hide/magnetic), nested (abrir, make unique, flatten, follow length), inspector, keyframes, texto, legendas manuais + estilos, transições, áudio (volume/fades/detach), preview com proxies, export de deliverables em lote, histórico visível, relink UI, atalhos configuráveis, pt-BR/en.

@@ -1,6 +1,6 @@
 # S1 — pacote de medição do Preview Surface (Windows 11)
 
-Executa o protocolo de `docs/spikes/S1-preview-surface.md` §4 e gera **um relatório estruturado** para análise. Fecha (ou não) **OD-1**, hard gate da Fase 3.
+Executa o protocolo de `docs/spikes/S1-preview-surface.md` §4 e gera **um relatório estruturado** para análise. **OD-1 foi fechada (ADR-069, presenter P2)** com base em execuções no runner Windows; este pacote continua sendo o teste de aceitação de CPU/pacing em **GPU real** (`.\run.ps1 -P2Res 1280x720`).
 
 ## Como executar
 

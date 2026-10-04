@@ -48,7 +48,7 @@ WebGL/WebGPU na UI continuam úteis para **desenhar a timeline** (thumbnails/wav
 **Podem diferir no preview (sinalizado):** resolução de render (1/2, 1/4), uso de proxy em vez do original, qualidade de filtro de escala, frames descartados em playback sob carga (nunca deslocados no tempo).
 **Teste de paridade:** render do mesmo frame pelo caminho "preview em resolução total sem proxy" e pelo caminho de export deve ser bit-idêntico antes do encode; com proxy, diferença perceptual abaixo do limiar (`TEST_STRATEGY.md`).
 
-## 5. Apresentação do preview na janela (spike obrigatório — OD-1: **ABERTA**; ver `docs/spikes/S1-preview-surface.md`)
+## 5. Apresentação do preview na janela (OD-1: **FECHADA — P2**, ADR-069; P1 eliminado por airspace medido; ver `docs/spikes/S1-preview-surface.md` §6)
 
 Abstração:
 ```rust

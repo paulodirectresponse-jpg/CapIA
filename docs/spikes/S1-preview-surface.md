@@ -2,7 +2,7 @@
 
 **Pergunta:** dá para exibir preview de baixa latência dentro de Tauri/WebView2 (P1 superfície nativa filha, P2 SharedBuffer → canvas)? Fecha OD-1.
 
-**Resultado: NÃO MEDIDO. OD-1 permanece ABERTA.** O ambiente da sessão (container Linux, sem GPU, sem Windows, sem WebView2) não consegue executar o experimento. Nenhum número de latência, DPI, resize, fullscreen, input ou overlay foi obtido, e nenhum foi estimado. Esta página registra o que *foi* verificado, o que isso muda, e o protocolo para executar S1 em Windows.
+**Resultado (§6): MEDIDO no runner Windows (WebView2/DWM reais, GPU por software). P1 eliminado (airspace); P2 passa os critérios funcionais e de latência → presenter = P2 (ADR-069). OD-1 FECHADA**, com validação residual de CPU/pacing em GPU real como critério de aceitação da Fase 3 (gatilho de reabertura na ADR-069). As §1–§5 abaixo são o registro histórico anterior à medição.
 
 ## 0. Status do harness (revisão pós-primeiro teste em Windows 11)
 
@@ -64,3 +64,23 @@ Medir, para cada harness: (1) **latência de apresentação** (timestamp de comp
 - Fase 2 (motor headless, render, export, CLI) **não depende** de S1: o `PreviewPresenter` é um trait e o compositor produz uma textura/frames independentemente do destino.
 - Dependem de OD-1: o presenter nativo de `capia-preview` e toda a Fase 3 (UI do editor).
 - **Decisão do PO (ADR-037):** a Fase 2 pode iniciar com OD-1 aberto; **OD-1 é hard gate da Fase 3**. Para executar: `tools/s1-preview-spike/` (`.\run.ps1` em Windows 11; gera um `.zip` com o relatório estruturado para análise). O pacote só foi compilado/cross-linkado e testado no que não é específico de Windows — ver o README dele.
+
+## 6. Resultados medidos (harness corrigido, runner `windows-latest`)
+
+**Ambiente:** Windows Server 2025 (desktop interativo), WebView2 153, DWM a 64 Hz, adaptador **WARP** (D3D12 por software, sem GPU física), 4 vCPU, tela pequena (janela ajustada à área útil). Workflow `.github/workflows/s1-harness.yml` (runs 6–9 no commit `ac5f3c2`); relatório por modo `MEASURED` nos três modos. **Critérios e regra de decisão (§4) inalterados.**
+
+| Medida | P1 (filho **abaixo**) | P1_above (controle) | P2 (SharedBuffer → canvas) |
+|---|---|---|---|
+| Padrão visível na tela | **NÃO** (grade 3×3 = fundo da página, 0 amostras de latência) | sim (26–39 ms após posicionar) | sim (18–37 ms) |
+| Overlay HTML sobre o preview | n/a (padrão invisível) | não (nativo cobre o HTML — esperado) | **sim** (192,64,64 = mistura exata) |
+| Input sobre o preview | — | nativo captura | HTML recebe; 0 cliques no HWND nativo |
+| Latência submissão→tela (p50 / p95) | — | — | **36 ms / 48 ms** (540p e 720p) |
+| fps / slots perdidos | ~62 fps (DWM 64 Hz), 0 erros de surface | ~62 fps | 540p: 60,0 fps, 0 perdidos · 720p: 57,4 fps, 59/1807 (3,3 %) |
+| Readback GPU→CPU (p50) | — | — | 5,5 ms (540p) / 10,9 ms (720p) — WARP |
+| Resize contínuo / fullscreen | — | — | sem amostra fora do retângulo esperado; padrão correto 47–92 ms após cada passo (1º passo frio 304 ms); fullscreen decodifica frame da tela |
+| CPU (GetProcessTimes) | — | — | 24 % da máquina (540p), 47 % (720p) **incluindo o rasterizador WARP**; WebView2 ≈ 0,15 %; JS upload+draw p50 0,3 ms |
+
+**Leitura (regra §4):**
+1. **P1 falha** o critério "overlay/padrão sob WebView2 transparente": reproduzido em todas as execuções; o controle com o mesmo HWND **acima** mostra o padrão, logo a sonda/posição estão corretas. Árvore de janelas medida: `WRY_WEBVIEW → Chrome_WidgetWin_0/1 → Chrome_RenderWidgetHostHWND → Intermediate D3D Window` cobrindo toda a região — airspace por *windowed hosting*; é propriedade da hospedagem, não da GPU (inferência).
+2. **P2 passa** overlay, input, resize, fullscreen e latência. **fps/CPU em GPU real não são mensuráveis** neste runner: o rasterizador de software roda dentro do processo medido, então 47 % de CPU a 720p é número confundido (nem a favor nem contra o critério < 25 %).
+3. **Decisão:** P2 (ADR-069). **Residual obrigatório:** rodar `powershell -ExecutionPolicy Bypass -File .\run.ps1 -P2Res 1280x720` em PC com GPU real (e 150 % DPI / 2 monitores se possível) na primeira entrega de preview da Fase 3; gatilho de reabertura na ADR-069.
