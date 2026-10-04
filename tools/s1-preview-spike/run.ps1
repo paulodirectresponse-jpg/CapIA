@@ -21,9 +21,11 @@ param(
   [switch]$SkipBuild,
   [switch]$SkipManual,
   [switch]$SkipGpuCounters,
-  [switch]$SkipInput
+  [switch]$SkipInput,
+  [switch]$Quick
 )
 
+if ($Quick) { $SkipManual = $true; $SkipGpuCounters = $true }
 $ErrorActionPreference = "Stop"
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Here

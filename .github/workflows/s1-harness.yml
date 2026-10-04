@@ -1,0 +1,58 @@
+name: S1 harness (Windows)
+
+# Reproduz o spike S1 (tools/s1-preview-spike) num runner Windows REAL: sem GPU fisica (adaptador
+# WARP/software) mas com WebView2, DWM e desktop interativo. Valida o fluxo do usuario
+# (Windows PowerShell 5.1 -> run.ps1 -> build -> execucao -> ZIP) e o handshake de layout /
+# SharedBuffer / HWND filho. NAO decide OD-1: os numeros de GPU/latencia so valem no PC do usuario.
+
+on:
+  push:
+    branches: ["claude/**"]
+    paths:
+      - "tools/s1-preview-spike/**"
+      - ".github/workflows/s1-harness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  s1-windows:
+    name: S1 harness (windows-latest, PowerShell 5.1)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/s1-preview-spike
+      - name: Executar run.ps1 (Windows PowerShell 5.1)
+        shell: powershell
+        working-directory: tools/s1-preview-spike
+        run: |
+          $PSVersionTable.PSVersion
+          .\run.ps1 -Quick -SteadySecs 3
+        continue-on-error: true
+        id: run
+      - name: Log do harness e resumo
+        if: always()
+        shell: powershell
+        working-directory: tools/s1-preview-spike
+        run: |
+          Get-ChildItem reports -ErrorAction SilentlyContinue | Format-Table Name, Length
+          foreach ($f in Get-ChildItem reports -Filter "*.md" -ErrorAction SilentlyContinue) { Get-Content $f.FullName }
+          foreach ($f in Get-ChildItem reports -Filter "*.events.jsonl" -ErrorAction SilentlyContinue) { Write-Host "=== $($f.Name)"; Get-Content $f.FullName -Tail 400 }
+          foreach ($f in Get-ChildItem reports -Filter "*.log" -ErrorAction SilentlyContinue) { if ($f.Name -notmatch "build") { Write-Host "=== $($f.Name)"; Get-Content $f.FullName -Tail 200 } }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s1-report
+          path: tools/s1-preview-spike/reports/*.zip
+          if-no-files-found: warn
+      - name: Falhar se o run.ps1 falhou
+        if: steps.run.outcome != 'success'
+        shell: powershell
+        run: exit 1
