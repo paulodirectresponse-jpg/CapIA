@@ -50,6 +50,26 @@ function tauriBinary(): string {
   return p;
 }
 
+/** Sobe outro devserver (testes de crash: matar o processo e reabrir o projeto noutro). */
+export async function launchDevserver(): Promise<{ url: string; child: ChildProcess }> {
+  const port = await freePort();
+  const child = spawn(
+    devserverBinary(),
+    ["--port", String(port), "--static", join(ROOT, "apps/desktop/dist")],
+    { stdio: "ignore", cwd: ROOT },
+  );
+  const url = `http://127.0.0.1:${String(port)}`;
+  for (let i = 0; i < 100; i++) {
+    try {
+      if ((await fetch(`${url}/index.html`)).ok) break;
+    } catch {
+      /* subindo */
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return { url, child };
+}
+
 export const test = base.extend<{ server: Server; editor: Editor }, object>({
   server: async ({}, use) => {
     const dir = mkdtempSync(join(tmpdir(), "capia-e2e-"));
@@ -248,6 +268,14 @@ export class Editor {
     const byPath = this.page.getByTestId("import-by-path");
     if (await byPath.count()) await byPath.click();
     else await this.page.getByTestId("import-media").click();
+  }
+
+  /** Importa um caminho absoluto qualquer (fora de `tests/fixtures/media`). */
+  async openImportAfterRail(absPath: string): Promise<void> {
+    await this.page.getByTestId("rail-media").click();
+    await this.openImportByPath();
+    await this.page.getByTestId("import-paths").fill(absPath);
+    await this.page.getByTestId("import-confirm").click();
   }
 
   async importMedia(...files: string[]): Promise<void> {
