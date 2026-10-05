@@ -125,7 +125,7 @@ mod windows_store {
 
     /// Windows Credential Manager (credenciais genéricas, DPAPI no perfil do usuário).
     #[derive(Debug, Default)]
-    pub struct CredentialManagerStore;
+    pub(crate) struct CredentialManagerStore;
 
     const SERVICE: &str = "CapIA";
 
@@ -164,7 +164,7 @@ mod windows_store {
 }
 
 #[cfg(windows)]
-pub use windows_store::CredentialManagerStore;
+pub(crate) use windows_store::CredentialManagerStore;
 
 /// Backend seguro da plataforma. Windows ⇒ Credential Manager; demais ⇒ `NoSecureBackend`
 /// (o chamador decide usar [`MemoryStore`] explicitamente — nunca silenciosamente).

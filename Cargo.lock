@@ -340,6 +340,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bytes",
+ "capia-ai",
  "capia-secrets",
  "futures-util",
  "jsonschema",

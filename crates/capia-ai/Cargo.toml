@@ -26,3 +26,7 @@ jsonschema = { version = "0.30", default-features = false }
 [features]
 # servidor HTTP falso para testes de contrato/segurança (também usado por capia-intelligence)
 testkit = []
+
+[dev-dependencies]
+# habilita o `testkit` (servidor HTTP falso) nos testes de integração do próprio crate
+capia-ai = { path = ".", features = ["testkit"] }
