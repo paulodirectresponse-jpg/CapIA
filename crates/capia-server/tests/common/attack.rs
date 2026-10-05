@@ -308,12 +308,165 @@ pub fn wait_until(max: Duration, mut cond: impl FnMut() -> bool) -> bool {
 
 /// Nome de dispositivo reservado do Windows (com ou sem extensão) ou com ponto/espaço final.
 pub fn windows_unsafe_name(n: &str) -> bool {
-    let stem = n.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let stem = n
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_ascii_uppercase();
     let dev = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$")
         || (stem.len() == 4
             && (stem.starts_with("COM") || stem.starts_with("LPT"))
             && stem.as_bytes()[3].is_ascii_digit());
     dev || n.ends_with('.') || n.ends_with(' ')
+}
+
+/// `capia-server serve` como processo filho real (stdout/stderr coletados por threads).
+pub struct ChildServer {
+    pub child: std::process::Child,
+    pub addr: SocketAddr,
+    pub data_dir: PathBuf,
+    pub stdout: std::sync::Arc<std::sync::Mutex<String>>,
+    pub stderr: std::sync::Arc<std::sync::Mutex<String>>,
+    /// Segredo impresso por `--bootstrap` (a exceção documentada de stdout).
+    pub bootstrap: Option<String>,
+}
+
+pub fn spawn_server(data_dir: &Path, extra: &[&str]) -> ChildServer {
+    use std::io::BufRead;
+    use std::process::{Command, Stdio};
+    use std::sync::{Arc, Mutex};
+    let mut child = Command::new(env!("CARGO_BIN_EXE_capia-server"))
+        .args(["serve", "--data-dir"])
+        .arg(data_dir)
+        .args(["--port", "0"])
+        .args(extra)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn capia-server");
+    let stdout = Arc::new(Mutex::new(String::new()));
+    let stderr = Arc::new(Mutex::new(String::new()));
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    let out = child.stdout.take().unwrap();
+    let so = stdout.clone();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(out).lines().map_while(Result::ok) {
+            so.lock().unwrap().push_str(&format!("{line}\n"));
+            let _ = tx.send(line);
+        }
+    });
+    let err = child.stderr.take().unwrap();
+    let se = stderr.clone();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(err).lines().map_while(Result::ok) {
+            se.lock().unwrap().push_str(&format!("{line}\n"));
+        }
+    });
+    let mut addr = None;
+    let mut bootstrap = None;
+    let t0 = Instant::now();
+    while addr.is_none() && t0.elapsed() < Duration::from_secs(30) {
+        if let Ok(line) = rx.recv_timeout(Duration::from_millis(200)) {
+            if let Some(t) = line.strip_prefix("CAPIA_BOOTSTRAP_TOKEN=") {
+                bootstrap = Some(t.to_owned());
+            }
+            if let Some(a) = line.split("http://").nth(1) {
+                addr = a.split_whitespace().next().and_then(|a| a.parse().ok());
+            }
+        }
+    }
+    ChildServer {
+        child,
+        addr: addr.expect("the server must announce `listening on http://ADDR`"),
+        data_dir: data_dir.to_path_buf(),
+        stdout,
+        stderr,
+        bootstrap,
+    }
+}
+
+impl ChildServer {
+    pub fn call(
+        &self,
+        method: &str,
+        path: &str,
+        token: Option<&str>,
+        extra: &[(&str, &str)],
+        body: &[u8],
+    ) -> Option<Resp> {
+        let host = format!("127.0.0.1:{}", self.addr.port());
+        let auth = token.map(|t| format!("Bearer {t}"));
+        let len = body.len().to_string();
+        let mut hs: Vec<(&str, &str)> = vec![("Host", &host), ("Connection", "close")];
+        if let Some(a) = &auth {
+            hs.push(("Authorization", a));
+        }
+        if !body.is_empty() {
+            hs.push(("Content-Length", &len));
+        }
+        hs.extend_from_slice(extra);
+        try_parse(&exchange(
+            self.addr,
+            &build(method, path, &hs, body),
+            Duration::from_secs(20),
+        )?)
+    }
+
+    pub fn json_call(&self, method: &str, path: &str, token: &str, body: &serde_json::Value) -> Option<Resp> {
+        let b = body.to_string();
+        self.call(
+            method,
+            path,
+            Some(token),
+            &[("Content-Type", "application/json")],
+            b.as_bytes(),
+        )
+    }
+
+    pub fn alive(&self) -> bool {
+        self.call("GET", "/v1/health", None, &[], b"")
+            .is_some_and(|r| r.status == 200)
+    }
+
+    pub fn wait_ready(&self) {
+        assert!(wait_until(Duration::from_secs(20), || self.alive()), "server never became healthy");
+    }
+
+    /// SIGKILL (sem shutdown gracioso).
+    pub fn kill(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+
+    /// Shutdown gracioso pelo arquivo `shutdown` (o que `capia-server stop` faz).
+    pub fn stop(&mut self) {
+        let _ = std::fs::write(self.data_dir.join("shutdown"), b"1");
+        let t0 = Instant::now();
+        while t0.elapsed() < Duration::from_secs(40) {
+            if self.child.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        self.kill();
+    }
+
+    pub fn out(&self) -> String {
+        self.stdout.lock().unwrap().clone()
+    }
+
+    pub fn err(&self) -> String {
+        self.stderr.lock().unwrap().clone()
+    }
+}
+
+impl Drop for ChildServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }
 
 pub fn pct(s: &str) -> String {
