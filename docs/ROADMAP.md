@@ -90,7 +90,7 @@ Escopo: shell UI + design system, `ui-timeline` (canvas), painel Project (árvor
 
 ## FASE 4 — Inteligência (IA assistida, um passo por vez)
 
-**Estado da Fase 4: `ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase4-intelligence`; ver `docs/STATUS.md`). Fase 5 **não** iniciada.
+**Estado da Fase 4: `ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase4-intelligence`; ver `docs/STATUS.md`; CI: run 83, commit `02b8490`, 6/6 jobs verdes). Fase 5 **não** iniciada.
 
 **Objetivo:** camada de IA configurável e segura; IA executa tarefas pontuais como transações.
 
