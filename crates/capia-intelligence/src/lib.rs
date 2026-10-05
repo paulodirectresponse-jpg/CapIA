@@ -9,9 +9,12 @@
 
 pub mod captions;
 pub mod ctx;
+pub mod demand;
+pub mod docs;
 pub mod engine;
 pub mod error;
 pub mod records;
+pub mod reference;
 pub mod scenes;
 pub mod silence;
 pub mod transcript;

@@ -441,6 +441,7 @@ dependencies = [
  "capia-assets",
  "capia-commands",
  "capia-editor-api",
+ "capia-intelligence",
  "capia-media",
  "capia-model",
  "capia-project",

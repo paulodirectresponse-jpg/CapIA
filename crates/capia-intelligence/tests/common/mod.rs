@@ -1,5 +1,5 @@
 //! Mundo de teste: projeto real (Session), mídia real gerada pelo ffmpeg, provider Replay.
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+#![allow(dead_code, unreachable_pub, clippy::unwrap_used, clippy::expect_used)]
 
 use capia_ai::brain::BrainProfile;
 use capia_ai::capability::{Capabilities, Capability};
@@ -78,6 +78,7 @@ pub struct World {
     pub ctx: IntelCtx,
     pub asset_id: String,
     pub stt: Arc<ReplayProvider>,
+    pub brain: Option<Arc<ReplayProvider>>,
     pub sink: Arc<MemorySink>,
 }
 
@@ -131,53 +132,143 @@ pub fn call(s: &Arc<Mutex<Session>>, m: &str, p: Value) -> Value {
 }
 
 pub fn world(name: &str, stt_script: Vec<ReplayResponse>) -> Option<World> {
-    let tc = ffmpeg()?;
+    world_media(name, make_speech_clip, stt_script, true)
+}
+
+/// 9,6 s: 4 planos de 2,4 s (cortes secos em 2,4/4,8/7,2 s) + tom contínuo.
+pub fn make_cut_clip(tc: &MediaToolchain, dir: &Path) -> PathBuf {
+    let out = dir.join("cuts.mp4");
+    let mut args: Vec<String> = ["-v", "error", "-y", "-nostdin"].map(String::from).to_vec();
+    for src in ["testsrc", "smptebars", "rgbtestsrc", "yuvtestsrc"] {
+        args.extend(["-f", "lavfi", "-t", "2.4", "-i"].map(String::from));
+        args.push(format!("{src}=size=320x180:rate=30"));
+    }
+    args.extend(
+        [
+            "-f",
+            "lavfi",
+            "-t",
+            "9.6",
+            "-i",
+            "sine=frequency=300:sample_rate=16000",
+        ]
+        .map(String::from),
+    );
+    args.extend([
+        "-filter_complex".into(),
+        "[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0[v]".into(),
+        "-map".into(),
+        "[v]".into(),
+        "-map".into(),
+        "4:a".into(),
+    ]);
+    args.extend(
+        [
+            "-c:v", "mpeg4", "-q:v", "3", "-c:a", "aac", "-pix_fmt", "yuv420p",
+        ]
+        .map(String::from),
+    );
+    args.push(out.display().to_string());
+    let st = Command::new(tc.ffmpeg.as_ref().unwrap())
+        .args(&args)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    out
+}
+
+pub fn world_media(
+    name: &str,
+    make: fn(&MediaToolchain, &Path) -> PathBuf,
+    stt_script: Vec<ReplayResponse>,
+    with_stt: bool,
+) -> Option<World> {
+    world_full(name, Some(make), stt_script, with_stt, None)
+}
+
+/// Mundo completo: mídia opcional, STT opcional e um "brain" de texto (Replay) opcional.
+pub fn world_full(
+    name: &str,
+    make: Option<fn(&MediaToolchain, &Path) -> PathBuf>,
+    stt_script: Vec<ReplayResponse>,
+    with_stt: bool,
+    brain_script: Option<Vec<ReplayResponse>>,
+) -> Option<World> {
+    let tc = if make.is_some() {
+        Some(ffmpeg()?)
+    } else {
+        None
+    };
     let dir = tmp(name);
-    let media = make_speech_clip(&tc, &dir);
+    let media = make.map(|m| m(tc.as_ref().unwrap(), &dir));
     let session = Arc::new(Mutex::new(Session::new(SessionConfig::default())));
     call(
         &session,
         "project.create",
         json!({ "path": dir.join("p.capia").display().to_string() }),
     );
-    call(
-        &session,
-        "assets.import",
-        json!({ "paths": [media.display().to_string()] }),
-    );
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let asset_id = loop {
-        let evs = call(&session, "events.poll", json!({}));
-        if let Some(a) = evs["events"].as_array().and_then(|a| {
-            a.iter()
-                .find(|e| e["kind"] == "import_finalized")
-                .map(|e| e["result"]["asset_id"].as_str().unwrap().to_owned())
-        }) {
-            break a;
-        }
-        assert!(Instant::now() < deadline, "import não terminou");
-        std::thread::sleep(Duration::from_millis(50));
-    };
-    call(
-        &session,
-        "command.execute",
-        json!({"label":"build","commands":[
-            {"operation_id":"b1","type":"create_sequence","id":"s","name":"M","frame_rate":"30","width":1080,"height":1920},
-            {"operation_id":"b2","type":"add_track","sequence":"s","id":"v","kind":"visual"},
-            {"operation_id":"b3","type":"insert_clip","track":"v","start":0,
-             "clip":{"id":"c1","duration":FRAME*360,"content":{"type":"media","asset":asset_id,"has_video":true,"has_audio":true}}}
-        ]}),
-    );
+    let mut asset_id = String::new();
+    if let Some(media) = media {
+        call(
+            &session,
+            "assets.import",
+            json!({ "paths": [media.display().to_string()] }),
+        );
+        let deadline = Instant::now() + Duration::from_secs(60);
+        asset_id = loop {
+            let evs = call(&session, "events.poll", json!({}));
+            if let Some(a) = evs["events"].as_array().and_then(|a| {
+                a.iter()
+                    .find(|e| e["kind"] == "import_finalized")
+                    .map(|e| e["result"]["asset_id"].as_str().unwrap().to_owned())
+            }) {
+                break a;
+            }
+            assert!(Instant::now() < deadline, "import não terminou");
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        call(
+            &session,
+            "command.execute",
+            json!({"label":"build","commands":[
+                {"operation_id":"b1","type":"create_sequence","id":"s","name":"M","frame_rate":"30","width":1080,"height":1920},
+                {"operation_id":"b2","type":"add_track","sequence":"s","id":"v","kind":"visual"},
+                {"operation_id":"b3","type":"insert_clip","track":"v","start":0,
+                 "clip":{"id":"c1","duration":FRAME*280,"content":{"type":"media","asset":asset_id,"has_video":true,"has_audio":true}}}
+            ]}),
+        );
+    }
 
     let mut reg = Registry::new();
-    let mut p = ProviderConfig::new("stt", ProviderKind::Replay, "stt");
-    p.enabled = true;
-    reg.providers.insert("stt".into(), p);
-    let mut m = ModelEndpoint::new("stt:m", "stt", "whisper-replay");
-    m.capabilities = Capabilities::declared(&[Capability::SpeechToText]);
-    m.enabled = true;
-    reg.models.insert(m.id.clone(), m);
-    let prof = BrainProfile::new("pf", "pf", "stt:m");
+    if with_stt {
+        let mut p = ProviderConfig::new("stt", ProviderKind::Replay, "stt");
+        p.enabled = true;
+        reg.providers.insert("stt".into(), p);
+        let mut m = ModelEndpoint::new("stt:m", "stt", "whisper-replay");
+        m.capabilities = Capabilities::declared(&[Capability::SpeechToText]);
+        m.enabled = true;
+        reg.models.insert(m.id.clone(), m);
+    }
+    let mut brain_replay = None;
+    let mut brain_id = "stt:m".to_owned();
+    if let Some(script) = brain_script {
+        let mut p = ProviderConfig::new("brain", ProviderKind::Replay, "brain");
+        p.enabled = true;
+        reg.providers.insert("brain".into(), p);
+        let mut m = ModelEndpoint::new("brain:m", "brain", "brain-replay");
+        m.capabilities = Capabilities::declared(&[
+            Capability::TextGeneration,
+            Capability::StructuredOutput,
+            Capability::ToolCalling,
+            Capability::Streaming,
+        ]);
+        m.context_window = 200_000;
+        m.enabled = true;
+        reg.models.insert(m.id.clone(), m);
+        brain_replay = Some(Arc::new(ReplayProvider::scripted("brain", script)));
+        "brain:m".clone_into(&mut brain_id);
+    }
+    let prof = BrainProfile::new("pf", "pf", brain_id);
     reg.profiles.insert("pf".into(), prof.clone());
     reg.active_profile = Some("pf".into());
     let sink = Arc::new(MemorySink::default());
@@ -187,6 +278,9 @@ pub fn world(name: &str, stt_script: Vec<ReplayResponse>) -> Option<World> {
     );
     let stt = Arc::new(ReplayProvider::scripted("stt", stt_script));
     rt.register_replay("stt", stt.clone());
+    if let Some(b) = &brain_replay {
+        rt.register_replay("brain", b.clone());
+    }
     let ctx = IntelCtx::new(Arc::new(SessionEngine::new(session.clone())), rt, prof);
     Some(World {
         dir,
@@ -195,6 +289,7 @@ pub fn world(name: &str, stt_script: Vec<ReplayResponse>) -> Option<World> {
         asset_id,
         stt,
         sink,
+        brain: brain_replay,
     })
 }
 

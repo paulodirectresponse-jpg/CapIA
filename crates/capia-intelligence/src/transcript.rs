@@ -151,14 +151,13 @@ pub async fn transcribe_asset(
             p.vocabulary.as_deref().unwrap_or(""),
         ])
     );
-    if !p.force {
-        if let Some(mut rec) = ctx
+    if !p.force
+        && let Some(mut rec) = ctx
             .records()?
             .latest::<TranscriptRecord>(KIND_TRANSCRIPT, &id)?
-        {
-            rec.from_cache = true;
-            return Ok(rec);
-        }
+    {
+        rec.from_cache = true;
+        return Ok(rec);
     }
 
     let probe = FfprobeBackend::new(tc.clone());

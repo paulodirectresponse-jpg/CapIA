@@ -150,7 +150,7 @@ fn silence_removal_cuts_only_silence_and_keeps_speech() {
     assert!(plan.cut_count >= 1, "{plan:?}");
     for r in &plan.silences {
         let (s, e) = (r.start_us as f64 / 1e6, r.end_us as f64 / 1e6);
-        let in_speech = |a: f64, b: f64| (s < b && e > a);
+        let in_speech = |a: f64, b: f64| s < b && e > a;
         assert!(
             !in_speech(0.0, 2.0) && !in_speech(4.5, 6.5) && !in_speech(7.0, 12.0),
             "{r:?}"
@@ -183,4 +183,58 @@ fn silence_removal_cuts_only_silence_and_keeps_speech() {
     call(&w.session, "command.undo", json!({}));
     let back = call(&w.session, "sequence.get", json!({ "sequence": "s" }));
     assert_eq!(back["clips"].as_object().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn reference_grammar_is_deterministic_cached_and_works_with_providers_off() {
+    use capia_intelligence::reference::{ReferenceOptions, analyze_reference};
+    // AI Off: nenhum provider no registry — cenas e áudio rodam local; a fala fica de fora
+    let Some(w) = world_media("ref", make_cut_clip, vec![], false) else {
+        return;
+    };
+    let t = task(&w, "ref1");
+    let o = ReferenceOptions::default();
+    let (g, cached) = analyze_reference(&w.ctx, &t, &w.asset_id, &o, &|_, _, _| {})
+        .await
+        .unwrap();
+    assert!(!cached);
+    assert_eq!(g.cut_rhythm.shot_count, 4, "{:?}", g.shots);
+    assert_eq!(g.transitions.cuts, 3);
+    for (i, expect_s) in [2.4f64, 4.8, 7.2].iter().enumerate() {
+        let got = g.shots[i + 1].start_us as f64 / 1e6;
+        assert!(
+            (got - expect_s).abs() <= 0.08,
+            "corte {i}: {got} ≠ {expect_s}"
+        );
+    }
+    assert!(g.speech.is_none());
+    assert!(
+        g.provenance.notes.contains(&"no_stt_available".to_owned()),
+        "{:?}",
+        g.provenance.notes
+    );
+    assert!(g.provenance.fully_local);
+    assert!(g.audio.as_ref().unwrap().speech_ratio_permille > 900);
+    assert_eq!(g.structure.first().unwrap().name, "hook");
+
+    let (again, cached) = analyze_reference(&w.ctx, &t, &w.asset_id, &o, &|_, _, _| {})
+        .await
+        .unwrap();
+    assert!(cached);
+    assert_eq!(again.content_digest(), g.content_digest());
+    // recomputar do zero dá o MESMO conteúdo (determinismo)
+    let mut forced = o.clone();
+    forced.force = true;
+    let (re, cached) = analyze_reference(&w.ctx, &t, &w.asset_id, &forced, &|_, _, _| {})
+        .await
+        .unwrap();
+    assert!(!cached);
+    if re.content_digest() != g.content_digest() {
+        eprintln!(
+            "A={}\nB={}",
+            serde_json::to_string(&g).unwrap(),
+            serde_json::to_string(&re).unwrap()
+        );
+    }
+    assert_eq!(re.content_digest(), g.content_digest());
 }
