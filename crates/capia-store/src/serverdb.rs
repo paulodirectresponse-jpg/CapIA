@@ -1047,6 +1047,14 @@ impl ServerDb {
         )? > 0)
     }
 
+    pub fn export_set_batch(&self, id: &str, batch: &str) -> StoreResult<()> {
+        self.conn().execute(
+            "UPDATE exports SET batch = ?2 WHERE id = ?1",
+            params![id, batch],
+        )?;
+        Ok(())
+    }
+
     pub fn export_get(&self, id: &str) -> StoreResult<Option<ExportRow>> {
         self.conn()
             .query_row(

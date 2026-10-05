@@ -82,7 +82,9 @@ impl ServerConfig {
             webhook_backoff_cap: Duration::from_secs(3600),
             idempotency_stale: Duration::from_secs(300),
             session: SessionConfig::default(),
-            secrets: capia_secrets::platform_store(),
+            // sem cofre do SO (Linux/CI) o segredo de webhook fica só em memória: nunca em arquivo
+            secrets: capia_secrets::platform_store()
+                .unwrap_or_else(|_| Arc::new(capia_secrets::MemoryStore::new())),
             demo_brain: false,
         }
     }

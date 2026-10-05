@@ -202,6 +202,22 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Servidor local (Fase 6, ADR-102): host REST/MCP/webhooks da MESMA Engine API. Composition root
+  // headless: não conhece Tauri/UI; escreve só por `preview → apply_plan` (ator Api); rede de saída
+  // só via `capia-ai` (WebhookClient). Cérebro Replay só pela feature opt-in `testkit`.
+  "capia-server": {
+    workspace: [
+      "capia-editor-api",
+      "capia-intelligence",
+      "capia-store",
+      "capia-secrets",
+      "capia-ai",
+      "capia-commands",
+    ],
+    normal: ["serde", "serde_json", "getrandom", "sha2", "base64", "jsonschema", "tokio"],
+    build: [],
+    dev: [],
+  },
   // Funções puras de UX da timeline (snap/grupo/colocação do core) em WASM (ADR-070). Só o núcleo
   // puro; única crate com `unsafe` (borda FFI mínima, sem herdar os lints do workspace).
   "capia-timeline-wasm": {
@@ -388,6 +404,26 @@ export function findForbiddenSourceImports(root) {
  * O cérebro Replay de E2E (`testkit`) nunca pode entrar no app de produto: no desktop, `testkit` só
  * existe como a feature opt-in `e2e-testkit`, que não é padrão, e a dependência não liga features.
  */
+/** Fase 6: o cérebro Replay do servidor só existe pela feature opt-in `testkit` (nunca padrão). */
+export function checkServerTestkit(root) {
+  const file = join(root, "crates", "capia-server", "Cargo.toml");
+  if (!existsSync(file)) return [];
+  const toml = readFileSync(file, "utf8");
+  const errors = [];
+  const allowed = 'testkit = ["capia-intelligence/testkit"]';
+  const lines = toml.split("\n").map((l) => l.trim());
+  if (!lines.includes(allowed)) errors.push("capia-server: feature testkit ausente/alterada");
+  if (/^default\s*=.*testkit/m.test(toml)) {
+    errors.push("capia-server: testkit não pode ser feature padrão");
+  }
+  // a feature só pode ser ligada por dev-dependency (auto-referência), nunca por dependência normal
+  const normal = toml.split(/\n\[dev-dependencies\]/)[0] ?? "";
+  if (/capia-intelligence\s*=.*features\s*=.*testkit/.test(normal)) {
+    errors.push("capia-server: capia-intelligence/testkit ligado em dependência normal");
+  }
+  return errors;
+}
+
 export function checkDesktopTestkit(root) {
   const file = join(root, "apps", "desktop", "src-tauri", "Cargo.toml");
   if (!existsSync(file)) return [];
@@ -431,6 +467,7 @@ function main() {
     ...checkJs(jsPackages),
     ...findForbiddenSourceImports(root),
     ...checkDesktopTestkit(root),
+    ...checkServerTestkit(root),
   ];
   if (errors.length > 0) {
     console.error("Violações de arquitetura:\n - " + errors.join("\n - "));

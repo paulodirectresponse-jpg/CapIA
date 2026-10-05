@@ -124,7 +124,9 @@ fn op(
         method,
         path,
         status,
-        project: path.contains("{project_id}"),
+        // `projects.get/open/close` endereçam o registry (não exigem o projeto aberto)
+        project: path.contains("{project_id}")
+            && !matches!(name, "projects.get" | "projects.open" | "projects.close"),
         surface: Surface::Both,
         schema,
     }

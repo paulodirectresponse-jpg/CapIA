@@ -33,7 +33,11 @@ pub struct RateLimiter {
 impl RateLimiter {
     pub fn new(scale: f64) -> Self {
         Self {
-            scale: if scale.is_finite() && scale > 0.0 { scale } else { 1.0 },
+            scale: if scale.is_finite() && scale > 0.0 {
+                scale
+            } else {
+                1.0
+            },
             buckets: Mutex::new(HashMap::new()),
         }
     }
@@ -54,9 +58,10 @@ impl RateLimiter {
         if map.len() > 4096 {
             map.retain(|_, b| now.duration_since(b.last).as_secs() < 300);
         }
-        let b = map
-            .entry((token_id.to_owned(), class))
-            .or_insert(Bucket { tokens: cap, last: now });
+        let b = map.entry((token_id.to_owned(), class)).or_insert(Bucket {
+            tokens: cap,
+            last: now,
+        });
         let dt = now.saturating_duration_since(b.last).as_secs_f64();
         b.tokens = (b.tokens + dt * rate).min(cap);
         b.last = now;
@@ -87,9 +92,10 @@ mod tests {
         assert!(rl.check_at("b", Class::RunStart, t0).is_ok());
         assert!(rl.check_at("a", Class::Read, t0).is_ok());
         // reposição: 0,2/s => 5 s devolvem 1 unidade
-        assert!(rl
-            .check_at("a", Class::RunStart, t0 + Duration::from_secs(5))
-            .is_ok());
+        assert!(
+            rl.check_at("a", Class::RunStart, t0 + Duration::from_secs(5))
+                .is_ok()
+        );
     }
 
     #[test]
