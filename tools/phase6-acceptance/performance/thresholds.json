@@ -1,0 +1,29 @@
+{
+  "_doc": "Limites do gate de desempenho da Fase 6 (ver docs/phase6/IMPL_PERFORMANCE.md). 'hard' = meta documentada (TIMELINE_UX §6 / ROADMAP Fase 2): NUNCA recebe fator de tolerância. Os demais são limites de regressão (~3x o p95 medido na máquina de referência de 4 vCPU Xeon 2.1 GHz) multiplicados por 'tolerance_factor' (runner compartilhado de CI). Cada estatística comparada é a MEDIANA entre as N execuções do benchmark.",
+  "runs": 3,
+  "tolerance_factor": 1.5,
+  "metrics": {
+    "open_project": { "max_p95_ms": 2000, "hard": true, "source": "ROADMAP Fase 2: abrir < 2 s (10k clips)", "baseline_p95_ms": 300 },
+    "reload_state": { "max_p95_ms": 2000, "hard": true, "source": "ROADMAP Fase 2: recarregar < 2 s", "baseline_p95_ms": 290 },
+    "commit_small": { "max_p95_ms": 30, "hard": true, "source": "TIMELINE_UX §6: commit < 30 ms (engine, durável FULL)", "baseline_p95_ms": 5 },
+    "undo": { "max_p95_ms": 50, "hard": true, "source": "TIMELINE_UX §6: undo/redo < 50 ms", "baseline_p95_ms": 4 },
+    "redo": { "max_p95_ms": 50, "hard": true, "source": "TIMELINE_UX §6: undo/redo < 50 ms", "baseline_p95_ms": 4 },
+    "preview_frame_warm": { "max_p95_ms": 100, "hard": true, "source": "TIMELINE_UX §6: scrub < 100 ms (404x720, compositor CPU)", "baseline_p95_ms": 52 },
+    "timeline_range_query_60s": { "max_p95_ms": 16, "hard": true, "source": "TIMELINE_UX §6: arrasto/rolagem < 16 ms por quadro", "baseline_p95_ms": 0.03 },
+    "timeline_range_query_all": { "max_p95_ms": 16, "hard": true, "source": "idem (zoom-to-fit, 1.800 clips)", "baseline_p95_ms": 0.3 },
+    "commit_bulk_50": { "max_p95_ms": 30, "baseline_p95_ms": 7 },
+    "commit_with_snapshot": { "max_p95_ms": 350, "source": "pior caso (snapshot de 6.000 clips a cada commit); limite de regressão, não a meta de 30 ms", "baseline_p95_ms": 115 },
+    "api_project_open": { "max_p95_ms": 1000, "baseline_p95_ms": 400 },
+    "api_project_snapshot": { "max_p50_ms": 90, "max_p95_ms": 150, "baseline_p95_ms": 50 },
+    "api_sequence_get_biggest": { "max_p95_ms": 30, "baseline_p95_ms": 9 },
+    "api_history_list": { "max_p95_ms": 60, "baseline_p95_ms": 20 },
+    "api_assets_list": { "max_p95_ms": 90, "baseline_p95_ms": 28 },
+    "render_graph_compile_biggest": { "max_p95_ms": 15, "baseline_p95_ms": 4 },
+    "preview_frame_cold": { "max_p95_ms": 150, "baseline_p95_ms": 45 },
+    "preview_frame_nested": { "max_p95_ms": 100, "hard": true, "source": "recursivo; mesmo teto de scrub", "baseline_p95_ms": 80 },
+    "ai_runs_list": { "max_p95_ms": 10, "baseline_p95_ms": 1 },
+    "ai_runs_full_history_read": { "max_p95_ms": 90, "baseline_p95_ms": 25 },
+    "export_queue_start": { "max_p95_ms": 10, "baseline_p95_ms": 0.3 },
+    "export_queue_start_to_cancelled": { "max_p95_ms": 1000, "baseline_p95_ms": 340, "allow_skip": "no ffmpeg" }
+  }
+}
