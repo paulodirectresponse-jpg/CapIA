@@ -6,7 +6,7 @@
 
 ## Fase 5 — Autonomia: o que existe
 
-> Especificações: `docs/phase5/` · decisões: ADR-087..101 · pacote de aceitação: `tools/phase5-acceptance/`. **CI:** run 37336701064 no commit `f917430` — os 6 jobs verdes (Núcleo Rust Linux, Rust+desktop Windows, TypeScript, Arquitetura/licenças/segredos, E2E Linux, E2E Windows). O HEAD final difere de `f917430` apenas por esta atualização de documentação.
+> Especificações: `docs/phase5/` · decisões: ADR-087..101 · pacote de aceitação: `tools/phase5-acceptance/`. **CI:** run 37356301933 no commit `587947a` — os 6 jobs verdes (Núcleo Rust Linux, Rust+desktop Windows, TypeScript, Arquitetura/licenças/segredos, E2E Linux, E2E Windows, incluindo a autonomia no app Tauri/WebView2 real sem skip). O HEAD final difere de `587947a` apenas por esta atualização de documentação.
 
 | Área | Estado (engenharia) | Evidência (arquivos de teste) |
 |---|---|---|
@@ -38,7 +38,7 @@
 1. **≥ 10 demandas reais avaliadas por um humano**, média ≥ 4,0, validadas por `node tools/phase5-acceptance/real-demands/validate.mjs --file <resultados.json>` (sem arquivo: `pending_external`).
 2. **Providers e chaves reais** (Brain real, provider de geração real, fontes reais do Gateway): nenhum teste da Fase 5 usa rede externa; qualidade/custo/latência reais **não medidos**.
 3. Checagem **humana** no desktop Windows com um provider real (o E2E Windows/Tauri automatizado já cobre o fluxo completo com o cérebro Replay; ver ADR-101).
-4. ~~CI no HEAD final~~ — verde: run 37336701064 / `f917430` (6 jobs); o HEAD final difere só por documentação.
+4. ~~CI no HEAD final~~ — verde: run 37356301933 / `587947a` (6 jobs); o HEAD final difere só por documentação.
 5. Pendências da Fase 4 (LLM real no DemandSpec, corpus real de cenas, STT real) e da Fase 3 (3 usuários, residual de GPU/P2, decisão jurídica de H.264) **continuam abertas**.
 
 ### Limitações conhecidas (Fase 5)
