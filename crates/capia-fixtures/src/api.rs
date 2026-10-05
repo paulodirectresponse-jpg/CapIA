@@ -31,6 +31,7 @@ impl ApiProbe {
                 synchronous: Synchronous::Full,
                 ..StoreOptions::default()
             },
+            actor: None,
         };
         Self {
             session: Session::new(cfg),
