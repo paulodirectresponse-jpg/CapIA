@@ -111,7 +111,7 @@ Cada evento publicado vira uma entrega por webhook inscrito (no máximo uma por 
 - **Sucesso:** qualquer `2xx`.
 - **Falha transitória** (erro de rede, timeout, `5xx`, `408`, `425`, `429`, `3xx`): nova tentativa com **backoff exponencial**; ao esgotar as tentativas a entrega vai para `dead`.
 - **Falha permanente** (`4xx` exceto 408/425/429): o seu endpoint recusou — repetir não adianta, a entrega vai direto para `dead`.
-- O número de tentativas e os intervalos exatos são definidos pelo servidor (interface prevista); `X-CapIA-Attempt` informa a tentativa atual. O estado das entregas é persistido no banco do servidor (a retomada após reinício é interface prevista).
+- O número máximo de tentativas é configurável no servidor; o backoff exponencial padrão parte de **5 s** e tem teto de **1 h** (`ServerConfig`: `webhook_backoff_base`/`webhook_backoff_cap`). `X-CapIA-Attempt` informa a tentativa atual. O estado das entregas é persistido no banco do servidor (a retomada após reinício é interface prevista).
 - O log guarda, por tentativa: status HTTP, latência, erro curto (sem URL/segredo), próxima tentativa e estado terminal. Consulte com `webhooks.deliveries`.
 - **Reentregar:** `webhooks.redeliver` enfileira de novo uma entrega (inclusive `dead`) com o **mesmo** `X-CapIA-Event-Id` — seu receptor de-duplica ou reprocessa conforme a sua política. Conserte o endpoint primeiro.
 - **Ordem não é garantida** entre eventos diferentes (retries reordenam). Use `occurred_ms` e consulte o estado atual (`runs.get`) em vez de confiar na sequência.
