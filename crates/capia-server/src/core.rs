@@ -361,7 +361,13 @@ impl Core {
         // nenhum valor conhecido como segredo (token, chave de provider, segredo de webhook) entra
         // no pipeline: nem no documento, nem na auditoria, nem em eco de erro
         let params = redact_registered(params);
-        // a chave do cliente nunca é gravada em claro (banco/auditoria): só um digest dela
+        // a chave do cliente é um nonce (não um segredo), mas se ela coincidir com um segredo
+        // conhecido a auditoria a mostra redigida; a tabela de idempotência só guarda um digest dela
+        let audit_key = ctx
+            .idempotency_key
+            .as_deref()
+            .filter(|_| def.mutating)
+            .map(capia_secrets::redact_registered_global);
         let key = ctx
             .idempotency_key
             .as_deref()
@@ -375,7 +381,7 @@ impl Core {
             surface: ctx.surface.to_owned(),
             op: def.name.to_owned(),
             mutating: def.mutating,
-            idempotency_key: key.clone(),
+            idempotency_key: audit_key,
             project_id: params["project_id"].as_str().map(str::to_owned),
             ..AuditRow::default()
         };

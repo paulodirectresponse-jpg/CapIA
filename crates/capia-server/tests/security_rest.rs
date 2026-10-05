@@ -2553,9 +2553,21 @@ fn idempotency_keys_are_scoped_per_token_and_never_cross_over() {
         200
     );
     assert_eq!(mk(&a, "shared-key", "secret-project-of-a").status, 401);
-    // a chave nunca é guardada em claro
+    // a chave é um nonce (a auditoria a mostra para correlação); se coincidir com um segredo
+    // conhecido, nunca chega ao disco: auditoria redigida e tabela de idempotência só com digest
     let key = "KEYCANARY-should-not-be-in-the-db-0123456789";
+    capia_secrets::register_global(key);
     mk(&b, key, "k");
+    mk(&b, "plain-correlation-key", "k2");
+    assert!(
+        s.core()
+            .db
+            .audit_list(0, 500)
+            .unwrap()
+            .iter()
+            .any(|r| r.idempotency_key.as_deref() == Some("plain-correlation-key")),
+        "the audit trail keeps ordinary keys for correlation"
+    );
     s.core()
         .db
         .audit_list(0, 500)

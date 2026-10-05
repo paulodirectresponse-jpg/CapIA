@@ -14,8 +14,9 @@ codificações; sem heurística, para não alterar texto legítimo) a **todas** 
 parâmetros **antes** de schema/auditoria/handler — vale igual para REST e MCP. (2) O mesmo para
 `X-Request-Id` e `X-Capia-Filename`. (3) `authenticate` registra o bearer reconhecido (tokens criados
 por outro processo/CLI passam a ser "conhecidos" assim que usados). (4) `ApiErr::body` redige também
-`details`. (5) A `Idempotency-Key` do cliente é gravada só como digest (`ik_<sha256[..40]>`) no banco
-e na auditoria.
+`details`. (5) A `Idempotency-Key` do cliente é um nonce, não um segredo: a **tabela de idempotência** só guarda
+um digest (`ik_<sha256[..40]>`) e a auditoria mostra a chave para correlação, redigida se ela
+coincidir com um segredo conhecido.
 
 **Alternativas.** Recusar (422) pedidos que contenham segredo conhecido — rejeitado: transforma um
 descuido do usuário em erro opaco e vaza a existência do segredo por oráculo; só redigir é mais
