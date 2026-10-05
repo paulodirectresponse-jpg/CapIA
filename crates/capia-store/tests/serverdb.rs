@@ -344,3 +344,25 @@ fn a_test_event_is_delivered_only_to_the_target_webhook() {
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].webhook_id, "w2");
 }
+
+#[test]
+fn the_audit_log_is_trimmed_to_the_most_recent_entries() {
+    let d = TempDir::new("serverdb-audit");
+    let db = open(d.path());
+    for i in 0..50u64 {
+        db.audit_append(&capia_store::AuditRow {
+            at_ms: i,
+            request_id: format!("r{i}"),
+            surface: "rest".into(),
+            op: "x".into(),
+            outcome: "ok".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    }
+    assert_eq!(db.audit_trim(10).unwrap(), 40);
+    let rows = db.audit_list(0, 100).unwrap();
+    assert_eq!(rows.len(), 10);
+    assert_eq!(rows[0].request_id, "r40");
+    assert_eq!(db.audit_trim(10).unwrap(), 0);
+}

@@ -76,7 +76,12 @@ fn upload_import_and_read_assets_without_leaking_paths() {
     assert_eq!(up.status, 201, "{}", String::from_utf8_lossy(&up.body));
     let meta = up.json();
     let meta = &meta["upload"];
-    assert_eq!(meta["kind"], "video", "{}", String::from_utf8_lossy(&up.body));
+    assert_eq!(
+        meta["kind"],
+        "video",
+        "{}",
+        String::from_utf8_lossy(&up.body)
+    );
     assert_eq!(
         meta["filename"], "clip final.mp4",
         "the name is sanitized to a basename"

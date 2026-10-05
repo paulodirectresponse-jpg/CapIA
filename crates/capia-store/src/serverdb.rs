@@ -706,6 +706,14 @@ impl ServerDb {
         Ok(conn.last_insert_rowid())
     }
 
+    /// Mantém só as `keep` entradas mais recentes (retenção limitada do log de auditoria).
+    pub fn audit_trim(&self, keep: u64) -> StoreResult<u64> {
+        Ok(self.conn().execute(
+            "DELETE FROM audit WHERE seq <= (SELECT COALESCE(MAX(seq), 0) FROM audit) - ?1",
+            [ms(keep)],
+        )? as u64)
+    }
+
     pub fn audit_list(&self, after_seq: i64, limit: u32) -> StoreResult<Vec<AuditRow>> {
         let conn = self.conn();
         let mut st = conn.prepare(

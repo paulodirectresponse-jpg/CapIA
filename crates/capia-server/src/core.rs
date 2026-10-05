@@ -18,7 +18,7 @@ use capia_store::{AuditRow, IdemBegin, ServerDb};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
 pub const API_VERSION: &str = "v1";
@@ -108,6 +108,9 @@ pub struct Core {
     pub started: Instant,
     pub shutting_down: AtomicBool,
     pub open_project: Mutex<Option<String>>,
+    /// Trocar o projeto aberto (create/open/close) exclui todas as chamadas por projeto em voo:
+    /// uma chamada validada para P1 nunca roda contra P2.
+    project_switch: RwLock<()>,
     pub wake: Wake,
     pub inflight: AtomicUsize,
     pub uploads_active: AtomicUsize,
@@ -188,6 +191,7 @@ impl Core {
             started: Instant::now(),
             shutting_down: AtomicBool::new(false),
             open_project: Mutex::new(None),
+            project_switch: RwLock::new(()),
             wake: Wake::default(),
             inflight: AtomicUsize::new(0),
             uploads_active: AtomicUsize::new(0),
@@ -357,10 +361,16 @@ impl Core {
         }
         // a auditoria cobre TODA chamada autenticada (e as negadas); falha de auditoria nunca
         // derruba a resposta, mas é visível no stderr redigido
-        if (def.mutating || result.is_err() || def.scope.is_some())
-            && let Err(e) = self.db.audit_append(&audit)
-        {
-            eprintln!("capia-server: audit write failed: {}", e.message);
+        // auditoria: toda escrita e toda recusa/erro (leituras bem-sucedidas não viram escrita no
+        // banco); o log é aparado para não crescer sem limite
+        if def.mutating || result.is_err() {
+            match self.db.audit_append(&audit) {
+                Ok(seq) if seq % 1000 == 0 => {
+                    let _ = self.db.audit_trim(100_000);
+                }
+                Ok(_) => {}
+                Err(e) => eprintln!("capia-server: audit write failed: {}", e.message),
+            }
         }
         result
     }
@@ -432,7 +442,33 @@ impl Core {
         };
         audit.revision_before = rev_before;
         self.inflight.fetch_add(1, Ordering::SeqCst);
-        let out = run(self, def, params.clone());
+        let switching = matches!(
+            def.name,
+            "projects.create" | "projects.open" | "projects.close"
+        );
+        let out = if switching {
+            let _w = self
+                .project_switch
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            run(self, def, params.clone())
+        } else if def.project {
+            let _r = self
+                .project_switch
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // reconfere sob o lock de leitura: o projeto pode ter trocado entre o gate e aqui
+            if self.open_project_id().as_deref() == params["project_id"].as_str() {
+                run(self, def, params.clone())
+            } else {
+                Err(ApiErr::conflict(
+                    "PROJECT_NOT_OPEN",
+                    "the project was closed or switched while the request was in flight",
+                ))
+            }
+        } else {
+            run(self, def, params.clone())
+        };
         self.inflight.fetch_sub(1, Ordering::SeqCst);
         if def.mutating {
             audit.revision_after = self.lock_session().revision();
