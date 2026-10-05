@@ -3,7 +3,9 @@
 //! canônico e o Ed25519 são idênticos nos dois lados.
 #![allow(clippy::unwrap_used)]
 
-use capia_updater::{Channel, Decision, Ed25519Verifier, TrustedKey, UpdateManifest, check_manifest};
+use capia_updater::{
+    Channel, Decision, Ed25519Verifier, TrustedKey, UpdateManifest, check_manifest,
+};
 use serde_json::Value;
 
 const MANIFEST: &str = include_str!("fixtures/node_signed_manifest.json");
@@ -24,7 +26,10 @@ fn verifier() -> Ed25519Verifier {
 fn a_manifest_signed_by_the_node_tool_verifies_in_rust() {
     let m = UpdateManifest::parse_and_verify(MANIFEST.as_bytes(), &verifier()).unwrap();
     assert_eq!(m.version, "0.7.0");
-    assert!(m.notes.contains("acentuação"), "non-ASCII must survive canonicalization");
+    assert!(
+        m.notes.contains("acentuação"),
+        "non-ASCII must survive canonicalization"
+    );
     assert_eq!(m.min_version.as_deref(), Some("0.6.0-rc.1"));
 }
 
@@ -66,7 +71,10 @@ fn policy_applies_on_top_of_the_verified_fixture() {
         &[],
     )
     .unwrap();
-    assert!(matches!(down.1, Decision::Rejected(_)), "no silent downgrade");
+    assert!(
+        matches!(down.1, Decision::Rejected(_)),
+        "no silent downgrade"
+    );
 }
 
 fn semver_parse(v: &str) -> capia_updater::Version {

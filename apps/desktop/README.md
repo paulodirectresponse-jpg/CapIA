@@ -7,3 +7,7 @@ Shell **fino** (Vite + Tauri 2). Nenhuma lógica de produto aqui (ADR-002).
 - `src/editorTransport.ts` (Tauri × HTTP do devserver), `src/sharedFrames.ts` (fonte de quadros P2), `src/platform.ts` (diálogos nativos).
 - Dev/E2E sem Tauri: `cargo run -p capia-devserver` serve `apps/desktop/dist` + `/api/*`.
 - Build: `pnpm build` (gera o WASM da timeline se faltar) · `pnpm desktop:build`.
+
+## Fase 6 — instalador, self-test e suporte
+
+`capia-desktop --version` e `--self-test [--require-media] [--out f]` (headless). Instalador NSIS por usuário, atualização assinada, crash report opt-in e diagnóstico: ver `docs/phase6/IMPL_DESKTOP_DISTRIBUTION.md`.
