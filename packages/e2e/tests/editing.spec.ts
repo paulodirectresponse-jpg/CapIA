@@ -420,20 +420,18 @@ test("undo after a long run of UI edits restores the exact original document", a
   const count =
     (await editor.api<{ entries: unknown[] }>("history.list")).entries.length - historyBefore;
   expect(count).toBeGreaterThan(5);
-  // desfaz até o botão desabilitar (cliques rápidos podem cair em um estado ainda não assentado)
+  // um clique por vez, esperando assentar (cliques em rajada podem cair em estado ainda não assentado)
   const undo = page.getByTestId("undo");
-  for (let i = 0; i < count + 10; i++) {
-    if (await undo.isDisabled()) break;
+  for (let i = 0; i < count; i++) {
     await undo.click();
-    await page.waitForTimeout(40);
+    await page.waitForTimeout(60);
   }
   await expect.poll(async () => norm(await editor.clips())).toBe(original);
   // e refazer tudo volta ao estado editado
   const redo = page.getByTestId("redo");
-  for (let i = 0; i < count + 10; i++) {
-    if (await redo.isDisabled()) break;
+  for (let i = 0; i < count; i++) {
     await redo.click();
-    await page.waitForTimeout(40);
+    await page.waitForTimeout(60);
   }
   await expect.poll(async () => norm(await editor.clips())).toBe(changed);
 });

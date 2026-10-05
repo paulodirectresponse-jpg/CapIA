@@ -1,7 +1,7 @@
 import { test as base, chromium, expect, type Page } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { mkdtempSync, existsSync } from "node:fs";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,12 +70,43 @@ export async function launchDevserver(): Promise<{ url: string; child: ChildProc
   return { url, child };
 }
 
+/** Espera a porta TCP local ficar livre (nada aceitando conexões). */
+async function waitPortFree(port: number, timeoutMs = 30_000): Promise<void> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    const inUse = await new Promise<boolean>((resolve) => {
+      const sock = connect({ port, host: "127.0.0.1" });
+      sock.once("connect", () => {
+        sock.destroy();
+        resolve(true);
+      });
+      sock.once("error", () => { resolve(false); });
+    });
+    if (!inUse) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+/** Encerra o app e (no Windows) a árvore de processos do WebView2, esperando a saída de verdade. */
+async function killTree(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.pid === undefined) return;
+  const exited = new Promise<void>((resolve) => child.once("exit", () => { resolve(); }));
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    child.kill();
+  }
+  await Promise.race([exited, new Promise((r) => setTimeout(r, 10_000))]);
+}
+
 export const test = base.extend<{ server: Server; editor: Editor }, object>({
   server: async ({}, use) => {
     const dir = mkdtempSync(join(tmpdir(), "capia-e2e-"));
     if (TAURI) {
       // porta fixa de `tauri.e2e.conf.json` (additionalBrowserArgs; o env do WebView2 é ignorado pelo wry)
       const port = 9222;
+      // o app anterior (e o msedgewebview2 dele) pode ainda segurar a porta CDP fixa
+      await waitPortFree(port);
       const child: ChildProcess = spawn(tauriBinary(), [], {
         stdio: "ignore",
         cwd: ROOT,
@@ -85,7 +116,8 @@ export const test = base.extend<{ server: Server; editor: Editor }, object>({
         },
       });
       await use({ url: `http://127.0.0.1:${String(port)}`, dir, child });
-      child.kill();
+      await killTree(child);
+      await waitPortFree(port);
       return;
     }
     const port = await freePort();
