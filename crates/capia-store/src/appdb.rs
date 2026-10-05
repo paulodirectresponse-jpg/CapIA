@@ -53,6 +53,79 @@ fn not_app_db(msg: &str) -> StoreError {
     StoreError::new(StoreErrorCode::NotACapiaProject, msg)
 }
 
+/// Abertura comum dos bancos globais (app/servidor): assinatura, WAL, migrations forward-only.
+pub(crate) fn open_connection(
+    path: &Path,
+    busy_timeout: Duration,
+    migrations: &[Migration],
+    target: u32,
+    application_id: i64,
+    what: &str,
+) -> StoreResult<Connection> {
+    let existed = path.exists();
+    // Depois de uma queda (kill) o cabeçalho do arquivo principal pode estar defasado: as
+    // páginas com `application_id`/versão ainda estão só no `-wal`. Com `-wal` não vazio a
+    // assinatura vale pela leitura da conexão (feita logo abaixo, antes de qualquer escrita).
+    let has_wal = {
+        let mut w = path.as_os_str().to_owned();
+        w.push("-wal");
+        std::fs::metadata(std::path::PathBuf::from(w)).is_ok_and(|m| m.len() > 0)
+    };
+    let from = if existed && has_wal {
+        0
+    } else if existed {
+        // lê a assinatura SEM abrir conexão (não cria -wal/-shm em arquivo alheio)
+        let p: Peek = peek(path)?;
+        if p.application_id != application_id {
+            return Err(not_app_db(&format!(
+                "the file is a SQLite database but not a CapIA {what}"
+            )));
+        }
+        check_signature_with(p, target, what)?;
+        p.user_version
+    } else {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        0
+    };
+    let mut conn = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+    )?;
+    conn.busy_timeout(busy_timeout)?;
+    conn.pragma_update(None, "trusted_schema", false)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "synchronous", "FULL")?;
+    // autenticidade pós-WAL
+    if existed {
+        let p = peek_connection(&conn)?;
+        if p.application_id != application_id {
+            return Err(not_app_db(&format!("the file is not a CapIA {what}")));
+        }
+        check_signature_with(p, target, what)?;
+    }
+    let from_live = if existed {
+        peek_connection(&conn)?.user_version
+    } else {
+        from
+    };
+    if from_live < target {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(0));
+        run_migrations(
+            &mut conn,
+            if existed { Some(path) } else { None },
+            migrations,
+            from_live,
+            target,
+            now,
+        )?;
+    }
+    Ok(conn)
+}
+
 impl AppDb {
     /// Abre (criando se não existir). Arquivo alheio/corrompido/futuro ⇒ erro estruturado **sem** modificá-lo.
     pub fn open(path: &Path, busy_timeout: Duration) -> StoreResult<Self> {
@@ -65,67 +138,14 @@ impl AppDb {
         migrations: &[Migration],
         target: u32,
     ) -> StoreResult<Self> {
-        let existed = path.exists();
-        // Depois de uma queda (kill) o cabeçalho do arquivo principal pode estar defasado: as
-        // páginas com `application_id`/versão ainda estão só no `-wal`. Com `-wal` não vazio a
-        // assinatura vale pela leitura da conexão (feita logo abaixo, antes de qualquer escrita).
-        let has_wal = {
-            let mut w = path.as_os_str().to_owned();
-            w.push("-wal");
-            std::fs::metadata(std::path::PathBuf::from(w)).is_ok_and(|m| m.len() > 0)
-        };
-        let from = if existed && has_wal {
-            0
-        } else if existed {
-            // lê a assinatura SEM abrir conexão (não cria -wal/-shm em arquivo alheio)
-            let p: Peek = peek(path)?;
-            if p.application_id != APP_APPLICATION_ID {
-                return Err(not_app_db(
-                    "the file is a SQLite database but not a CapIA app database",
-                ));
-            }
-            check_signature_with(p, target, "app database")?;
-            p.user_version
-        } else {
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir)?;
-            }
-            0
-        };
-        let mut conn = Connection::open_with_flags(
+        let conn = open_connection(
             path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+            busy_timeout,
+            migrations,
+            target,
+            APP_APPLICATION_ID,
+            "app database",
         )?;
-        conn.busy_timeout(busy_timeout)?;
-        conn.pragma_update(None, "trusted_schema", false)?;
-        conn.pragma_update(None, "journal_mode", "WAL")?;
-        conn.pragma_update(None, "synchronous", "FULL")?;
-        // autenticidade pós-WAL
-        if existed {
-            let p = peek_connection(&conn)?;
-            if p.application_id != APP_APPLICATION_ID {
-                return Err(not_app_db("the file is not a CapIA app database"));
-            }
-            check_signature_with(p, target, "app database")?;
-        }
-        let from_live = if existed {
-            peek_connection(&conn)?.user_version
-        } else {
-            from
-        };
-        if from_live < target {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(0));
-            run_migrations(
-                &mut conn,
-                if existed { Some(path) } else { None },
-                migrations,
-                from_live,
-                target,
-                now,
-            )?;
-        }
         Ok(Self {
             conn: Mutex::new(conn),
             path: path.to_path_buf(),

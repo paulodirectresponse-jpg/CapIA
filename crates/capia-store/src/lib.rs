@@ -17,6 +17,7 @@ mod failpoints;
 mod jobs;
 mod load;
 mod schema;
+mod serverdb;
 mod store;
 
 pub use ai::{AiStore, MAX_RECORD_JSON, RecordRow, UsageRow, UsageSummary};
@@ -30,6 +31,10 @@ pub use error::{StoreError, StoreErrorCode, StoreResult};
 pub use jobs::{JobStore, Recovery, TicketRow, TicketState};
 pub use load::StoreStats;
 pub use schema::{APPLICATION_ID, CURRENT_SCHEMA_VERSION, MIGRATIONS, Migration};
+pub use serverdb::{
+    AuditRow, DeliveryRow, ExportRow, IdemBegin, ProjectRow, SERVER_APPLICATION_ID,
+    SERVER_MIGRATIONS, SERVER_SCHEMA_VERSION, ServerDb, ServerEventRow, TokenRow, WebhookRow,
+};
 pub use store::{
     ProjectInfo, ProjectStore, SequenceInfo, StoreOptions, StoredOperation, Synchronous,
     ValidationReport, random_plan_key,
