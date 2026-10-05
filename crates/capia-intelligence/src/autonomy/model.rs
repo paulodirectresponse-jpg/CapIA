@@ -110,6 +110,8 @@ pub struct RunPolicy {
     pub final_approval: bool,
     /// Licença desconhecida exige aprovação (padrão seguro).
     pub unknown_license_requires_approval: bool,
+    /// Licença conhecida como restrita: `true` descarta o candidato; `false` pede decisão.
+    pub reject_restricted_license: bool,
     pub allow_gateway: bool,
     pub allow_generation: bool,
     pub on_critical_unavailable: CriticalUnavailable,
@@ -130,6 +132,7 @@ impl Default for RunPolicy {
             destructive_threshold: 25,
             final_approval: false,
             unknown_license_requires_approval: true,
+            reject_restricted_license: true,
             allow_gateway: true,
             allow_generation: true,
             on_critical_unavailable: CriticalUnavailable::Wait,

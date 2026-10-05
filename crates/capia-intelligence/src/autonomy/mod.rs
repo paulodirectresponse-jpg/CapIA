@@ -3,7 +3,13 @@
 //! depende dela; sem Run, o editor é idêntico.
 
 pub mod critic;
+pub mod failpoint;
+pub mod gateway;
+pub mod generation;
 pub mod machine;
 pub mod memory;
 pub mod model;
+pub mod orchestrator;
 pub mod plan;
+pub mod roles;
+pub mod stages;

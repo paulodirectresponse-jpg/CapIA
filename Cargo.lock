@@ -441,6 +441,7 @@ dependencies = [
 name = "capia-intelligence"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "capia-ai",
  "capia-assets",

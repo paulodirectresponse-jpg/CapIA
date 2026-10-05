@@ -28,11 +28,14 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 quick-xml = "0.37"
 pdf-extract = "0.7"
 base64 = "0.22"
+async-trait = "0.1"
 
 [features]
+# pontos de falha para testes de crash/resume da autonomia — SÓ testes
+failpoints = []
 # geradores de DOCX/PDF para testes de integração (sem binários versionados)
 testkit = []
 
 [dev-dependencies]
 capia-ai = { workspace = true, features = ["testkit"] }
-capia-intelligence = { path = ".", features = ["testkit"] }
+capia-intelligence = { path = ".", features = ["testkit", "failpoints"] }
