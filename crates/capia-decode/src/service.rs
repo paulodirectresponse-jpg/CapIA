@@ -586,8 +586,13 @@ fn run_request(inner: &Arc<Inner>, req: Request) {
         }
     }
     // supersession vence mesmo que o quadro tenha chegado a ser decodificado
+    // (e um aborto interno causado pela supersessão também vira `Superseded`: o motivo do abort é o
+    // que conta, não em que ponto da execução ele foi observado — o erro era uma corrida)
     let result = match result {
         Ok(_) if t.state.superseded.load(Ordering::SeqCst) => Err(DecodeError::Superseded),
+        Err(DecodeError::Cancelled) if t.state.superseded.load(Ordering::SeqCst) => {
+            Err(DecodeError::Superseded)
+        }
         other => other,
     };
     match &result {
