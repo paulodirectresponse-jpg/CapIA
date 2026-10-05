@@ -1,4 +1,4 @@
-<#
+﻿<#
 EXEMPLO (não é código de produto): fluxo canônico do CapIA por REST em PowerShell 5.1+ / 7+.
 Ver docs/api/canonical-flow.md.
 

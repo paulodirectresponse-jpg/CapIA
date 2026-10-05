@@ -1,0 +1,59 @@
+{
+  "suite": "installer",
+  "description": "Pacote de instalação do release candidate: versão única, documentos de release, build do desktop, inspeção do artefato, política de licenças e a evidência EXTERNA de assinatura (certificado real).",
+  "steps": [
+    {
+      "id": "version-single-source",
+      "title": "Versão única (Cargo workspace, package.json, tauri.conf.json) propagada",
+      "cmd": ["node", "tools/phase6-acceptance/installer/check-release.mjs", "--versions"]
+    },
+    {
+      "id": "release-docs-complete",
+      "title": "Documentos de release presentes e coerentes (CHANGELOG, RELEASE, KNOWN_ISSUES, MIGRATION_COMPAT)",
+      "cmd": [
+        "node",
+        "tools/phase6-acceptance/installer/check-release.mjs",
+        "--docs",
+        "--version",
+        "0.6.0-rc.1"
+      ]
+    },
+    {
+      "id": "desktop-build-unsigned",
+      "title": "Build do desktop (Tauri) sem bundle/assinatura — artefato de desenvolvimento",
+      "requires": { "bin": ["pnpm"], "env": ["CAPIA_P6_HEAVY"] },
+      "cmd": ["pnpm", "desktop:build"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "installer-artifact-inspection",
+      "title": "Instalador informado em CAPIA_INSTALLER: tamanho, SHA-256 e formato (PE/MSI)",
+      "requires": { "env": ["CAPIA_INSTALLER"] },
+      "cmd": [
+        "node",
+        "tools/phase6-acceptance/installer/inspect-installer.mjs",
+        "--file",
+        "${env:CAPIA_INSTALLER}"
+      ]
+    },
+    {
+      "id": "dependency-license-policy",
+      "title": "cargo-deny: licenças, bans e fontes",
+      "requires": { "bin": ["cargo-deny"] },
+      "cmd": ["${bin:cargo-deny}", "check", "licenses", "bans", "sources"]
+    },
+    {
+      "id": "signed-installer-and-sbom-evidence",
+      "title": "Instalador ASSINADO (Authenticode válido, carimbo de tempo), hashes, SBOM, licenças e aviso LGPL do FFmpeg",
+      "external": true,
+      "why": "exige certificado de assinatura de código real (aquisição externa) e a verificação em Windows",
+      "evidence": "target/phase6-acceptance/evidence/installer-results.json",
+      "validate": [
+        "node",
+        "tools/phase6-acceptance/installer/validate.mjs",
+        "--file",
+        "${evidence}"
+      ]
+    }
+  ]
+}

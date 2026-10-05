@@ -1,0 +1,69 @@
+{
+  "template": true,
+  "schema": "capia.phase6.update/1",
+  "attestation": { "performed_by": "", "results_are_real": false, "no_simulation": false },
+  "from_version": "0.6.0-rc.1",
+  "to_version": "0.6.0-rc.2",
+  "environment": { "kind": "physical", "os": "Windows 11 23H2 (build 22631)" },
+  "signed_update": {
+    "performed": false,
+    "reason": "certificado de assinatura indisponível",
+    "manifest_signature_verified": false,
+    "artifact_signature_verified": false,
+    "manifest_sha256": "",
+    "artifact_sha256": "",
+    "version_after": "",
+    "started_at": "",
+    "finished_at": "",
+    "project_opens_after_update": false,
+    "settings_and_secret_refs_preserved": false,
+    "user_projects_intact": false
+  },
+  "rollback": {
+    "scenarios": [
+      {
+        "id": "interrupted_download",
+        "result": "not_run",
+        "performed_at": "",
+        "prior_version_launches": false,
+        "user_projects_intact": false,
+        "notes": ""
+      },
+      {
+        "id": "corrupt_artifact",
+        "result": "not_run",
+        "performed_at": "",
+        "prior_version_launches": false,
+        "user_projects_intact": false,
+        "notes": ""
+      },
+      {
+        "id": "invalid_signature",
+        "result": "not_run",
+        "performed_at": "",
+        "update_refused": false,
+        "prior_version_launches": false,
+        "user_projects_intact": false,
+        "notes": ""
+      },
+      {
+        "id": "startup_health_failure",
+        "result": "not_run",
+        "performed_at": "",
+        "prior_version_launches": false,
+        "user_projects_intact": false,
+        "notes": ""
+      },
+      {
+        "id": "active_run",
+        "result": "not_run",
+        "performed_at": "",
+        "behavior": "deferred",
+        "prior_version_launches": false,
+        "user_projects_intact": false,
+        "notes": ""
+      }
+    ]
+  },
+  "downgrade_blocked": false
+}

@@ -1,0 +1,109 @@
+{
+  "suite": "security",
+  "description": "Segurança da API local: fronteiras de arquitetura, invariantes do catálogo/scopes, primitivas de MAC, política de webhook, banco do servidor, regressões das Fases 4/5, suíte de API/MCP (outra frente), dependências e pentest independente (externo). Passos pesados exigem CAPIA_P6_HEAVY=1 (compilam Rust).",
+  "steps": [
+    {
+      "id": "architecture-boundaries",
+      "title": "Fronteiras de dependência entre crates/pacotes (pnpm check:arch)",
+      "cmd": ["node", "tools/check-architecture.mjs"]
+    },
+    {
+      "id": "webhook-receiver-forgery-replay",
+      "title": "Receptor de exemplo recusa forja, replay e corpo adulterado; de-duplica por event id",
+      "cmd": ["node", "--test", "examples/webhook-receiver/receiver.test.mjs"]
+    },
+    {
+      "id": "catalog-scope-invariants",
+      "title": "Todo item do catálogo tem scope; leituras não mutam; schemas fechados; nada perigoso exposto",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["crates/capia-server/src/catalog.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-server", "--lib", "catalog"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "mac-primitives",
+      "title": "HMAC-SHA256 (RFC 4231) e comparação em tempo constante",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["crates/capia-server/src/mac.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-server", "--lib", "mac"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "webhook-delivery-policy",
+      "title": "Cliente de entrega de webhooks: SSRF, sem redirect, timeouts",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["crates/capia-ai/tests/webhook.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-ai", "--test", "webhook"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "server-db-security",
+      "title": "Banco do servidor: tokens só como hash, idempotência, auditoria, entregas",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["crates/capia-store/src/serverdb.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-store", "serverdb"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "phase4-security-regression",
+      "title": "Regressão da suíte de segurança da Fase 4 (segredos, SSRF de provider, injeção)",
+      "requires": { "env": ["CAPIA_P6_HEAVY"] },
+      "cmd": ["node", "tools/phase4-acceptance/security/run.mjs"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "phase5-security-regression",
+      "title": "Regressão da suíte de segurança da Fase 5 (Run hostil, aprovações, SafeFetcher)",
+      "requires": { "env": ["CAPIA_P6_HEAVY"] },
+      "cmd": ["node", "tools/phase5-acceptance/security/run.mjs"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "api-security-suite",
+      "title": "API/MCP: 401, 403 por scope, revogação, escalada por rota, idempotência, revisão antiga, JSON malformado, traversal, tamanho de upload, SSRF, CORS",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["crates/capia-server/tests/security.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-server", "--test", "security"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "api-fuzz",
+      "title": "Fuzzing de REST e MCP (métodos, rotas, corpos, cabeçalhos, tools desconhecidas)",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["crates/capia-server/tests/fuzz.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-server", "--test", "fuzz"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "dependency-audit",
+      "title": "cargo-deny: avisos de segurança, licenças, bans e fontes",
+      "requires": { "bin": ["cargo-deny"] },
+      "cmd": ["${bin:cargo-deny}", "check", "advisories", "licenses", "bans", "sources"]
+    },
+    {
+      "id": "independent-pentest",
+      "title": "Pentest independente da API local (relatório de terceiro)",
+      "external": true,
+      "why": "um pentest independente exige um profissional/serviço externo; o pentest básico da engenharia é a suíte acima",
+      "evidence": "target/phase6-acceptance/evidence/pentest-report.json"
+    }
+  ]
+}

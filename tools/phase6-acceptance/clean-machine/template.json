@@ -1,0 +1,56 @@
+{
+  "template": true,
+  "schema": "capia.phase6.clean-machine/1",
+  "release_candidate": "0.6.0-rc.1",
+  "attestation": {
+    "performed_by": "",
+    "results_are_real": false,
+    "no_simulation": false,
+    "statement": "Executei este checklist pessoalmente em máquina limpa; os resultados abaixo são reais."
+  },
+  "machines": [
+    {
+      "id": "win10-22h2-01",
+      "kind": "physical",
+      "os": {
+        "caption": "Microsoft Windows 10 Pro",
+        "version": "10.0.19045",
+        "build": 19045,
+        "display_version": "22H2"
+      },
+      "fresh_user_profile": false,
+      "dev_tools": {
+        "cargo": false,
+        "rustc": false,
+        "node": false,
+        "npm": false,
+        "pnpm": false,
+        "git": false,
+        "python": false,
+        "cmake": false,
+        "cl": false,
+        "ffmpeg_on_path": false
+      },
+      "installer": {
+        "file": "",
+        "sha256": "",
+        "signed": false,
+        "authenticode_status": "NotSigned"
+      },
+      "app_version": "0.6.0-rc.1",
+      "started_at": "",
+      "finished_at": "",
+      "steps": [
+        { "id": "install", "result": "not_run", "completed_at": "", "notes": "" },
+        { "id": "launch", "result": "not_run", "completed_at": "", "notes": "" },
+        { "id": "create_project", "result": "not_run", "completed_at": "", "notes": "" },
+        { "id": "import", "result": "not_run", "completed_at": "", "notes": "" },
+        { "id": "edit", "result": "not_run", "completed_at": "", "notes": "" },
+        { "id": "export", "result": "not_run", "completed_at": "", "notes": "" },
+        { "id": "uninstall", "result": "not_run", "completed_at": "", "notes": "" }
+      ],
+      "export": { "file_size_bytes": 0 },
+      "user_project_preserved_after_uninstall": false
+    }
+  ]
+}

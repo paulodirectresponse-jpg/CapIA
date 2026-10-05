@@ -1,0 +1,30 @@
+{
+  "suite": "update",
+  "description": "Atualização e rollback: testes do atualizador (outra frente) e a evidência EXTERNA de atualização assinada entre dois builds RC + cenários de rollback.",
+  "steps": [
+    {
+      "id": "update-validator-selftest",
+      "title": "O validador de evidência de update recusa evidência malformada e aceita só a completa",
+      "cmd": ["node", "--test", "tools/phase6-acceptance/update/validate.test.mjs"]
+    },
+    {
+      "id": "updater-unit-tests",
+      "title": "Testes do atualizador do desktop (manifesto assinado, comparação de versão, staging, rollback)",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["apps/desktop/src-tauri/src/updater.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-desktop", "updater"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "signed-update-and-rollback",
+      "title": "Atualização assinada RC→RC + download interrompido, artefato corrompido, assinatura inválida, falha de saúde e Run ativa",
+      "external": true,
+      "why": "a atualização assinada exige certificado real; o rollback precisa de máquinas Windows reais (ou VM) executando o instalador e o atualizador",
+      "evidence": "target/phase6-acceptance/evidence/update-results.json",
+      "validate": ["node", "tools/phase6-acceptance/update/validate.mjs", "--file", "${evidence}"]
+    }
+  ]
+}
