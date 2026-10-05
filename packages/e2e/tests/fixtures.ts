@@ -199,7 +199,8 @@ export class Editor {
   async createProject(name = "project"): Promise<void> {
     await this.page.getByTestId("project-path").fill(join(this.server.dir, `${name}.capia`));
     await this.page.getByTestId("project-create").click();
-    await expect(this.page.getByTestId("editor")).toBeVisible();
+    // o primeiro projeto de uma partida fria do app real (WebView2 + WASM) pode demorar
+    await expect(this.page.getByTestId("editor")).toBeVisible({ timeout: 45_000 });
   }
 
   /** Chama o engine direto (a verdade persistida, independente do que a UI mostra). */

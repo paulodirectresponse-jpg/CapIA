@@ -210,7 +210,7 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
       .toBe(true);
     const nested = (await editor.clips(second.id)).find((c) => c.content.type === "nested");
     if (!nested) throw new Error("nested ausente");
-    const p = await editor.clipPoint(nested.id, 0.5, 0.5);
+    const p = await editor.clipPoint(nested.id, 0.08, 0.5);
     await page.mouse.dblclick(p.x, p.y);
     await expect(page.getByTestId("breadcrumb")).toBeVisible();
     // volta à primeira sequence
