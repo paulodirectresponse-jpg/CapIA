@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "capia-fixtures"
-version = "0.0.0"
+version = "0.6.0-rc.1"
 dependencies = [
  "capia-assets",
  "capia-commands",
@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "capia-server"
-version = "0.0.0"
+version = "0.6.0-rc.1"
 dependencies = [
  "base64 0.22.1",
  "capia-ai",
