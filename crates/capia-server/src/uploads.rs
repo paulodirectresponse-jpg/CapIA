@@ -380,6 +380,7 @@ impl Core {
         }
         self.call_def(ctx, def, params, |c, _d, _p| {
             c.store_upload(ctx, filename, expected_sha, reader, Some(content_length))
+                .map(|m| json!({"upload": m}))
         })
     }
 

@@ -43,9 +43,9 @@ pub fn mint(
 ) -> ApiResult<(TokenRow, String)> {
     let secret = format!(
         "{TOKEN_PREFIX}{}",
-        random_hex(32).map_err(|e| ApiErr::internal(e))?
+        random_hex(32).map_err(ApiErr::internal)?
     );
-    let id = format!("tok_{}", random_hex(6).map_err(|e| ApiErr::internal(e))?);
+    let id = format!("tok_{}", random_hex(6).map_err(ApiErr::internal)?);
     let row = TokenRow {
         id,
         name: name.to_owned(),

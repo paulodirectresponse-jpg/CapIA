@@ -1,6 +1,6 @@
 //! Utilitários dos testes do servidor: diretório temporário, servidor em loopback com token admin e
 //! um cliente HTTP mínimo sobre `std::net` (sem dependência extra).
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+#![allow(dead_code, unreachable_pub, clippy::unwrap_used, clippy::expect_used)]
 
 use capia_server::config::ServerConfig;
 use capia_server::{Server, auth};
