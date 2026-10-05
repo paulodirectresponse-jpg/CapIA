@@ -317,6 +317,10 @@ impl Core {
             "memory.list" => self.ai_call("ai.memory.list", json!({})),
             "gateway.status" => self.ai_call("ai.gateway.status", json!({})),
             // ---- exports --------------------------------------------------------------------
+            "exports.encoders" => {
+                let v = self.session_call("export.encoders", json!({}))?;
+                Ok(json!({"encoders": v}))
+            }
             "exports.start" => self.op_export_start(&p),
             "exports.list" | "deliverables.list" => {
                 let limit = page_limit(&p, 50, 200);

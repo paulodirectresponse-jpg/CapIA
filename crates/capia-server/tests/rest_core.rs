@@ -714,3 +714,24 @@ fn local_metrics_count_requests_errors_and_rate_limits_without_labels_of_secrets
     assert_eq!(m["webhook_deliveries_pending"], 0);
     assert!(!m.to_string().contains("capia_"));
 }
+
+#[test]
+fn the_approved_encoder_catalog_is_readable_with_the_export_scope() {
+    let s = start("encoders", |_| {});
+    let r = s.call("GET", "/v1/exports/encoders", None);
+    // sem FFmpeg o engine responde um erro estruturado; com FFmpeg, a lista de capabilities
+    assert!(
+        r.status == 200 || r.status == 422,
+        "{} {}",
+        r.status,
+        String::from_utf8_lossy(&r.body)
+    );
+    if r.status == 200 {
+        assert!(r.json()["encoders"].is_array());
+    }
+    let ro = s.token("ro", &["project:read"]);
+    assert_eq!(
+        s.call_as(&ro, "GET", "/v1/exports/encoders", None).status,
+        403
+    );
+}

@@ -744,6 +744,17 @@ fn build() -> Vec<OpDef> {
             ),
         ),
         op(
+            "exports.encoders",
+            "Approved export encoders available on this machine (capability catalog).",
+            Some(ExportRead),
+            false,
+            Read,
+            "GET",
+            "/v1/exports/encoders",
+            200,
+            obj(&[], &[]),
+        ),
+        op(
             "exports.list",
             "List exports.",
             Some(ExportRead),
