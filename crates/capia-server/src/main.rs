@@ -91,10 +91,7 @@ fn main() -> ExitCode {
             }
         }
         "serve" => serve(&args),
-        "mcp-stdio" => {
-            eprintln!("mcp-stdio: not implemented yet");
-            ExitCode::from(2)
-        }
+        "mcp-stdio" => mcp_stdio(&args),
         _ => usage(),
     }
 }
@@ -241,4 +238,27 @@ fn serve(args: &Args) -> ExitCode {
     let _ = std::fs::remove_file(&marker);
     server.shutdown();
     ExitCode::SUCCESS
+}
+
+/// MCP por stdio: o mesmo `Core` do `serve`, sem abrir socket (pump + webhooks rodam em threads).
+fn mcp_stdio(args: &Args) -> ExitCode {
+    let (Some(dir), Some(token_env)) = (args.value("--data-dir"), args.value("--token-env")) else {
+        return usage();
+    };
+    #[allow(unused_mut)]
+    let mut cfg = ServerConfig::new(&dir);
+    #[cfg(feature = "testkit")]
+    {
+        cfg.demo_brain = std::env::var_os("CAPIA_AI_DEMO_BRAIN").is_some();
+    }
+    let host = match capia_server::mcp::Headless::start(cfg) {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let code = capia_server::mcp::serve_stdio(std::sync::Arc::clone(host.core()), &token_env);
+    host.shutdown();
+    ExitCode::from(u8::try_from(code).unwrap_or(1))
 }
