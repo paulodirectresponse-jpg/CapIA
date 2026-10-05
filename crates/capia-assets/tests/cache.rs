@@ -186,7 +186,7 @@ fn different_keys_do_not_block_each_other() {
             std::thread::spawn(move || {
                 let k = key(&hash_of(format!("k{i}").as_bytes()), "index");
                 c.produce(&k, "bin", &|| false, &ok, &|p| {
-                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    std::thread::sleep(std::time::Duration::from_millis(400));
                     write_good(p)
                 })
                 .unwrap();
@@ -196,8 +196,10 @@ fn different_keys_do_not_block_each_other() {
     for h in hs {
         h.join().unwrap();
     }
+    // em paralelo ~400 ms; serializado >= 1600 ms. O limite fica no meio, com folga
+    // para runners carregados (Windows) sem perder o poder de detectar a serialização.
     assert!(
-        started.elapsed() < std::time::Duration::from_millis(700),
+        started.elapsed() < std::time::Duration::from_millis(1200),
         "keys were serialized"
     );
 }
