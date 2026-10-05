@@ -1,0 +1,22 @@
+[package]
+name = "capia-fixtures"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "DEV-ONLY (Fase 6, Track D-1): fixture determinística de projeto grande + utilitários de benchmark/soak. Não faz parte do produto: só entra em [dev-dependencies]."
+
+[lints]
+workspace = true
+
+[dependencies]
+capia-time.workspace = true
+capia-model.workspace = true
+capia-commands.workspace = true
+capia-store.workspace = true
+capia-project.workspace = true
+capia-assets.workspace = true
+capia-media.workspace = true
+capia-editor-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true

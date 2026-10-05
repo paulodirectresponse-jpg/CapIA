@@ -158,6 +158,8 @@ export const RUST_RULES = {
       "capia-render",
       // só dev-dependency: os testes de paridade preview × export usam o scheduler headless
       "capia-preview",
+      // só dev-dependency (DEV_ONLY_CRATES): fixture de projeto grande + benchmarks/soak da Fase 6
+      "capia-fixtures",
     ],
     normal: ["serde", "serde_json"],
     build: [],
@@ -218,6 +220,24 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Fixture/benchmarks da Fase 6 (Track D-1) — DEV-ONLY: constrói um projeto grande pelo Command
+  // Engine/Project API/stores públicos e mede. Nenhum crate de produto pode depender dele fora de
+  // [dev-dependencies] (DEV_ONLY_CRATES). Não conhece UI, IA/providers, render nem servidor.
+  "capia-fixtures": {
+    workspace: [
+      "capia-time",
+      "capia-model",
+      "capia-commands",
+      "capia-store",
+      "capia-project",
+      "capia-assets",
+      "capia-media",
+      "capia-editor-api",
+    ],
+    normal: ["serde", "serde_json"],
+    build: [],
+    dev: [],
+  },
   "capia-desktop": {
     // composition root: hospeda `ai.*` (Credential Manager via capia-secrets); a IA nunca é
     // dependência do editor — sem o serviço o shell funciona igual
@@ -237,6 +257,8 @@ export const RUST_RULES = {
 /** Nunca no núcleo (time/model/commands/project): shell, GPU, mídia, banco, rede, provedores de IA. */
 export const FORBIDDEN_IN_CORE =
   /^(tauri(-.*)?|wry|tao|wgpu(-.*)?|ffmpeg(-.*)?|libav.*|rusqlite|sqlx|diesel|reqwest|hyper|ureq|openai.*|async-openai|anthropic.*|genai|rig-core|llm(-.*)?)$/;
+/** Crates de apoio a desenvolvimento: só podem aparecer como `[dev-dependencies]` dos demais. */
+export const DEV_ONLY_CRATES = ["capia-fixtures"];
 export const CORE_CRATES = ["capia-time", "capia-model", "capia-commands", "capia-project"];
 
 /** Matriz JS. `external` = prefixos de dependências de terceiros permitidas além das listadas. */
@@ -299,6 +321,19 @@ export function checkRust(metadata, rules = RUST_RULES) {
       // dev-dependency de um crate nele mesmo = truque de features de teste (não é aresta do grafo)
       if (dep.name === pkg.name && kind === "dev") continue;
       const isWorkspace = names.has(dep.name);
+      if (isWorkspace && DEV_ONLY_CRATES.includes(dep.name) && pkg.name !== dep.name) {
+        // crate de apoio só entra por dev-dependency; essa aresta não conta no grafo de produto
+        // (o ciclo project ⇄ fixtures é de teste e o cargo o permite)
+        if (kind !== "dev") {
+          errors.push(
+            `${pkg.name} depende de ${dep.name} como ${kind}: crate DEV-ONLY só pode ser [dev-dependencies]`,
+          );
+        }
+        if (!rule.workspace.includes(dep.name)) {
+          errors.push(`${pkg.name} não pode depender de ${dep.name}`);
+        }
+        continue;
+      }
       if (isWorkspace) {
         graph[pkg.name].push(dep.name);
         if (!rule.workspace.includes(dep.name)) {

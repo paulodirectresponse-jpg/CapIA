@@ -25,6 +25,7 @@ members = [
     "crates/capia-secrets",
     "crates/capia-ai",
     "crates/capia-intelligence",
+    "crates/capia-fixtures",
     "apps/desktop/src-tauri",
 ]
 # Experimentos descartáveis e ferramentas com workspace próprio: fora do build principal.
@@ -53,6 +54,7 @@ capia-editor-api = { path = "crates/capia-editor-api", version = "0.0.0" }
 capia-ai = { path = "crates/capia-ai", version = "0.0.0" }
 capia-intelligence = { path = "crates/capia-intelligence", version = "0.0.0" }
 capia-secrets = { path = "crates/capia-secrets", version = "0.0.0" }
+capia-fixtures = { path = "crates/capia-fixtures", version = "0.0.0" }
 capia-server = { path = "crates/capia-server", version = "0.0.0" }
 capia-webview-surface = { path = "crates/capia-webview-surface", version = "0.0.0" }
 rusqlite = { version = "0.40", features = ["bundled"] }

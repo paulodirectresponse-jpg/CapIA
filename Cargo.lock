@@ -438,6 +438,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-fixtures"
+version = "0.0.0"
+dependencies = [
+ "capia-assets",
+ "capia-commands",
+ "capia-editor-api",
+ "capia-media",
+ "capia-model",
+ "capia-project",
+ "capia-store",
+ "capia-time",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "capia-intelligence"
 version = "0.0.0"
 dependencies = [
@@ -509,6 +525,7 @@ dependencies = [
  "capia-assets",
  "capia-commands",
  "capia-decode",
+ "capia-fixtures",
  "capia-jobs",
  "capia-media",
  "capia-model",
