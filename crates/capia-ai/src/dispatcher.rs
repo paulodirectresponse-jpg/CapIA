@@ -292,6 +292,18 @@ impl AiRuntime {
         Ok((chain(&reg, &profile, ropts)?, profile))
     }
 
+    /// Decisões de roteamento (sem chamar ninguém): permite saber **antes** qual modelo serve e
+    /// compor chaves de cache/auditoria. Erro estruturado quando nenhuma rota é válida.
+    pub fn route_preview(&self, route: &RouteRequest) -> Result<Vec<Decision>, ProviderError> {
+        Ok(self.routes(route)?.0)
+    }
+
+    /// O destino roda na máquina do usuário (Ollama/LM Studio/whisper.cpp/Replay)?
+    pub fn is_endpoint_local(&self, endpoint_id: &str) -> bool {
+        self.endpoint(endpoint_id)
+            .is_ok_and(|(_, p)| p.kind.is_local())
+    }
+
     fn mark(&self, endpoint_id: &str, ok: bool) {
         self.update_registry(|r| {
             if let Some(m) = r.models.get_mut(endpoint_id) {

@@ -285,6 +285,62 @@ impl Session {
         v
     }
 
+    // ---- entradas **só Rust** para clientes não-humanos (IA/API; ADR-029/030/085) -----------------
+    //
+    // Não existem como método de `call`/`begin`: a UI (JS) não alcança estas funções. Atores `Agent`/
+    // `Api` jamais escrevem direto — só `preview → apply_plan`, com token HMAC preso ao ator.
+
+    /// Fase 1 do gate: valida e devolve o diff + `plan_token` (nada é gravado).
+    pub fn agent_preview(
+        &mut self,
+        actor: &Actor,
+        label: &str,
+        commands: Value,
+    ) -> Result<Value, ApiError> {
+        let tx: Transaction = parse_transaction(&commands.to_string(), label)
+            .map_err(|e| ApiError::invalid(e.to_string()))?;
+        let o = self.open_mut()?;
+        let pv = o.project.preview(actor, tx)?;
+        Ok(json!({
+            "plan_token": pv.plan_token,
+            "already_applied": pv.already_applied,
+            "base_revision": pv.base_revision,
+            "plan_digest": pv.plan_digest,
+            "diff_digest": pv.diff_digest,
+            "op_count": pv.ops.len(),
+            "refs": pv.refs,
+            "results": serde_json::to_value(&pv.results)?,
+        }))
+    }
+
+    /// Fase 2 do gate: aplica **só** o plano revisado (rebase falha se o documento mudou).
+    pub fn agent_apply(&mut self, actor: &Actor, token: &str) -> Result<Value, ApiError> {
+        let o = self.open_mut()?;
+        let r = o.project.apply_plan(actor, token)?;
+        let extra = json!({
+            "refs": r.refs,
+            "results": serde_json::to_value(&r.results)?,
+            "replayed": r.replayed,
+        });
+        let reply = Self::commit_reply(o, r.entry_id, false, extra);
+        Self::announce_revision(&self.events, &reply);
+        Ok(reply)
+    }
+
+    /// Documento (somente leitura) — a IA enxerga a timeline por tools paginadas, nunca por aqui
+    /// diretamente; hospedeiros Rust (capia-intelligence) usam isto para montar *digests*.
+    pub fn document(&self) -> Result<&capia_model::Document, ApiError> {
+        Ok(self.open_ref()?.project.document())
+    }
+
+    pub fn project_path(&self) -> Option<PathBuf> {
+        self.open.as_ref().map(|o| o.project.path().to_path_buf())
+    }
+
+    pub fn media_toolchain(&self) -> Option<&MediaToolchain> {
+        self.toolchain.as_ref()
+    }
+
     /// Ponto único de entrada (síncrono): resolve e, se preciso, executa o trabalho pesado.
     pub fn call(&mut self, method: &str, p: Value) -> Result<Reply, ApiError> {
         match self.begin(method, p)? {

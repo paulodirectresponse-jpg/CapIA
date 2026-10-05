@@ -221,3 +221,103 @@ pub fn extract_audio_chunk(
     }
     Ok(out.stdout)
 }
+
+/// Callback de amostras PCM (s16, mono) de [`decode_pcm_s16_mono`].
+pub type PcmSink<'a> = &'a mut dyn FnMut(&[i16]) -> Result<Flow, MediaError>;
+
+/// Decodifica `[start, start+duration)` do áudio como PCM s16le **mono** a `sample_rate` Hz e entrega
+/// as amostras em blocos. Para análise local (silêncio, energia, ritmo) — nada sai da máquina.
+#[allow(clippy::too_many_arguments)]
+pub fn decode_pcm_s16_mono(
+    tc: &MediaToolchain,
+    path: &Path,
+    stream_index: u32,
+    start: Ticks,
+    duration: Ticks,
+    sample_rate: u32,
+    timeout: Duration,
+    cancel: &dyn Fn() -> bool,
+    on_samples: PcmSink<'_>,
+) -> Result<u64, MediaError> {
+    let ffmpeg = ffmpeg_of(tc)?;
+    if start.0 < 0 || duration.0 <= 0 || !(8_000..=48_000).contains(&sample_rate) {
+        return Err(bad("invalid PCM interval or sample rate"));
+    }
+    let abs = checked_input_path(path)?;
+    let secs = |t: Ticks| {
+        let micros = i128::from(t.0) * 1_000_000 / i128::from(TICKS_PER_SECOND);
+        format!("{}.{:06}", micros / 1_000_000, micros % 1_000_000)
+    };
+    let mut args: Vec<OsString> = [
+        "-v",
+        "error",
+        "-nostdin",
+        "-protocol_whitelist",
+        "file",
+        "-ss",
+    ]
+    .iter()
+    .map(OsString::from)
+    .collect();
+    args.push(secs(start).into());
+    args.push("-t".into());
+    args.push(secs(duration).into());
+    args.push("-i".into());
+    args.push(file_url_arg(&abs));
+    for a in [
+        "-map".to_owned(),
+        format!("0:{stream_index}"),
+        "-vn".into(),
+        "-sn".into(),
+        "-ac".into(),
+        "1".into(),
+        "-ar".into(),
+        sample_rate.to_string(),
+        "-f".into(),
+        "s16le".into(),
+        "pipe:1".into(),
+    ] {
+        args.push(a.into());
+    }
+    let mut carry: Vec<u8> = Vec::new();
+    let mut total: u64 = 0;
+    let mut samples: Vec<i16> = Vec::new();
+    let out = run_streaming(
+        ffmpeg,
+        &args,
+        &StreamLimits::new(timeout),
+        cancel,
+        &mut |chunk| {
+            carry.extend_from_slice(chunk);
+            let usable = carry.len() & !1;
+            samples.clear();
+            samples.extend(
+                carry[..usable]
+                    .chunks_exact(2)
+                    .map(|b| i16::from_le_bytes([b[0], b[1]])),
+            );
+            carry.drain(..usable);
+            if samples.is_empty() {
+                return Ok(Flow::Continue);
+            }
+            total += samples.len() as u64;
+            if total > MAX_SCAN_SAMPLES {
+                return Err(MediaError::new(
+                    MediaErrorCode::MediaLimitExceeded,
+                    "the PCM scan exceeds the sample limit",
+                ));
+            }
+            on_samples(&samples)
+        },
+    )?;
+    match out.status {
+        Some(s) if !s.success() => Err(MediaError::new(
+            MediaErrorCode::MediaDecodeFailed,
+            "ffmpeg failed while decoding the audio",
+        )),
+        _ => Ok(total),
+    }
+}
+
+/// Teto de amostras por varredura PCM (≈ 12 h a 16 kHz).
+pub const MAX_SCAN_SAMPLES: u64 = 700_000_000;

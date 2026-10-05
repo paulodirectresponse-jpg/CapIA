@@ -55,7 +55,8 @@ pub use proxy::{
     ProxyProfileV1, ProxyReport, generate_proxy, list_encoders, select_encoder,
 };
 pub use scan::{
-    FrameSink, MAX_SCAN_FRAMES, SttAudioFormat, decode_small_frames, extract_audio_chunk,
+    FrameSink, MAX_SCAN_FRAMES, MAX_SCAN_SAMPLES, PcmSink, SttAudioFormat, decode_pcm_s16_mono,
+    decode_small_frames, extract_audio_chunk,
 };
 pub use stream::FrameStream;
 pub use thumbnail::{ThumbnailRequest, extract_frame_png};
