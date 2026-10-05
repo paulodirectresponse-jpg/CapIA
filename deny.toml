@@ -28,6 +28,9 @@ allow = [
     "BSL-1.0",
     "Unicode-3.0",
     "Unicode-DFS-2016",
+    # Fase 4 (ADR-079): licença de DADOS permissiva do bundle de CAs Mozilla (webpki-root-certs, via
+    # rustls-platform-verifier do reqwest). Só exige manter o aviso; registrada em docs/PROVENANCE.md.
+    "CDLA-Permissive-2.0",
     # Copyleft fraco **por arquivo**: permitido apenas como dependência não modificada; revisar a cada
     # nova ocorrência (PROVENANCE.md). Modificar arquivos MPL obriga a publicá-los.
     "MPL-2.0",

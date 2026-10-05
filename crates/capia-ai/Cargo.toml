@@ -1,0 +1,28 @@
+[package]
+name = "capia-ai"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Fase 4: abstração de providers (OpenAI-compatível, Anthropic, Google, local/replay), Model Registry, Brain Profile, Capability Router, tool system (ADR-079..082)"
+
+[lints]
+workspace = true
+
+[dependencies]
+capia-secrets.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "net", "io-util"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "multipart", "json"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+async-trait = "0.1"
+bytes = "1"
+url = "2"
+base64 = "0.22"
+jsonschema = { version = "0.30", default-features = false }
+
+[features]
+# servidor HTTP falso para testes de contrato/segurança (também usado por capia-intelligence)
+testkit = []

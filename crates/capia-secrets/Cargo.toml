@@ -1,0 +1,16 @@
+[package]
+name = "capia-secrets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Segredos da Fase 4: SecretString (zeroize, Debug redigido), SecretStore (Credential Manager no Windows), registro e redação central (ADR-078)"
+
+[lints]
+workspace = true
+
+[dependencies]
+zeroize = "1"
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }

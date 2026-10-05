@@ -15,6 +15,16 @@ const base = () => [
   pkg("capia-media", [["capia-time"], ["serde"], ["serde_json"], ["sha2"], ["capia-media", "dev"]]),
   pkg("capia-preview", [["capia-time"], ["capia-model"], ["capia-render"]]),
   pkg("capia-decode", [["capia-time"], ["capia-media"]]),
+  pkg("capia-secrets", [["zeroize"], ["keyring"]]),
+  pkg("capia-ai", [
+    ["capia-secrets"],
+    ["serde"],
+    ["serde_json"],
+    ["sha2"],
+    ["tokio"],
+    ["reqwest"],
+    ["async-trait"],
+  ]),
   pkg("capia-assets", [
     ["capia-time"],
     ["capia-model"],
@@ -33,6 +43,7 @@ const base = () => [
     ["serde_json"],
     ["rusqlite"],
     ["getrandom"],
+    ["capia-secrets"],
     ["capia-store", "dev"],
   ]),
   pkg("capia-project", [
@@ -54,6 +65,20 @@ const base = () => [
     ["capia-store"],
     ["capia-assets"],
     ["capia-media"],
+    ["serde"],
+    ["serde_json"],
+  ]),
+  pkg("capia-intelligence", [
+    ["capia-time"],
+    ["capia-model"],
+    ["capia-commands"],
+    ["capia-media"],
+    ["capia-assets"],
+    ["capia-store"],
+    ["capia-project"],
+    ["capia-editor-api"],
+    ["capia-ai"],
+    ["capia-secrets"],
     ["serde"],
     ["serde_json"],
   ]),
@@ -187,8 +212,8 @@ test("Tauri is allowed only in the desktop shell", () => {
 
 test("a new crate must be added to the matrix on purpose", () => {
   assert.match(
-    checkRust({ packages: [...base(), pkg("capia-ai")] }).join("\n"),
-    /capia-ai.*não está na matriz/,
+    checkRust({ packages: [...base(), pkg("capia-newthing")] }).join("\n"),
+    /capia-newthing.*não está na matriz/,
   );
 });
 
@@ -218,4 +243,31 @@ test("JS: engine-bindings must not know React or Tauri; UI must not know Tauri",
   const badUi = structuredClone(ok);
   badUi[3].dependencies["@tauri-apps/api"] = "2";
   assert.match(checkJs(badUi).join("\n"), /editor-ui não pode depender de @tauri-apps\/api/);
+});
+
+test("AI/provider boundaries (Fase 4): providers never see the project; the core never sees providers", () => {
+  const swap = (name, deps) => {
+    const p = base();
+    const i = p.findIndex((x) => x.name === name);
+    p[i] = pkg(name, deps);
+    return checkRust({ packages: p }).join("\n");
+  };
+  assert.match(
+    swap("capia-ai", [["capia-secrets"], ["capia-project"]]),
+    /capia-ai não pode depender de capia-project/,
+  );
+  assert.match(swap("capia-ai", [["capia-model"]]), /capia-ai não pode depender de capia-model/);
+  assert.match(
+    swap("capia-secrets", [["capia-ai"]]),
+    /capia-secrets não pode depender de capia-ai/,
+  );
+  assert.match(
+    swap("capia-project", [["capia-ai"]]),
+    /capia-project não pode depender de capia-ai/,
+  );
+  assert.match(
+    swap("capia-editor-api", [["capia-intelligence"]]),
+    /capia-editor-api.*capia-intelligence/,
+  );
+  assert.match(swap("capia-commands", [["capia-time"], ["reqwest"]]), /reqwest/);
 });

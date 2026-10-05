@@ -8,7 +8,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
 
 /// Versão de schema que este software escreve e entende.
-pub const CURRENT_SCHEMA_VERSION: u32 = 3;
+pub const CURRENT_SCHEMA_VERSION: u32 = 4;
 
 /// `PRAGMA application_id` de todo `.capia` ("CAPI").
 pub const APPLICATION_ID: i64 = 0x4341_5049;
@@ -47,7 +47,60 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "media jobs (jobs, import_tickets) + asset fingerprint",
         up: m003_media_jobs,
     },
+    Migration {
+        version: 4,
+        name: "intelligence records and AI usage",
+        up: m004_intelligence,
+    },
 ];
+
+/// Schema 4 (ADR-082): registros de inteligência do **projeto** (transcripts, análises,
+/// ReferenceGrammar, DemandSpec versionada, conversas/tarefas do assistente, cache determinístico)
+/// e o uso/custo de IA. Aditiva (projetos v1..v3 ganham tabelas vazias). Nada daqui entra no
+/// documento nem no undo; **nenhum segredo** é gravado (o store redige valores registrados).
+const INTELLIGENCE_SQL: &str = "
+CREATE TABLE ai_records (
+    kind           TEXT    NOT NULL CHECK (length(kind) BETWEEN 1 AND 48),
+    id             TEXT    NOT NULL CHECK (length(id) BETWEEN 1 AND 192),
+    version        INTEGER NOT NULL DEFAULT 0 CHECK (version >= 0),
+    parent         TEXT    CHECK (parent IS NULL OR length(parent) <= 192),
+    schema_version INTEGER NOT NULL CHECK (schema_version >= 1),
+    created_ms     INTEGER NOT NULL CHECK (created_ms >= 0),
+    updated_ms     INTEGER NOT NULL CHECK (updated_ms >= 0),
+    json           TEXT    NOT NULL CHECK (json_valid(json)),
+    PRIMARY KEY (kind, id, version)
+) STRICT;
+CREATE INDEX ai_records_parent ON ai_records(kind, parent);
+
+CREATE TABLE ai_usage (
+    seq           INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    request_id    TEXT    NOT NULL,
+    task_id       TEXT,
+    provider_id   TEXT    NOT NULL,
+    endpoint_id   TEXT    NOT NULL,
+    model_id      TEXT    NOT NULL,
+    capability    TEXT    NOT NULL,
+    purpose       TEXT,
+    input_tokens  INTEGER NOT NULL CHECK (input_tokens >= 0),
+    output_tokens INTEGER NOT NULL CHECK (output_tokens >= 0),
+    cached_tokens INTEGER NOT NULL CHECK (cached_tokens >= 0),
+    synthetic     INTEGER NOT NULL CHECK (synthetic IN (0, 1)),
+    cost_known    INTEGER NOT NULL CHECK (cost_known IN (0, 1)),
+    cost_micros   INTEGER NOT NULL CHECK (cost_micros >= 0),
+    currency      TEXT,
+    latency_ms    INTEGER NOT NULL CHECK (latency_ms >= 0),
+    attempt       INTEGER NOT NULL CHECK (attempt >= 0),
+    status        TEXT    NOT NULL CHECK (status IN ('ok', 'failed', 'cancelled', 'cache_hit')),
+    error_code    TEXT,
+    pricing_date  TEXT,
+    timestamp_ms  INTEGER NOT NULL CHECK (timestamp_ms >= 0)
+) STRICT;
+CREATE INDEX ai_usage_task ON ai_usage(task_id);
+";
+
+fn m004_intelligence(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(INTELLIGENCE_SQL)
+}
 
 /// Schema 3 (ADR-052/053): fila de jobs de mídia persistida (estado/progresso/resultado/erro, para
 /// sobreviver a fechar/crash: `running` vira `interrupted` ao reabrir) e tickets de import
@@ -279,6 +332,27 @@ pub(crate) fn peek_connection(conn: &Connection) -> StoreResult<Peek> {
         application_id,
         user_version: u32::try_from(user_version).unwrap_or(u32::MAX),
     })
+}
+
+/// Como [`check_signature`] para um banco que não é um projeto (`what` aparece nas mensagens); a
+/// checagem do `application_id` é do chamador.
+pub(crate) fn check_signature_with(p: Peek, supported: u32, what: &str) -> StoreResult<()> {
+    if p.user_version == 0 {
+        return Err(StoreError::corrupted(format!(
+            "{what} without a schema version"
+        )));
+    }
+    if p.user_version > supported {
+        return Err(StoreError::new(
+            StoreErrorCode::UnsupportedSchemaVersion,
+            format!(
+                "the {what} uses schema {} but this version of CapIA understands up to {supported}; the file was not modified",
+                p.user_version
+            ),
+        )
+        .with_details(serde_json::json!({ "found": p.user_version, "supported": supported })));
+    }
+    Ok(())
 }
 
 /// Valida a assinatura e a versão **antes de qualquer escrita**.

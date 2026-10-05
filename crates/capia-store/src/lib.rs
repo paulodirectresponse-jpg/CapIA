@@ -8,6 +8,8 @@
 //! Este crate faz IO e **não** compila para WASM; o núcleo puro (`capia-time/model/commands`) segue
 //! livre de SQLite (verificado por `tools/check-architecture.mjs`).
 
+mod ai;
+mod appdb;
 mod catalog;
 mod error;
 mod failpoints;
@@ -16,6 +18,8 @@ mod load;
 mod schema;
 mod store;
 
+pub use ai::{AiStore, MAX_RECORD_JSON, RecordRow, UsageRow, UsageSummary};
+pub use appdb::{APP_APPLICATION_ID, APP_MIGRATIONS, APP_SCHEMA_VERSION, AppDb};
 pub use catalog::{Catalog, CatalogEvent, CatalogEventKind, CatalogOp, PendingCatalog};
 pub use error::{StoreError, StoreErrorCode, StoreResult};
 pub use jobs::{JobStore, Recovery, TicketRow, TicketState};

@@ -15,6 +15,7 @@ mod limits;
 mod normalize;
 mod process;
 mod proxy;
+mod scan;
 mod stream;
 mod thumbnail;
 mod toolchain;
@@ -52,6 +53,9 @@ pub use process::{
 pub use proxy::{
     FpsPolicy, HARDWARE_H264_ENCODERS, PROXY_PRODUCER, ProxyAudio, ProxyCodec, ProxyEncoder,
     ProxyProfileV1, ProxyReport, generate_proxy, list_encoders, select_encoder,
+};
+pub use scan::{
+    FrameSink, MAX_SCAN_FRAMES, SttAudioFormat, decode_small_frames, extract_audio_chunk,
 };
 pub use stream::FrameStream;
 pub use thumbnail::{ThumbnailRequest, extract_frame_png};

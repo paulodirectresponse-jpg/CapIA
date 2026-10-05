@@ -58,6 +58,55 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Segredos (Fase 4, ADR-080): SecretString/SecretStore/redator. Folha: não conhece modelo, projeto,
+  // mídia, providers nem rede; só o cofre do SO (Windows Credential Manager) e zeroize.
+  "capia-secrets": {
+    workspace: [],
+    normal: ["zeroize", "keyring"],
+    build: [],
+    dev: [],
+  },
+  // Providers de IA (Fase 4, ADR-079/081): contrato canônico, adapters (OpenAI-compatível, Anthropic,
+  // Google, Replay, whisper.cpp), registry, router, tool gate. Único crate com HTTP de saída; nunca
+  // conhece o documento, o projeto nem a timeline (uma IA só enxerga o motor por tools).
+  "capia-ai": {
+    workspace: ["capia-secrets"],
+    normal: [
+      "serde",
+      "serde_json",
+      "sha2",
+      "tokio",
+      "reqwest",
+      "futures-util",
+      "async-trait",
+      "bytes",
+      "url",
+      "base64",
+      "jsonschema",
+    ],
+    build: [],
+    dev: [],
+  },
+  // Inteligência assistida (Fase 4, ADR-082..084): pipelines (transcrição, legendas, silêncio, cenas,
+  // Reference Analyzer, Demand Interpreter) e assistente. Cliente do Engine API: escreve só por
+  // preview → apply_plan com ator Agent. Roda sem rede (providers off) quando a tarefa é local.
+  "capia-intelligence": {
+    workspace: [
+      "capia-time",
+      "capia-model",
+      "capia-commands",
+      "capia-media",
+      "capia-assets",
+      "capia-store",
+      "capia-project",
+      "capia-editor-api",
+      "capia-ai",
+      "capia-secrets",
+    ],
+    normal: ["serde", "serde_json", "sha2", "tokio", "zip", "quick-xml", "pdf-extract", "base64"],
+    build: [],
+    dev: [],
+  },
   // Domínio de assets (ADR-046..049): identidade, hash em streaming, import, verify, relink, cache.
   // Sem SQLite e sem Command Engine.
   "capia-assets": {
@@ -75,6 +124,8 @@ export const RUST_RULES = {
       "capia-assets",
       "capia-media",
       "capia-jobs",
+      // só para redigir segredos registrados antes de persistir erros (ADR-080); sem IO próprio
+      "capia-secrets",
     ],
     normal: ["serde", "serde_json", "rusqlite", "getrandom"],
     build: [],
