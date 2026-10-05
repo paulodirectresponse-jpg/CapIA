@@ -43,7 +43,7 @@ M = [
          file=f"{I}/src/autonomy/stages.rs",
          old="                if validated.is_none_or(|v| v.diff_digest != digest) {",
          new="                if false && validated.is_none_or(|v| v.diff_digest != digest) {",
-         cmd=f"{T} autonomy_scenarios -- manual_edit"),
+         cmd=f"{T} autonomy_scenarios -- drift"),
     dict(id=7, name="licença desconhecida entra sem aprovação",
          file=f"{I}/src/autonomy/gateway.rs",
          old="            if p.unknown_license_requires_approval {\n                LicenseVerdict::NeedsApproval",
