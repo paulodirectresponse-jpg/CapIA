@@ -53,6 +53,7 @@ pub fn available() -> bool {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    #[cfg(target_os = "linux")]
     use super::*;
 
     #[test]

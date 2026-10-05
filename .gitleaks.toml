@@ -13,3 +13,12 @@ regexes = [
   '''KEY-[a-z0-9-]+-[0-9a-f]{8,}''',
   '''sk-E2E-[A-Za-z0-9-]+''',
 ]
+
+# Vetores de teste de assinatura HMAC dos receptores de exemplo (Fase 6): segredos inventados, usados
+# só para verificar a implementação de `verify` contra valores calculados de forma independente.
+[[allowlists]]
+description = "vetores de teste dos receptores de webhook de exemplo"
+paths = [
+  '''examples/webhook-receiver/receiver\.test\.mjs''',
+  '''examples/webhook-receiver/test_receiver\.py''',
+]
