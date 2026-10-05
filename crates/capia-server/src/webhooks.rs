@@ -40,7 +40,10 @@ const TICK: Duration = Duration::from_millis(100);
 
 /// Valor do cabeçalho `X-CapIA-Signature` (`v1=<hex>`): HMAC-SHA256 de `"<timestamp>.<corpo cru>"`.
 pub fn sign(secret: &str, timestamp: u64, body: &[u8]) -> String {
-    format!("{SIGNATURE_SCHEME}={}", signature_hex(secret, timestamp, body))
+    format!(
+        "{SIGNATURE_SCHEME}={}",
+        signature_hex(secret, timestamp, body)
+    )
 }
 
 fn signature_hex(secret: &str, timestamp: u64, body: &[u8]) -> String {
@@ -426,27 +429,69 @@ mod tests {
         let h = sign("whsec_x", 1_700_000_000, b"{\"a\":1}");
         assert!(h.starts_with("v1="));
         assert_eq!(
-            verify("whsec_x", 1_700_000_000, b"{\"a\":1}", &h, 1_700_000_100, 300),
+            verify(
+                "whsec_x",
+                1_700_000_000,
+                b"{\"a\":1}",
+                &h,
+                1_700_000_100,
+                300
+            ),
             Ok(())
         );
         assert_eq!(
-            verify("whsec_x", 1_700_000_000, b"{\"a\":2}", &h, 1_700_000_100, 300),
+            verify(
+                "whsec_x",
+                1_700_000_000,
+                b"{\"a\":2}",
+                &h,
+                1_700_000_100,
+                300
+            ),
             Err(VerifyError::SignatureMismatch)
         );
         assert_eq!(
-            verify("whsec_y", 1_700_000_000, b"{\"a\":1}", &h, 1_700_000_100, 300),
+            verify(
+                "whsec_y",
+                1_700_000_000,
+                b"{\"a\":1}",
+                &h,
+                1_700_000_100,
+                300
+            ),
             Err(VerifyError::SignatureMismatch)
         );
         assert_eq!(
-            verify("whsec_x", 1_700_000_001, b"{\"a\":1}", &h, 1_700_000_100, 300),
+            verify(
+                "whsec_x",
+                1_700_000_001,
+                b"{\"a\":1}",
+                &h,
+                1_700_000_100,
+                300
+            ),
             Err(VerifyError::SignatureMismatch)
         );
         assert_eq!(
-            verify("whsec_x", 1_700_000_000, b"{\"a\":1}", &h, 1_700_000_301, 300),
+            verify(
+                "whsec_x",
+                1_700_000_000,
+                b"{\"a\":1}",
+                &h,
+                1_700_000_301,
+                300
+            ),
             Err(VerifyError::TimestampOutsideTolerance)
         );
         assert_eq!(
-            verify("whsec_x", 1_700_000_000, b"{\"a\":1}", &h, 1_699_999_000, 300),
+            verify(
+                "whsec_x",
+                1_700_000_000,
+                b"{\"a\":1}",
+                &h,
+                1_699_999_000,
+                300
+            ),
             Err(VerifyError::TimestampOutsideTolerance)
         );
         assert_eq!(
@@ -456,7 +501,14 @@ mod tests {
         // rotação: várias assinaturas, basta uma
         let two = format!("v1={},{h}", "0".repeat(64));
         assert_eq!(
-            verify("whsec_x", 1_700_000_000, b"{\"a\":1}", &two, 1_700_000_000, 300),
+            verify(
+                "whsec_x",
+                1_700_000_000,
+                b"{\"a\":1}",
+                &two,
+                1_700_000_000,
+                300
+            ),
             Ok(())
         );
     }
