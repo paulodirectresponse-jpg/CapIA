@@ -18,7 +18,11 @@ static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Resumo observável da timeline produzida (independente de ids de run).
 fn shape(a: &AutoWorld, seq: &str) -> Value {
-    let s = a.w.ctx.engine.read("sequence.get", json!({"sequence": seq})).unwrap();
+    let s =
+        a.w.ctx
+            .engine
+            .read("sequence.get", json!({"sequence": seq}))
+            .unwrap();
     let mut clips: Vec<Value> = s["clips"]
         .as_object()
         .unwrap()
@@ -44,7 +48,11 @@ async fn baseline(name: &str) -> Option<(Value, usize, u32)> {
     let done = a.run_to_rest(&run.id).await;
     assert_eq!(done.status, RunStatus::Completed, "{:?}", done.error);
     let seq = done.sequences[0].sequence_id.clone();
-    let agent = a.history_actors().iter().filter(|x| x.starts_with("run:")).count();
+    let agent = a
+        .history_actors()
+        .iter()
+        .filter(|x| x.starts_with("run:"))
+        .count();
     Some((shape(&a, &seq), agent, a.spy.applies.load(Ordering::SeqCst)))
 }
 
@@ -81,8 +89,15 @@ async fn crash_loop(a: &AutoWorld, run_id: &str, point: &str, max_rounds: usize)
         if r.status == RunStatus::Completed {
             break;
         }
-        assert_eq!(r.status, RunStatus::Paused, "recover turns running into paused");
-        assert!(rec.iter().any(|x| x.run_id == run_id), "the run is classified");
+        assert_eq!(
+            r.status,
+            RunStatus::Paused,
+            "recover turns running into paused"
+        );
+        assert!(
+            rec.iter().any(|x| x.run_id == run_id),
+            "the run is classified"
+        );
     }
     // resume final sem crash
     let r = orch.load(run_id).unwrap();
@@ -97,7 +112,11 @@ async fn crash_loop(a: &AutoWorld, run_id: &str, point: &str, max_rounds: usize)
                 st.status,
                 st.error
             );
-            assert!(t0.elapsed().as_secs() < 90, "{point}: resume timeout {:?}", st.status);
+            assert!(
+                t0.elapsed().as_secs() < 90,
+                "{point}: resume timeout {:?}",
+                st.status
+            );
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
     }
@@ -114,10 +133,23 @@ async fn check_point(point: &str, rounds: usize, min_crashes: usize) {
     let crashes = crash_loop(&a, &run.id, point, rounds).await;
     assert!(crashes >= min_crashes, "{point}: only {crashes} crashes");
     let done = a.orch.load(&run.id).unwrap();
-    assert_eq!(done.status, RunStatus::Completed, "{point}: {:?}", done.error);
+    assert_eq!(
+        done.status,
+        RunStatus::Completed,
+        "{point}: {:?}",
+        done.error
+    );
     let seq = done.sequences[0].sequence_id.clone();
-    assert_eq!(shape(&a, &seq), base_shape, "{point}: timeline differs from the clean run");
-    let agent = a.history_actors().iter().filter(|x| x.starts_with("run:")).count();
+    assert_eq!(
+        shape(&a, &seq),
+        base_shape,
+        "{point}: timeline differs from the clean run"
+    );
+    let agent = a
+        .history_actors()
+        .iter()
+        .filter(|x| x.starts_with("run:"))
+        .count();
     assert_eq!(agent, base_agent, "{point}: duplicated edits in history");
     assert!(
         a.spy.applies.load(Ordering::SeqCst) <= base_applies + crashes as u32,
@@ -153,7 +185,11 @@ async fn crash_right_after_the_understand_provider_returns_does_not_pay_twice() 
     crash_loop(&a, &run.id, "autonomy_understand_after_provider", 3).await;
     let done = a.orch.load(&run.id).unwrap();
     assert_eq!(done.status, RunStatus::Completed, "{:?}", done.error);
-    assert_eq!(a.script.count("demand"), 1, "the paid LLM answer was reused, not re-requested");
+    assert_eq!(
+        a.script.count("demand"),
+        1,
+        "the paid LLM answer was reused, not re-requested"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -194,23 +230,41 @@ async fn crash_before_the_apply_writes_nothing_and_after_it_never_applies_twice(
         let n = crash_loop(&a, &run.id, point, 3).await;
         assert!(n >= 1, "{point}");
         let done = a.orch.load(&run.id).unwrap();
-        assert_eq!(done.status, RunStatus::Completed, "{point}: {:?}", done.error);
-        let agent = a.history_actors().iter().filter(|x| x.starts_with("run:")).count();
+        assert_eq!(
+            done.status,
+            RunStatus::Completed,
+            "{point}: {:?}",
+            done.error
+        );
+        let agent = a
+            .history_actors()
+            .iter()
+            .filter(|x| x.starts_with("run:"))
+            .count();
         // o histórico ganha exatamente as entradas de uma execução limpa: sem cópia por reaplicar
         let all = a.history_actors().len();
         assert!(all > before);
         assert!(agent >= 1, "{point}");
-        let mut ids: Vec<String> = a.w.ctx.engine.read("history.list", json!({})).unwrap()["entries"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|e| e["actor"]["id"].as_str().is_some_and(|x| x.starts_with("run:")))
-            .map(|e| e["operation_id"].as_str().unwrap_or("").to_owned())
-            .collect();
+        let mut ids: Vec<String> =
+            a.w.ctx.engine.read("history.list", json!({})).unwrap()["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|e| {
+                    e["actor"]["id"]
+                        .as_str()
+                        .is_some_and(|x| x.starts_with("run:"))
+                })
+                .map(|e| e["operation_id"].as_str().unwrap_or("").to_owned())
+                .collect();
         let n0 = ids.len();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), n0, "{point}: duplicated operation ids in history");
+        assert_eq!(
+            ids.len(),
+            n0,
+            "{point}: duplicated operation ids in history"
+        );
     }
 }
 
