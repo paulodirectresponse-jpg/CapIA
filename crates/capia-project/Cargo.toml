@@ -27,5 +27,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 capia-preview.workspace = true
+# DEV-ONLY (Fase 6, D-1): fixture de projeto grande + benchmarks/soak (ciclo de teste permitido pelo cargo)
+capia-fixtures.workspace = true
 # habilita `failpoints` nos testes de crash sem expor a feature no build normal
 capia-project = { path = ".", features = ["failpoints"] }

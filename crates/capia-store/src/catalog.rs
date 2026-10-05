@@ -198,8 +198,22 @@ fn to_record(raw: Raw) -> StoreResult<AssetRecord> {
 
 /// Lê todo o catálogo (ordem estável por `asset_id`), validando cada linha.
 pub(crate) fn read_all(conn: &Connection) -> StoreResult<Vec<AssetRecord>> {
+    // um projeto no schema 2 (antes da migration 3) ainda não tem `fingerprint`: leitura sem
+    // migrar (`validate_file` é não destrutivo e vale para qualquer schema suportado)
+    let has_fingerprint: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('media_assets') WHERE name = 'fingerprint')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(true);
+    let columns = if has_fingerprint {
+        COLUMNS.to_owned()
+    } else {
+        COLUMNS.replace("fingerprint", "NULL")
+    };
     let mut stmt = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM media_assets ORDER BY asset_id"
+        "SELECT {columns} FROM media_assets ORDER BY asset_id"
     ))?;
     let rows = stmt.query_map([], raw_row)?;
     let mut out = Vec::new();

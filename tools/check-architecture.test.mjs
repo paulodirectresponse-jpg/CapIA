@@ -56,6 +56,18 @@ const base = () => [
     ["serde"],
     ["serde_json"],
   ]),
+  pkg("capia-fixtures", [
+    ["capia-time"],
+    ["capia-model"],
+    ["capia-commands"],
+    ["capia-store"],
+    ["capia-project"],
+    ["capia-assets"],
+    ["capia-media"],
+    ["capia-editor-api"],
+    ["serde"],
+    ["serde_json"],
+  ]),
   pkg("capia-cli", [["capia-project"], ["capia-commands"], ["capia-model"], ["serde_json"]]),
   pkg("capia-editor-api", [
     ["capia-project"],
@@ -299,4 +311,41 @@ test("o cérebro de E2E só existe como feature opt-in do desktop", async () => 
   assert.ok(checkDesktopTestkit(mk(ok + 'default = ["e2e-testkit"]\n')).length > 0);
   // feature removida
   assert.ok(checkDesktopTestkit(mk("[features]\n")).length > 0);
+});
+
+test("capia-fixtures é DEV-ONLY: só como dev-dependency, sem ciclo de produto (Fase 6 D-1)", () => {
+  const swap = (name, deps) => {
+    const p = base();
+    p[p.findIndex((x) => x.name === name)] = pkg(name, deps);
+    return checkRust({ packages: p }).join("\n");
+  };
+  const projectDeps = [
+    ["capia-time"],
+    ["capia-model"],
+    ["capia-commands"],
+    ["capia-store"],
+    ["serde"],
+    ["serde_json"],
+  ];
+  // dev-dependency de capia-project (o ciclo project ⇄ fixtures é de teste e é permitido)
+  assert.deepEqual(swap("capia-project", [...projectDeps, ["capia-fixtures", "dev"]]), "");
+  // dependência normal/build de produto é proibida
+  assert.match(
+    swap("capia-project", [...projectDeps, ["capia-fixtures"]]),
+    /capia-project depende de capia-fixtures como normal/,
+  );
+  assert.match(
+    swap("capia-cli", [["capia-project"], ["capia-fixtures"]]),
+    /capia-cli depende de capia-fixtures como normal/,
+  );
+  assert.match(
+    swap("capia-store", [["capia-fixtures", "dev"]]),
+    /capia-store não pode depender de capia-fixtures/,
+  );
+  // a fixture não pode conhecer IA/servidor/UI
+  assert.match(
+    swap("capia-fixtures", [["capia-project"], ["capia-ai"]]),
+    /capia-fixtures não pode depender de capia-ai/,
+  );
+  assert.match(swap("capia-fixtures", [["capia-project"], ["reqwest"]]), /capia-fixtures.*reqwest/);
 });
