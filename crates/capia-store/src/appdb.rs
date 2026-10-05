@@ -66,7 +66,17 @@ impl AppDb {
         target: u32,
     ) -> StoreResult<Self> {
         let existed = path.exists();
-        let from = if existed {
+        // Depois de uma queda (kill) o cabeçalho do arquivo principal pode estar defasado: as
+        // páginas com `application_id`/versão ainda estão só no `-wal`. Com `-wal` não vazio a
+        // assinatura vale pela leitura da conexão (feita logo abaixo, antes de qualquer escrita).
+        let has_wal = {
+            let mut w = path.as_os_str().to_owned();
+            w.push("-wal");
+            std::fs::metadata(std::path::PathBuf::from(w)).is_ok_and(|m| m.len() > 0)
+        };
+        let from = if existed && has_wal {
+            0
+        } else if existed {
             // lê a assinatura SEM abrir conexão (não cria -wal/-shm em arquivo alheio)
             let p: Peek = peek(path)?;
             if p.application_id != APP_APPLICATION_ID {

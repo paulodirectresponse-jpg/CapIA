@@ -438,3 +438,17 @@ fn app_db_redacts_registered_secrets() {
         );
     }
 }
+
+#[test]
+fn an_app_db_left_by_a_killed_process_reopens_with_its_data() {
+    // O cabeçalho do arquivo principal só é atualizado no checkpoint: depois de um kill, o
+    // `application_id` e os dados ainda estão no `-wal`. Reabrir NÃO pode tomar isso por "arquivo
+    // alheio" (regressão achada pelo E2E de autonomia: app reaberto após kill -9).
+    let dir = TempDir::new("appdb-kill");
+    let p = dir.file("app.db");
+    let db = AppDb::open(&p, BUSY).unwrap();
+    db.put("ns", "k", &json!({"v": 1}), 1).unwrap();
+    std::mem::forget(db); // sem fechar: nada de checkpoint (como um processo morto)
+    let again = AppDb::open(&p, BUSY).expect("a killed app db must reopen");
+    assert_eq!(again.get("ns", "k").unwrap(), Some(json!({"v": 1})));
+}

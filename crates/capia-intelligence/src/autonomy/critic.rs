@@ -54,6 +54,32 @@ pub enum Category {
     AssetQuality,
     Cta,
     Technical,
+    /// Visão (quadros): B-roll inadequado ao que é dito/pedido.
+    BrollFit,
+    /// Visão: produto/elemento esperado ausente ou irreconhecível.
+    ProductPresence,
+    /// Visão: o que se vê não combina com a mensagem/brief.
+    VisualFit,
+    /// Visão: texto/legenda ilegível, cortado ou sem contraste.
+    Legibility,
+    /// Visão: composição fora do esperado (equilíbrio, safe area, hierarquia).
+    Composition,
+}
+
+impl Category {
+    /// Categorias que só podem nascer de **evidência visual** (quadro citado).
+    pub fn is_visual(self) -> bool {
+        matches!(
+            self,
+            Self::Framing
+                | Self::Continuity
+                | Self::BrollFit
+                | Self::ProductPresence
+                | Self::VisualFit
+                | Self::Legibility
+                | Self::Composition
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

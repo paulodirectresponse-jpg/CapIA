@@ -24,6 +24,20 @@ const s = runSuite("autonomy", [
     cmd: cargo(["-p", "capia-commands", "--test", "selective_undo"]),
   },
   {
+    req: [
+      "Critic com visão: frames amostrados → Router → achados com EvidenceRef; degradação explícita",
+    ],
+    cmd: cargo(["-p", "capia-intelligence", "--test", "autonomy_vision"]),
+  },
+  {
+    req: ["corpus de autonomia (20 casos mapeados a testes)"],
+    cmd: cargo(["-p", "capia-intelligence", "--test", "autonomy_corpus"]),
+  },
+  {
+    req: ["orçamento por Run: limite exato, preço desconhecido, teto de gerações"],
+    cmd: cargo(["-p", "capia-intelligence", "--test", "autonomy_budget"]),
+  },
+  {
     req: ["pipeline headless pelo serviço ai.* (brief → plano → aprovação → timeline → undo)"],
     cmd: cargo(["-p", "capia-intelligence", "--test", "autonomy_service"]),
   },

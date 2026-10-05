@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { checkJs, checkRust, findCycles } from "./check-architecture.mjs";
+import { checkDesktopTestkit, checkJs, checkRust, findCycles } from "./check-architecture.mjs";
 
 const pkg = (name, deps = []) => ({
   name,
@@ -277,4 +277,26 @@ test("AI/provider boundaries (Fase 4): providers never see the project; the core
     /capia-editor-api.*capia-intelligence/,
   );
   assert.match(swap("capia-commands", [["capia-time"], ["reqwest"]]), /reqwest/);
+});
+
+test("o cérebro de E2E só existe como feature opt-in do desktop", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const mk = (toml) => {
+    const root = mkdtempSync(join(tmpdir(), "arch-"));
+    mkdirSync(join(root, "apps/desktop/src-tauri"), { recursive: true });
+    writeFileSync(join(root, "apps/desktop/src-tauri/Cargo.toml"), toml);
+    return root;
+  };
+  const ok = '[features]\ne2e-testkit = ["capia-intelligence/testkit"]\n';
+  assert.deepEqual(checkDesktopTestkit(mk(ok)), []);
+  // testkit ligado na dependência de produto
+  assert.ok(
+    checkDesktopTestkit(mk(ok + 'capia-intelligence = { features = ["testkit"] }\n')).length > 0,
+  );
+  // feature padrão
+  assert.ok(checkDesktopTestkit(mk(ok + 'default = ["e2e-testkit"]\n')).length > 0);
+  // feature removida
+  assert.ok(checkDesktopTestkit(mk("[features]\n")).length > 0);
 });

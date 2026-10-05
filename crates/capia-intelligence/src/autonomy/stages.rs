@@ -2052,6 +2052,26 @@ impl Orchestrator {
         (get("ignored"), get("locked"))
     }
 
+    /// Pode o Critic usar visão agora? (política e orçamento; privacidade e capability são do Router.)
+    fn vision_gate(&self, run: &AiRun) -> Result<(), String> {
+        if !run.policy.critic_vision {
+            return Err("DISABLED_BY_POLICY".into());
+        }
+        let u = self.usage_from_ledger(&run.id, &run.usage);
+        if run
+            .budget
+            .max_cost_micros
+            .is_some_and(|m| u.cost_micros >= m)
+            || run
+                .budget
+                .max_provider_calls
+                .is_some_and(|m| u.provider_calls >= m)
+        {
+            return Err("BUDGET_EXCEEDED".into());
+        }
+        Ok(())
+    }
+
     fn timeline_digest(seq: &Value) -> Value {
         let clips: Vec<Value> = seq["clips"]
             .as_object()
@@ -2084,11 +2104,16 @@ impl Orchestrator {
         let inv = self.inventory()?;
         let mut seqs: Vec<(String, Value)> = Vec::new();
         for p in &run.sequences {
-            if let Ok(s) = self
+            if let Ok(mut s) = self
                 .deps
                 .engine
                 .read("sequence.get", json!({"sequence": p.sequence_id}))
             {
+                // `sequence.get` não repete o id no cabeçalho: os conserto do Critic (AddCtaText…)
+                // precisam do id REAL da sequence, não da chave do deliverable
+                if let Some(h) = s["header"].as_object_mut() {
+                    h.insert("id".into(), json!(p.sequence_id));
+                }
                 seqs.push((p.deliverable.clone(), s));
             }
         }
@@ -2140,7 +2165,78 @@ impl Orchestrator {
                 .collect::<Vec<_>>()
         );
         let (ign, lck) = Self::review_decisions(run);
+        // contexto extra do Critic: transcrição do bruto e ReferenceGrammar (sem a lista de shots)
+        let records = ic.records()?;
+        let mut transcript_text = String::new();
+        for asset in run.inputs.assets.iter().take(2) {
+            if let Some(v) = latest_for_asset(&records, KIND_TRANSCRIPT, asset)? {
+                for s in v["transcript"]["segments"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .take(40)
+                {
+                    transcript_text.push_str(&format!(
+                        "[{}-{}ms] {}\n",
+                        s["start_us"].as_i64().unwrap_or(0) / 1000,
+                        s["end_us"].as_i64().unwrap_or(0) / 1000,
+                        s["text"].as_str().unwrap_or("")
+                    ));
+                }
+            }
+        }
+        let reference = match run.inputs.references.first() {
+            Some(a) => latest_for_asset(&records, KIND_REFERENCE, a)?.map(|mut g| {
+                if let Some(o) = g.as_object_mut() {
+                    o.remove("shots");
+                }
+                g
+            }),
+            None => None,
+        };
+        // visão: gate explícito (política, orçamento) antes de renderizar qualquer quadro
+        let vision_gate = self.vision_gate(run);
+        let mut vision = json!({"requested": run.policy.critic_vision,
+                                "status": if run.policy.critic_vision { "unavailable" } else { "disabled" },
+                                "reason": null, "frames": 0, "per_deliverable": {}});
+        if let Err(reason) = &vision_gate {
+            vision["reason"] = json!(reason);
+            if reason != "DISABLED_BY_POLICY" {
+                vision["status"] = json!("unavailable");
+            }
+        }
         for (dk, seq) in &seqs {
+            let seq_id = run
+                .sequences
+                .iter()
+                .find(|p| &p.deliverable == dk)
+                .map(|p| p.sequence_id.clone())
+                .unwrap_or_default();
+            let mut frames: Vec<super::vision::FrameSample> = Vec::new();
+            if vision_gate.is_ok() {
+                let specs = super::vision::plan_samples(seq, run.policy.critic_max_frames);
+                let engine = self.deps.engine.clone();
+                let (sid, sj, cancel) = (seq_id.clone(), seq.clone(), task.cancel.clone());
+                let captured = tokio::task::spawn_blocking(move || {
+                    super::vision::capture(engine.as_ref(), &sid, &sj, &specs, &cancel)
+                })
+                .await
+                .map_err(|e| IntelError::new("INTERNAL", e.to_string()))?;
+                match captured {
+                    Ok(f) => frames = f,
+                    Err(e) if e.is_cancelled() => return Err(e),
+                    // falha do compositor nunca derruba o Review: degrada e registra
+                    Err(e) => {
+                        vision["reason"] = json!(e.code);
+                    }
+                }
+                if frames.is_empty() {
+                    vision["status"] = json!("unavailable");
+                    if vision["reason"].is_null() {
+                        vision["reason"] = json!("NO_FRAMES");
+                    }
+                }
+            }
             let cc = CriticContext {
                 demand: spec.as_ref().map(demand_json).unwrap_or(Value::Null),
                 plan: serde_json::to_value(
@@ -2148,14 +2244,59 @@ impl Orchestrator {
                 )
                 .unwrap_or(Value::Null),
                 timeline_digest: Self::timeline_digest(seq),
-                transcript: None,
+                transcript: (!transcript_text.is_empty()).then(|| transcript_text.clone()),
                 deterministic: det_json.clone(),
                 decisions: json!({"ignored": ign, "locked": lck}),
+                reference: reference.clone(),
+                frames,
             };
-            let key = format!("llm:{}:critic:{cycle}:{dk}", run.id);
-            match roles::run_semantic_critic(ic, task, &cc, dk, Some((&cache, &key))).await {
+            let nframes = cc.frames.len();
+            let fdigest = if cc.frames.is_empty() {
+                "text".to_owned()
+            } else {
+                super::vision::frames_digest(&cc.frames)
+            };
+            let key = format!("llm:{}:critic:{cycle}:{dk}:{fdigest}", run.id);
+            let mut result =
+                roles::run_semantic_critic(ic, task, &cc, dk, Some((&cache, &key))).await;
+            // sem modelo com visão / privacidade / orçamento: o Critic NÃO cai — repete só com texto
+            // e o Review registra a degradação (nunca silenciosa)
+            let degradable = |c: &str| {
+                matches!(
+                    c,
+                    "NO_CAPABLE_MODEL"
+                        | "UNSUPPORTED_CAPABILITY"
+                        | "PRIVACY_POLICY_BLOCKED"
+                        | "BUDGET_EXCEEDED"
+                        | "NOT_CONFIGURED"
+                        | "CONTEXT_TOO_LONG"
+                        | "CONTENT_FILTERED"
+                )
+            };
+            let mut used_frames = !cc.frames.is_empty();
+            if let Err(e) = &result
+                && used_frames
+                && degradable(&e.code)
+            {
+                vision["status"] = json!("unavailable");
+                vision["reason"] = json!(e.code);
+                let text_only = CriticContext {
+                    frames: Vec::new(),
+                    ..cc
+                };
+                let key = format!("llm:{}:critic:{cycle}:{dk}:text", run.id);
+                result = roles::run_semantic_critic(ic, task, &text_only, dk, Some((&cache, &key)))
+                    .await;
+                used_frames = false;
+            }
+            match result {
                 Ok(out) => {
                     prov["semantic_model"] = json!(out.meta.model_id);
+                    if used_frames {
+                        vision["status"] = json!("used");
+                        vision["reason"] = Value::Null;
+                        vision["model"] = json!(out.meta.model_id);
+                    }
                     findings.extend(out.value);
                 }
                 Err(e) if e.is_cancelled() => return Err(e),
@@ -2163,7 +2304,18 @@ impl Orchestrator {
                     prov["semantic_error"] = json!(e.code);
                 }
             }
+            if used_frames {
+                vision["frames"] = json!(vision["frames"].as_u64().unwrap_or(0) + nframes as u64);
+                vision["per_deliverable"][dk.as_str()] =
+                    json!({"frames": nframes, "digest": fdigest});
+            }
         }
+        prov["critic_mode"] = json!(if vision["status"] == "used" {
+            "vision+text"
+        } else {
+            "deterministic+text"
+        });
+        prov["vision"] = vision;
         critic::apply_decisions(&mut findings, &ign, &lck);
         let revision = self.deps.engine.revision().unwrap_or(0);
         let review: Review =

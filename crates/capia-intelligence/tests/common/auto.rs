@@ -56,6 +56,11 @@ pub struct Script {
     pub counts: Mutex<std::collections::BTreeMap<String, u32>>,
     /// Todos os prompts enviados ao "modelo": `(sistema, usuário)`.
     pub prompts: Mutex<Vec<(String, String)>>,
+    /// "Modelo de visão" do Replay: recebe os quadros que o Critic enviou (PNG decodificado).
+    #[allow(clippy::type_complexity)]
+    pub vision: Mutex<Option<VisionOracle>>,
+    /// Quantas imagens chegaram ao modelo em cada chamada de Critic.
+    pub images_seen: Mutex<Vec<usize>>,
     /// Atraso (ms) entre os dois pedaços da resposta do Producer (para testar pausa/cancelamento).
     pub producer_delay_ms: std::sync::atomic::AtomicU64,
     /// Faz a primeira chamada do Producer falhar com 429 (retry/fallback).
@@ -76,6 +81,8 @@ impl Script {
             critic: Box::new(critic),
             counts: Mutex::new(Default::default()),
             prompts: Mutex::new(Vec::new()),
+            vision: Mutex::new(None),
+            images_seen: Mutex::new(Vec::new()),
             producer_delay_ms: Default::default(),
             rate_limit_first_producer: Default::default(),
         })
@@ -144,7 +151,13 @@ pub fn brain_for(script: Arc<Script>) -> Arc<ReplayProvider> {
                 chat_json(&(script.planner)(&d, n))
             } else if sys.starts_with("ROLE: critic") {
                 let n = script.bump("critic");
-                chat_json(&(script.critic)(n))
+                let seen = seen_frames(req);
+                script.images_seen.lock().unwrap().push(seen.len());
+                let oracle = script.vision.lock().unwrap().clone();
+                match (oracle, seen.is_empty()) {
+                    (Some(o), false) => chat_json(&o(&seen)),
+                    _ => chat_json(&(script.critic)(n)),
+                }
             } else {
                 script.bump("demand");
                 chat_json(&(script.demand)())
@@ -193,6 +206,10 @@ pub struct SpyEngine {
     pub log: Mutex<Vec<(String, u64)>>,
     pub previews: AtomicU32,
     pub applies: AtomicU32,
+    /// Quantos quadros o Critic pediu ao compositor.
+    pub frames: AtomicU32,
+    /// Simula um engine sem compositor (`render_frame` → `None`).
+    pub no_frames: std::sync::atomic::AtomicBool,
     /// Gancho chamado ANTES de cada preview com o nº dele (simula edição manual no meio da Run).
     #[allow(clippy::type_complexity)]
     pub on_preview: Mutex<Option<Box<dyn Fn(u32) + Send + Sync>>>,
@@ -236,6 +253,19 @@ impl Engine for SpyEngine {
     }
     fn revision(&self) -> IntelResult<u64> {
         self.inner.revision()
+    }
+    fn render_frame(
+        &self,
+        s: &str,
+        at: i64,
+        w: u32,
+        h: u32,
+    ) -> IntelResult<Option<capia_intelligence::engine::RawFrame>> {
+        self.frames.fetch_add(1, Ordering::SeqCst);
+        if self.no_frames.load(Ordering::SeqCst) {
+            return Ok(None);
+        }
+        self.inner.render_frame(s, at, w, h)
     }
     fn import_begin(&self, p: &Path) -> IntelResult<String> {
         self.inner.import_begin(p)
@@ -351,6 +381,8 @@ pub fn auto_world_at(
         log: Mutex::new(Vec::new()),
         previews: AtomicU32::new(0),
         applies: AtomicU32::new(0),
+        frames: AtomicU32::new(0),
+        no_frames: std::sync::atomic::AtomicBool::new(false),
         on_preview: Mutex::new(None),
     });
     let events: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
@@ -471,5 +503,238 @@ impl AutoWorld {
             .iter()
             .map(|e| e["actor"]["id"].as_str().unwrap().to_owned())
             .collect()
+    }
+}
+
+/// Um quadro como o "modelo" o enxerga: rótulo + pixels (RGBA8).
+#[derive(Clone, Debug)]
+pub struct SeenFrame {
+    pub index: usize,
+    pub label: String,
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+
+/// Extrai (rótulo, imagem) dos pedaços da mensagem de usuário, na ordem em que foram enviados.
+pub fn seen_frames(req: &ChatRequest) -> Vec<SeenFrame> {
+    use base64::Engine as _;
+    use capia_ai::types::Part;
+    let mut out = Vec::new();
+    let mut label = String::new();
+    for m in &req.messages {
+        for p in &m.parts {
+            match p {
+                Part::Text { text } if text.starts_with("FRAME ") => label.clone_from(text),
+                Part::Image { data_b64, .. } => {
+                    let png = base64::engine::general_purpose::STANDARD
+                        .decode(data_b64)
+                        .unwrap();
+                    let f = capia_intelligence::autonomy::vision::decode_png(&png).unwrap();
+                    out.push(SeenFrame {
+                        index: out.len(),
+                        label: std::mem::take(&mut label),
+                        width: f.width,
+                        height: f.height,
+                        rgba: f.rgba,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+impl SeenFrame {
+    fn px(&self, x: u32, y: u32) -> [u8; 3] {
+        let i = ((y * self.width + x) * 4) as usize;
+        [self.rgba[i], self.rgba[i + 1], self.rgba[i + 2]]
+    }
+
+    /// Fração de pixels dominantemente vermelhos entre os que NÃO são barra preta (o clipe 16:9
+    /// é encaixado numa timeline vertical, então há faixas pretas em cima e embaixo).
+    pub fn red_fraction(&self) -> f64 {
+        let (mut red, mut content) = (0u32, 0u32);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let [r, g, b] = self.px(x, y);
+                if r > 24 || g > 24 || b > 24 {
+                    content += 1;
+                    if r > 150 && g < 90 && b < 90 {
+                        red += 1;
+                    }
+                }
+            }
+        }
+        if content == 0 {
+            0.0
+        } else {
+            f64::from(red) / f64::from(content)
+        }
+    }
+
+    /// Centroide (0..1) dos pixels quase brancos (o "sujeito" das fixtures), se houver.
+    pub fn subject_centroid(&self) -> Option<(f64, f64)> {
+        let (mut sx, mut sy, mut n) = (0f64, 0f64, 0f64);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let [r, g, b] = self.px(x, y);
+                if r > 220 && g > 220 && b > 220 {
+                    sx += f64::from(x);
+                    sy += f64::from(y);
+                    n += 1.0;
+                }
+            }
+        }
+        (n > 20.0).then(|| {
+            (
+                sx / n / f64::from(self.width),
+                sy / n / f64::from(self.height),
+            )
+        })
+    }
+}
+
+/// "Modelo de visão" do Replay: olha os PIXELS de cada quadro. Regras fixas e conhecidas pelos
+/// testes — (1) vermelho sólido = B-roll sem relação com o produto; (2) sujeito (branco) fora do
+/// centro = enquadramento incorreto. O índice citado é o do quadro recebido.
+/// Oráculo de visão do Replay.
+pub type VisionOracle = Arc<dyn Fn(&[SeenFrame]) -> Value + Send + Sync>;
+
+pub fn pixel_oracle() -> VisionOracle {
+    Arc::new(|frames| {
+        let mut findings = Vec::new();
+        for f in frames {
+            if f.red_fraction() > 0.8 {
+                findings.push(json!({"key": format!("broll-wrong-{}", f.index), "severity": "major",
+                    "category": "broll_fit", "expected": "B-roll that matches the product and the spoken line",
+                    "observed": "the frame shows an unrelated solid red image", "confidence": 0.9,
+                    "evidence": [{"kind": "frame", "detail": f.index.to_string()}]}));
+            } else if let Some((cx, cy)) = f.subject_centroid()
+                && (!(0.3..=0.7).contains(&cx) || !(0.25..=0.75).contains(&cy))
+            {
+                findings.push(json!({"key": format!("framing-{}", f.index), "severity": "major",
+                    "category": "framing", "expected": "subject centered in the frame",
+                    "observed": format!("the subject sits at ({cx:.2}, {cy:.2}), off-center"), "confidence": 0.85,
+                    "evidence": [{"kind": "frame", "detail": f.index.to_string()}]}));
+            }
+        }
+        json!({"summary": "visual review", "findings": findings})
+    })
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ClipKind {
+    /// Fundo verde, sujeito branco centralizado.
+    Centered,
+    /// Vermelho sólido (B-roll sem relação).
+    Red,
+    /// Fundo escuro, sujeito branco no canto superior esquerdo.
+    OffCenter,
+}
+
+/// Gera um clipe 320x180@30 (+ áudio) com o conteúdo visual de `kind`.
+pub fn color_clip(
+    tc: &capia_media::MediaToolchain,
+    dir: &Path,
+    name: &str,
+    secs: u32,
+    kind: ClipKind,
+) -> std::path::PathBuf {
+    let out = dir.join(name);
+    let vf = match kind {
+        ClipKind::Centered => {
+            "color=c=green:s=320x180:r=30,drawbox=x=110:y=45:w=100:h=90:color=white:t=fill"
+        }
+        ClipKind::Red => "color=c=red:s=320x180:r=30",
+        ClipKind::OffCenter => {
+            "color=c=0x202020:s=320x180:r=30,drawbox=x=10:y=8:w=70:h=50:color=white:t=fill"
+        }
+    };
+    let st = std::process::Command::new(tc.ffmpeg.as_ref().unwrap())
+        .args([
+            "-v",
+            "error",
+            "-y",
+            "-nostdin",
+            "-f",
+            "lavfi",
+            "-t",
+            &secs.to_string(),
+            "-i",
+            vf,
+        ])
+        .args([
+            "-f",
+            "lavfi",
+            "-t",
+            &secs.to_string(),
+            "-i",
+            "sine=frequency=500:sample_rate=16000",
+        ])
+        .args([
+            "-c:v",
+            "mpeg4",
+            "-q:v",
+            "2",
+            "-c:a",
+            "aac",
+            "-pix_fmt",
+            "yuv420p",
+            "-shortest",
+        ])
+        .arg(&out)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    out
+}
+
+impl AutoWorld {
+    /// Importa um arquivo de mídia pelo caminho normal do projeto e devolve o `asset_id`.
+    pub fn import_clip(&self, path: &Path) -> String {
+        call(
+            &self.w.session,
+            "assets.import",
+            json!({"paths": [path.display().to_string()]}),
+        );
+        let t0 = std::time::Instant::now();
+        loop {
+            let evs = call(&self.w.session, "events.poll", json!({}));
+            if let Some(a) = evs["events"].as_array().and_then(|a| {
+                a.iter()
+                    .find(|e| {
+                        e["kind"] == "import_finalized"
+                            && e["result"]["path"].as_str().is_none_or(|p| {
+                                p.ends_with(path.file_name().unwrap().to_str().unwrap())
+                            })
+                    })
+                    .map(|e| e["result"]["asset_id"].as_str().unwrap().to_owned())
+            }) {
+                return a;
+            }
+            assert!(t0.elapsed().as_secs() < 60, "import timeout");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    /// Liga/desliga `VisionInput` no modelo do "cérebro" (o Capability Router decide a partir disso).
+    pub fn set_vision(&self, on: bool) {
+        use capia_ai::capability::{Capabilities, Capability};
+        self.w.ctx.ai.update_registry(|r| {
+            let mut caps = vec![
+                Capability::TextGeneration,
+                Capability::StructuredOutput,
+                Capability::ToolCalling,
+                Capability::Streaming,
+            ];
+            if on {
+                caps.push(Capability::VisionInput);
+            }
+            if let Some(m) = r.models.get_mut("brain:m") {
+                m.capabilities = Capabilities::declared(&caps);
+            }
+        });
     }
 }

@@ -455,6 +455,7 @@ dependencies = [
  "capia-store",
  "capia-time",
  "pdf-extract",
+ "png 0.18.1",
  "quick-xml 0.37.5",
  "serde",
  "serde_json",

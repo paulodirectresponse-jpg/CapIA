@@ -114,6 +114,8 @@ export const RUST_RULES = {
       "pdf-extract",
       "base64",
       "async-trait",
+      // PNG dos quadros reduzidos enviados ao Critic com visão (Fase 5 closeout, ADR-100)
+      "png",
     ],
     build: [],
     dev: [],
@@ -382,6 +384,30 @@ export function findForbiddenSourceImports(root) {
   return errors;
 }
 
+/**
+ * O cérebro Replay de E2E (`testkit`) nunca pode entrar no app de produto: no desktop, `testkit` só
+ * existe como a feature opt-in `e2e-testkit`, que não é padrão, e a dependência não liga features.
+ */
+export function checkDesktopTestkit(root) {
+  const file = join(root, "apps", "desktop", "src-tauri", "Cargo.toml");
+  if (!existsSync(file)) return [];
+  const errors = [];
+  const toml = readFileSync(file, "utf8");
+  const lines = toml.split("\n").map((l) => l.trim());
+  const allowed = 'e2e-testkit = ["capia-intelligence/testkit"]';
+  for (const l of lines) {
+    if (l.startsWith("#")) continue;
+    if (l.includes("testkit") && l !== allowed) {
+      errors.push(`apps/desktop: \`testkit\` fora da feature opt-in e2e-testkit: ${l}`);
+    }
+  }
+  if (!lines.includes(allowed)) errors.push("apps/desktop: feature e2e-testkit ausente/alterada");
+  if (/^default\s*=.*e2e-testkit/m.test(toml)) {
+    errors.push("apps/desktop: e2e-testkit não pode ser feature padrão");
+  }
+  return errors;
+}
+
 function main() {
   const root = join(fileURLToPath(import.meta.url), "..", "..");
   const metadata = JSON.parse(
@@ -404,6 +430,7 @@ function main() {
     ...checkRust(metadata),
     ...checkJs(jsPackages),
     ...findForbiddenSourceImports(root),
+    ...checkDesktopTestkit(root),
   ];
   if (errors.length > 0) {
     console.error("Violações de arquitetura:\n - " + errors.join("\n - "));

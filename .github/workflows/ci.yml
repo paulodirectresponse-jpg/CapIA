@@ -88,8 +88,10 @@ jobs:
       - run: node tools/build-wasm.mjs
       - run: pnpm --filter @capia/desktop build
       # Build SÓ para E2E: mesma app, mais a porta CDP do WebView2 (config extra; o produto não a tem)
+      # e a feature de cargo `e2e-testkit` (cérebro Replay determinístico atrás da env
+      # CAPIA_AI_DEMO_BRAIN). O build de produto (`pnpm desktop:build`) NÃO liga essa feature.
       - name: Build do aplicativo desktop para E2E (sem instalador)
-        run: pnpm --filter @capia/desktop tauri build --no-bundle --config src-tauri/tauri.e2e.conf.json
+        run: pnpm --filter @capia/desktop tauri build --no-bundle --config src-tauri/tauri.e2e.conf.json -- --features e2e-testkit
       - name: E2E do aplicativo (fluxos críticos, H.264 real, SharedBuffer)
         shell: pwsh
         run: pnpm --filter @capia/e2e e2e --workers=1 --grep-invert "targets with 5k clips"
@@ -132,7 +134,7 @@ jobs:
         run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli -p capia-secrets -p capia-ai -p capia-intelligence
       - name: "Autonomia (Fase 5): Run, cenários, crash/kill real, segurança, memória, orçamento, variantes, serviço"
         run: |
-          cargo test -p capia-intelligence --test autonomy_run --test autonomy_scenarios --test autonomy_crash --test autonomy_crash_acquire --test autonomy_kill --test autonomy_security --test autonomy_memory --test autonomy_budget --test autonomy_variants --test autonomy_service --test autonomy_properties
+          cargo test -p capia-intelligence --test autonomy_run --test autonomy_scenarios --test autonomy_crash --test autonomy_crash_acquire --test autonomy_kill --test autonomy_security --test autonomy_memory --test autonomy_budget --test autonomy_variants --test autonomy_vision --test autonomy_corpus --test autonomy_service --test autonomy_properties
         env:
           CAPIA_REQUIRE_FFMPEG: "1"
       - name: "Autonomia: propriedades ampliadas (release)"

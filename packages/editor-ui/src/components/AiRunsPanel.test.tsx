@@ -83,10 +83,10 @@ const mem = (over: Partial<MemoryItemView> = {}): MemoryItemView => ({
   ...over,
 });
 
-function setup(initial: RunSummary[], items: MemoryItemView[] = []) {
+function setup(initial: RunSummary[], items: MemoryItemView[] = [], enabled = true) {
   let runs = initial;
   const ai = {
-    status: vi.fn(() => Promise.resolve({ enabled: true, any_usable_model: true } as AiStatus)),
+    status: vi.fn(() => Promise.resolve({ enabled, any_usable_model: true } as AiStatus)),
     runList: vi.fn(() => Promise.resolve({ runs })),
     runGet: vi.fn((id: string) => {
       const r = runs.find((x) => x.id === id) ?? run();
@@ -196,5 +196,15 @@ describe("painel de execuções de IA", () => {
     await waitFor(() => {
       expect(editor.undoSelective).toHaveBeenCalledWith("run:run-1", "safe", expect.any(String));
     });
+  });
+
+  it("com a IA desligada o botão de iniciar fica desabilitado e explica por quê", async () => {
+    const { ai, controller } = setup([], [], false);
+    await controller.ai.refresh();
+    ui(controller);
+    fireEvent.change(await screen.findByTestId("ai-run-brief"), { target: { value: "x" } });
+    expect(await screen.findByTestId("ai-run-off")).toBeTruthy();
+    expect(screen.getByTestId<HTMLButtonElement>("ai-run-start").disabled).toBe(true);
+    expect(ai.runCreate).not.toHaveBeenCalled();
   });
 });

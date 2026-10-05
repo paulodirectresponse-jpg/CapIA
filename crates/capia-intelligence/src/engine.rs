@@ -35,6 +35,26 @@ pub trait Engine: Send + Sync + core::fmt::Debug {
     /// Estado do ticket de import (finaliza o que estiver pronto).
     fn import_poll(&self, ticket_id: &str) -> IntelResult<Value>;
     fn import_cancel(&self, ticket_id: &str) -> IntelResult<bool>;
+    /// Quadro **composto** da timeline (o mesmo `render.frame` do preview), RGBA8, já na resolução
+    /// pedida. `None` = este engine não renderiza (o Critic degrada para só-texto, explicitamente).
+    /// Só leitura: nunca escreve no documento (ADR-100).
+    fn render_frame(
+        &self,
+        _sequence: &str,
+        _at_ticks: i64,
+        _width: u32,
+        _height: u32,
+    ) -> IntelResult<Option<RawFrame>> {
+        Ok(None)
+    }
+}
+
+/// Quadro RGBA8 devolvido por [`Engine::render_frame`].
+#[derive(Clone, Debug)]
+pub struct RawFrame {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
 }
 
 /// Adaptador sobre a [`Session`] do editor (a mesma que a UI usa — um único documento).
@@ -110,6 +130,45 @@ impl Engine for SessionEngine {
 
     fn import_begin(&self, path: &std::path::Path) -> IntelResult<String> {
         self.lock().agent_import_begin(path).map_err(api_err)
+    }
+
+    fn render_frame(
+        &self,
+        sequence: &str,
+        at_ticks: i64,
+        width: u32,
+        height: u32,
+    ) -> IntelResult<Option<RawFrame>> {
+        // fase 1 sob o lock; o compositor/decode roda FORA dele (edição nunca espera um quadro)
+        let begun = self
+            .lock()
+            .begin(
+                "render.frame",
+                serde_json::json!({"sequence": sequence, "at": at_ticks, "width": width, "height": height}),
+            )
+            .map_err(api_err)?;
+        let reply = match begun {
+            capia_editor_api::Outcome::Done(r) => r,
+            capia_editor_api::Outcome::Later(job) => job.run().map_err(api_err)?,
+        };
+        match reply {
+            Reply::Binary { meta, bytes, .. } => {
+                let w = meta["width"].as_u64().unwrap_or(0) as u32;
+                let h = meta["height"].as_u64().unwrap_or(0) as u32;
+                if w == 0 || h == 0 || bytes.len() != (w as usize) * (h as usize) * 4 {
+                    return Err(IntelError::new("ENGINE_ERROR", "unexpected frame buffer"));
+                }
+                Ok(Some(RawFrame {
+                    width: w,
+                    height: h,
+                    rgba: bytes,
+                }))
+            }
+            Reply::Json(_) => Err(IntelError::new(
+                "ENGINE_ERROR",
+                "unexpected json frame reply",
+            )),
+        }
     }
 
     fn import_poll(&self, ticket_id: &str) -> IntelResult<Value> {

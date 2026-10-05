@@ -113,7 +113,7 @@ Escopo: `capia-secrets` (Credential Manager), Provider abstraction (OpenAI-compa
 
 Escopo: AI Orchestrator (state machine, AI Run persistente/retomável), Producer, Planner (EditPlan), VALIDATE_PLAN via dry-run, Editor (transações), Critic (frames + digest), loop de correção, checkpoints humanos, orçamentos, Memory (4 escopos, propostas, aprovação), Asset Gateway + adapters iniciais, geração de mídia com proveniência/versões, `generate_variants`, undo seletivo por ator.
 
-**Estado da Fase 5: `PHASE 5 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase5-autonomy`; ver `docs/STATUS.md`; ADR-087..099; especificações em `docs/phase5/`). CI verde (6 jobs) no run 37336701064 / `f917430` (HEAD final difere só por documentação). Fase 6 **não** iniciada.
+**Estado da Fase 5: `PHASE 5 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase5-autonomy`; ver `docs/STATUS.md`; ADR-087..101; especificações em `docs/phase5/`). CI verde (6 jobs) no run 37336701064 / `f917430` (HEAD final difere só por documentação). Fase 6 **não** iniciada.
 
 **Critérios de conclusão:**
 - [ ] Em ≥ 10 demandas reais de teste: produz as variações pedidas, 100% editáveis, com custo exibido antes da execução; avaliação humana média ≥ "utilizável com ajustes leves".

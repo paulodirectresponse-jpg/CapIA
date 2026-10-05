@@ -96,7 +96,7 @@ Todo arquivo de mídia e toda saída do ffprobe são **entrada não confiável**
 ---
 **Estado de implementação (Fase 4):** fronteira de segredos (ADR-078), host binding/SSRF/TLS, Tool gate (ADR-081), `untrusted_data` e Interpreter sem tools (ADR-085); suíte `tools/phase4-acceptance/security/run.mjs`.
 
-## Fase 5 — superfícies novas da autonomia (ADR-087..099)
+## Fase 5 — superfícies novas da autonomia (ADR-087..101)
 
 | Superfície | Ameaça | Controle | Evidência |
 |---|---|---|---|
@@ -114,3 +114,5 @@ Todo arquivo de mídia e toda saída do ffprobe são **entrada não confiável**
 | Failpoints | superfície de teste no produto | feature `failpoints` **fora** do build normal; no-op sem a feature | `autonomy/failpoint.rs` |
 
 Regras: sem shell/filesystem/HTTP genérico/segredo como tool (inalterado); a UI fala com `ai.run/memory/gateway/generation` só por `aiController`; `Session::agent_*` e `agent_import_*` são só Rust. **Fora desta fase:** pentest, API local autenticada (Fase 6).
+
+**Visão do Critic (ADR-100):** os quadros enviados ao modelo são reduzidos (≤ 384 px), em número limitado (≤ 12, padrão 6) e nunca são vídeo inteiro; a classe de dados `Frames` passa pela política de privacidade do Brain (provider/modelo que não pode receber quadros ⇒ degradação explícita para texto); o rótulo de cada quadro carrega só ids do sistema; texto dentro do quadro (legenda/OCR) é dado, não instrução; achado visual sem quadro citado é descartado; o orçamento da Run é checado antes de renderizar qualquer quadro. **App de teste (ADR-101):** o cérebro Replay do E2E só existe com a feature `e2e-testkit` e a env `CAPIA_AI_DEMO_BRAIN`; o build de produto não a liga (verificado por `check-architecture.mjs`) e a WebView nunca vê o provider.

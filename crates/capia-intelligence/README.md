@@ -15,7 +15,7 @@ Pipelines e assistente da Fase 4 (ADR-082..086). Cliente do Engine API: lê por 
 
 Testes: `cargo test -p capia-intelligence` (FFmpeg real; `CAPIA_REQUIRE_FFMPEG=1` no CI). Aceitação: `tools/phase4-acceptance/`.
 
-## Autonomia (Fase 5, ADR-087..099)
+## Autonomia (Fase 5, ADR-087..101)
 
 Módulo `autonomy/` (mesmo crate; o crate continua **cliente** do Engine API via `capia-editor-api` e só escreve por `preview → apply_plan` com o ator `run:<id>`). Rede só pelo `capia-ai` (providers e `SafeFetcher`); este crate orquestra.
 

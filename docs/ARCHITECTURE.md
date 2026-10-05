@@ -234,7 +234,7 @@ Regras: a UI nunca escreve fora do Command Engine (teste de fronteira); preferê
 
 `capia-secrets` (folha) → `capia-ai` (providers, registry, router, dispatcher, tools; único HTTP de saída) → `capia-intelligence` (pipelines + assistente + serviço `ai.*`; cliente do Engine API) → hospedado pelos composition roots `capia-devserver`/`capia-desktop`. A matriz está em `tools/check-architecture.mjs`; o núcleo puro (time/model/commands) continua sem rede/IA. Decisões: ADR-078..086. A UI só fala `ai.*` por `store/aiController.ts`.
 
-## Fase 5 — autonomia (implementada; ADR-087..099)
+## Fase 5 — autonomia (implementada; ADR-087..101)
 
 Sem crate novo: a autonomia é o módulo `autonomy/` **dentro de `capia-intelligence`** (cliente do Engine API; também usa `capia-store` para `AutonomyStore`/`AppDb`). Mapa:
 

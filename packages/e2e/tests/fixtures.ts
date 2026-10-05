@@ -107,32 +107,115 @@ async function killTree(child: ChildProcess): Promise<void> {
   await Promise.race([exited, new Promise((r) => setTimeout(r, 10_000))]);
 }
 
-export const test = base.extend<{ server: Server; editor: Editor }, object>({
-  server: async ({}, use) => {
+/** Variáveis do app/devserver de E2E quando o cérebro Replay de demonstração está ligado. */
+function demoEnv(dir: string, extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    CAPIA_AI_DEMO_BRAIN: "1",
+    // app Tauri (feature e2e-testkit) e devserver: o banco do app fica na pasta do teste
+    CAPIA_E2E_APPDB: join(dir, "app.db"),
+    CAPIA_AI_APPDB: join(dir, "app.db"),
+    ...extra,
+  };
+}
+
+export { demoEnv };
+
+/** Sobe o app Tauri real (WebView2) com env de E2E; o banco do app fica na pasta do teste. */
+async function launchTauriApp(dir: string, env: Record<string, string>): Promise<ChildProcess> {
+  // porta fixa de `tauri.e2e.conf.json` (additionalBrowserArgs; o env do WebView2 é ignorado pelo wry)
+  const port = 9222;
+  // o app anterior (e o msedgewebview2 dele) pode ainda segurar a porta CDP fixa
+  await waitPortFree(port);
+  return spawn(tauriBinary(), [], {
+    stdio: "ignore",
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      WEBVIEW2_USER_DATA_FOLDER: join(dir, "webview2"),
+      CAPIA_E2E_APPDB: join(dir, "app.db"),
+      ...env,
+    },
+  });
+}
+
+/** Conecta por CDP à janela do app nativo e devolve a página (a "página" do Playwright não serve). */
+async function connectTauriPage(url: string): Promise<{ page: Page; close: () => Promise<void> }> {
+  let browser = null;
+  for (let i = 0; i < 150 && !browser; i++) {
+    try {
+      browser = await chromium.connectOverCDP(url);
+    } catch {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+  if (!browser) throw new Error("não foi possível conectar ao WebView2 por CDP");
+  let tauriPage: Page | undefined;
+  for (let i = 0; i < 100 && !tauriPage; i++) {
+    tauriPage = browser.contexts()[0]?.pages()[0];
+    if (!tauriPage) await new Promise((r) => setTimeout(r, 200));
+  }
+  if (!tauriPage) throw new Error("janela do app não encontrada");
+  const b = browser;
+  return {
+    page: tauriPage,
+    close: async () => {
+      await b.close().catch(() => undefined);
+    },
+  };
+}
+
+/**
+ * Fecha o app/devserver de `server` e sobe outro com a MESMA pasta de dados (projeto, banco do app).
+ * Devolve a página do novo processo. `hard` mata sem fechar nada (kill -9 / taskkill /F).
+ */
+export async function relaunch(
+  server: Server,
+  env: Record<string, string>,
+  browserPage: Page,
+  /** `false`: encerra o processo antigo normalmente em vez de matá-lo. */
+  hard = true,
+): Promise<Page> {
+  if (TAURI) {
+    await killTree(server.child);
+    await waitPortFree(9222);
+    server.child = await launchTauriApp(server.dir, env);
+    const c = await connectTauriPage(server.url);
+    tauriClose = c.close;
+    return c.page;
+  }
+  server.child.kill(hard ? "SIGKILL" : "SIGTERM");
+  const second = await launchDevserver(env);
+  server.url = second.url;
+  server.child = second.child;
+  return browserPage;
+}
+
+let tauriClose: (() => Promise<void>) | null = null;
+
+/** Fecha a conexão CDP mais recente (a do processo atual, depois de `relaunch`). */
+async function closeTauriPage(): Promise<void> {
+  await tauriClose?.();
+}
+
+export const test = base.extend<{ server: Server; editor: Editor; aiDemo: boolean }, object>({
+  /** `test.use({ aiDemo: true })`: liga o cérebro Replay de demonstração (só build/modo de teste). */
+  aiDemo: [false, { option: true }],
+  server: async ({ aiDemo }, use) => {
     const dir = mkdtempSync(join(tmpdir(), "capia-e2e-"));
+    const extra = aiDemo ? demoEnv(dir) : {};
     if (TAURI) {
-      // porta fixa de `tauri.e2e.conf.json` (additionalBrowserArgs; o env do WebView2 é ignorado pelo wry)
-      const port = 9222;
-      // o app anterior (e o msedgewebview2 dele) pode ainda segurar a porta CDP fixa
-      await waitPortFree(port);
-      const child: ChildProcess = spawn(tauriBinary(), [], {
-        stdio: "ignore",
-        cwd: ROOT,
-        env: {
-          ...process.env,
-          WEBVIEW2_USER_DATA_FOLDER: join(dir, "webview2"),
-        },
-      });
-      await use({ url: `http://127.0.0.1:${String(port)}`, dir, child });
-      await killTree(child);
-      await waitPortFree(port);
+      const child = await launchTauriApp(dir, extra);
+      const server: Server = { url: "http://127.0.0.1:9222", dir, child };
+      await use(server);
+      await killTree(server.child);
+      await waitPortFree(9222);
       return;
     }
     const port = await freePort();
     const child: ChildProcess = spawn(
       devserverBinary(),
       ["--port", String(port), "--static", join(ROOT, "apps/desktop/dist")],
-      { stdio: "ignore", cwd: ROOT },
+      { stdio: "ignore", cwd: ROOT, env: { ...process.env, ...extra } },
     );
     const url = `http://127.0.0.1:${String(port)}`;
     for (let i = 0; i < 100; i++) {
@@ -144,31 +227,19 @@ export const test = base.extend<{ server: Server; editor: Editor }, object>({
       }
       await new Promise((r) => setTimeout(r, 100));
     }
-    await use({ url, dir, child });
-    child.kill();
+    const server: Server = { url, dir, child };
+    await use(server);
+    server.child.kill();
   },
   // No app nativo a "página" é a janela do WebView2 (CDP): não depende do `page` do Playwright, que
   // lançaria um Chromium que não existe (nem é necessário) nesse alvo.
   ...(TAURI
     ? {
         page: async ({ server }: { server: Server }, use: (p: Page) => Promise<void>) => {
-          let browser = null;
-          for (let i = 0; i < 150 && !browser; i++) {
-            try {
-              browser = await chromium.connectOverCDP(server.url);
-            } catch {
-              await new Promise((r) => setTimeout(r, 200));
-            }
-          }
-          if (!browser) throw new Error("não foi possível conectar ao WebView2 por CDP");
-          let tauriPage: Page | undefined;
-          for (let i = 0; i < 100 && !tauriPage; i++) {
-            tauriPage = browser.contexts()[0]?.pages()[0];
-            if (!tauriPage) await new Promise((r) => setTimeout(r, 200));
-          }
-          if (!tauriPage) throw new Error("janela do app não encontrada");
-          await use(tauriPage);
-          await browser.close();
+          const c = await connectTauriPage(server.url);
+          tauriClose = c.close;
+          await use(c.page);
+          await closeTauriPage();
         },
       }
     : {}),

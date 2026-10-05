@@ -30,3 +30,9 @@ capia-intelligence.workspace = true
 capia-secrets.workspace = true
 serde_json.workspace = true
 tauri-plugin-dialog = "2"
+
+[features]
+# SÓ para o app de E2E (CI Windows): hospeda o cérebro Replay determinístico atrás da env
+# `CAPIA_AI_DEMO_BRAIN`. Nunca no build de produto (`pnpm desktop:build` não liga esta feature);
+# `tools/check-architecture.mjs` falha se `testkit` entrar fora desta feature.
+e2e-testkit = ["capia-intelligence/testkit"]

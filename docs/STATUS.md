@@ -6,7 +6,7 @@
 
 ## Fase 5 — Autonomia: o que existe
 
-> Especificações: `docs/phase5/` · decisões: ADR-087..099 · pacote de aceitação: `tools/phase5-acceptance/`. **CI:** run 37336701064 no commit `f917430` — os 6 jobs verdes (Núcleo Rust Linux, Rust+desktop Windows, TypeScript, Arquitetura/licenças/segredos, E2E Linux, E2E Windows). O HEAD final difere de `f917430` apenas por esta atualização de documentação.
+> Especificações: `docs/phase5/` · decisões: ADR-087..101 · pacote de aceitação: `tools/phase5-acceptance/`. **CI:** run 37336701064 no commit `f917430` — os 6 jobs verdes (Núcleo Rust Linux, Rust+desktop Windows, TypeScript, Arquitetura/licenças/segredos, E2E Linux, E2E Windows). O HEAD final difere de `f917430` apenas por esta atualização de documentação.
 
 | Área | Estado (engenharia) | Evidência (arquivos de teste) |
 |---|---|---|
@@ -21,6 +21,8 @@
 | Crash/kill | failpoints (feature `failpoints`, só testes) em processo + SIGKILL real com retomada em outro processo | `autonomy_crash.rs`, `autonomy_crash_acquire.rs`, `autonomy_kill.rs` |
 | Serviço `ai.*` | `ai.run.*`, `ai.memory.*`, `ai.gateway.*`, `ai.generation.set_enabled`; AI Off recusa Runs e o editor segue | `autonomy_service.rs` |
 | UI | painéis Runs/Memory/Sources, só por `aiController.ts`; undo de Run por `controller.undoRun`; geração/fontes desligadas por padrão | `AiRunsPanel.test.tsx`, `aiController.test.ts`, `architecture.test.ts`, `packages/e2e/tests/autonomy.spec.ts` |
+| Critic com visão | quadros compostos amostrados → Capability Router (`VisionInput`) → achados com `EvidenceRef` de quadro; degradação explícita; cache por digest; cancelamento; orçamento | `autonomy_vision.rs`, `autonomy/vision.rs` |
+| E2E Windows/Tauri | app desktop de teste (feature `e2e-testkit` + env) com cérebro Replay; Run completa, CORRECT, 2 variantes, undo seletivo, kill/reabrir, WAITING_USER, cancel, resume, AI Off — **sem skip** | `packages/e2e/tests/autonomy.spec.ts` |
 | Pacote de aceitação | `tools/phase5-acceptance/` (`autonomy`, `crash-resume`, `security`, `gateway`, `memory`, `real-demands`, `run-all.mjs`) | `real-demands/validate.test.mjs` |
 
 ### Critérios de saída (ROADMAP Fase 5) — evidência
@@ -35,15 +37,14 @@
 ### Pendências (exatas) para `PHASE 5 COMPLETE`
 1. **≥ 10 demandas reais avaliadas por um humano**, média ≥ 4,0, validadas por `node tools/phase5-acceptance/real-demands/validate.mjs --file <resultados.json>` (sem arquivo: `pending_external`).
 2. **Providers e chaves reais** (Brain real, provider de geração real, fontes reais do Gateway): nenhum teste da Fase 5 usa rede externa; qualidade/custo/latência reais **não medidos**.
-3. Checagem humana no desktop **Windows real** do fluxo Run → aprovação → timeline → undo seletivo, se exigida pelo PO (E2E usa devserver + Replay).
+3. Checagem **humana** no desktop Windows com um provider real (o E2E Windows/Tauri automatizado já cobre o fluxo completo com o cérebro Replay; ver ADR-101).
 4. ~~CI no HEAD final~~ — verde: run 37336701064 / `f917430` (6 jobs); o HEAD final difere só por documentação.
 5. Pendências da Fase 4 (LLM real no DemandSpec, corpus real de cenas, STT real) e da Fase 3 (3 usuários, residual de GPU/P2, decisão jurídica de H.264) **continuam abertas**.
 
 ### Limitações conhecidas (Fase 5)
 - Fontes do Gateway são locais/URL aprovada/catálogo Replay; não há marketplace de stock real integrado.
 - `service/demo.rs` (feature `testkit`) é só dev/E2E; o produto sem provider configurado falha com erro claro.
-- **Critic sem visão:** o Critic usa checagens determinísticas + digest da timeline + transcrição (via LLM de texto); **amostragem de quadros para modelo de visão não foi implementada** (a especificação original cita `render.frame`; fica como evolução, não como critério de saída automatizável).
-- O E2E `autonomy.spec.ts` roda no devserver (Linux) com o cérebro demo; **no alvo Windows/Tauri ele é pulado** (o app real nunca carrega o cérebro de demonstração). A cobertura Windows da Fase 5 é: suíte Rust completa (inclui crash/kill real e propriedades) no job Windows + E2E de editor existente.
+- **Critic com visão (ADR-100):** o modelo de visão real não foi avaliado (o Replay simula olhando os pixels dos quadros); qualidade de visão com provider real é pendência externa.
 - Correções encontradas pelos próprios testes da fase (registradas por honestidade): mídia adquirida ficava só no cache descartável (agora `<projeto>-media/ai/`); gramática de referência e transcrições não chegavam ao Planner/Critic (busca por sujeito do registro); undo seletivo não reportava perda por dependência.
 - Fase 6 (REST/MCP/Webhooks, instalador) **não iniciada**.
 

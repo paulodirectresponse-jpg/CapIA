@@ -136,3 +136,98 @@ fn memory_and_gateway_endpoints_are_safe_by_default() {
             .all(|a| a["paid"] != true || a["enabled"] == false)
     );
 }
+
+fn approve_pending(w: &ServiceWorld, id: &str, rounds: usize) -> Value {
+    for _ in 0..rounds {
+        let r = wait_run(w, id, |r| {
+            matches!(
+                r["status"].as_str(),
+                Some("waiting_user" | "completed" | "failed")
+            )
+        });
+        if r["run"]["status"] != "waiting_user" {
+            return r;
+        }
+        let dec = r["run"]["pending"]["id"].as_str().unwrap().to_owned();
+        w.ai(
+            "ai.run.decide",
+            json!({"run_id": id, "decision_id": dec, "option": "approve"}),
+        );
+    }
+    wait_run(w, id, |r| r["status"] == "completed")
+}
+
+#[test]
+fn the_demo_brain_exercises_review_correct_and_two_variants_with_selective_undo() {
+    let Some(w) = service_world("svc-demo-full", true) else {
+        return;
+    };
+    w.svc.install_demo_autonomy();
+    let created = w.ai(
+        "ai.run.create",
+        json!({"inputs": {"brief_text": "Produto: Demo. CTA: Compre agora. [demo:needs-correction]",
+                           "assets": [w.asset_id], "deliverables": [{"key": "main", "max_duration_s": 30}]},
+               "policy": {"plan": "always", "demand_spec": "auto"}}),
+    );
+    let id = created["run"]["id"].as_str().unwrap().to_owned();
+    let done = approve_pending(&w, &id, 4);
+    assert_eq!(done["run"]["status"], "completed", "{done}");
+    // REVIEW achou o CTA ausente e CORRECT aplicou o conserto (vocabulário fechado)
+    let stages: Vec<&str> = done["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| s["status"] == "completed")
+        .filter_map(|s| s["stage"].as_str())
+        .collect();
+    assert!(stages.contains(&"correct"), "{stages:?}");
+    assert!(done["run"]["usage"]["review_loops"].as_u64().unwrap() >= 1);
+    // as variantes saem de uma Run concluída: duas sequences novas, editáveis
+    let v = w.ai(
+        "ai.run.variants",
+        json!({"run_id": id, "count": 2, "axis": ["hooks"]}),
+    );
+    let vid = v["run"]["id"].as_str().unwrap().to_owned();
+    let vdone = approve_pending(&w, &vid, 4);
+    assert_eq!(vdone["run"]["status"], "completed", "{vdone}");
+    let seqs: Vec<&str> = vdone["run"]["sequences"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| s["role"] != "superseded")
+        .filter_map(|s| s["sequence_id"].as_str())
+        .collect();
+    assert!(seqs.len() >= 2, "{seqs:?}");
+    // undo seletivo só da Run das variantes: o master continua
+    let before = call(
+        &w.session,
+        "sequence.get",
+        json!({"sequence": done["run"]["sequences"][0]["sequence_id"]}),
+    );
+    call(
+        &w.session,
+        "history.undo_selective",
+        json!({"actor_id": format!("run:{vid}")}),
+    );
+    for s in &seqs {
+        assert!(w.svc.call("ai.run.get", json!({"run_id": vid})).is_ok());
+        assert!(call_err(&w, s), "{s} should be gone");
+    }
+    let after = call(
+        &w.session,
+        "sequence.get",
+        json!({"sequence": done["run"]["sequences"][0]["sequence_id"]}),
+    );
+    assert_eq!(
+        before, after,
+        "the master was untouched by undoing the variants run"
+    );
+}
+
+fn call_err(w: &ServiceWorld, seq: &str) -> bool {
+    w.session
+        .lock()
+        .unwrap()
+        .call("sequence.get", json!({"sequence": seq}))
+        .is_err()
+}

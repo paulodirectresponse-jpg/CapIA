@@ -136,7 +136,8 @@ function NewRun() {
   const [approve, setApprove] = useState(true);
   const [gateway, setGateway] = useState(false);
   const [generation, setGeneration] = useState(false);
-  const canStart = raw.length > 0 && brief.trim().length > 0;
+  const aiOff = useAi((s) => s.status !== null && !s.status.enabled);
+  const canStart = raw.length > 0 && brief.trim().length > 0 && !aiOff;
   return (
     <div className="ed-ai-card" role="group" aria-label={t("ai.runs.new")} data-testid="ai-run-new">
       <label className="ed-field">
@@ -198,6 +199,11 @@ function NewRun() {
         />{" "}
         {t("ai.runs.allowGeneration")}
       </label>
+      {aiOff && (
+        <p role="status" className="ed-warn" data-testid="ai-run-off">
+          {t("ai.off.banner")}
+        </p>
+      )}
       <p className="ed-hint">{t("ai.runs.privacy")}</p>
       <Button
         variant="primary"

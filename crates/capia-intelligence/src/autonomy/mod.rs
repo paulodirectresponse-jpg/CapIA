@@ -13,3 +13,4 @@ pub mod orchestrator;
 pub mod plan;
 pub mod roles;
 pub mod stages;
+pub mod vision;

@@ -54,6 +54,12 @@ impl AiState {
         let secrets: Arc<dyn capia_secrets::SecretStore> = capia_secrets::platform_store()
             .unwrap_or_else(|_| Arc::new(capia_secrets::MemoryStore::new()));
         let engine = Arc::new(SessionEngine::new(session));
+        // E2E (feature `e2e-testkit`, nunca no produto): o banco do app vai para uma pasta temporária
+        // do teste, para o app reaberto enxergar o mesmo estado e as execuções não vazarem entre testes
+        #[cfg(feature = "e2e-testkit")]
+        let appdb = std::env::var_os("CAPIA_E2E_APPDB")
+            .map(PathBuf::from)
+            .or(appdb);
         let svc = IntelligenceService::new(
             engine,
             ServiceConfig {
@@ -62,6 +68,11 @@ impl AiState {
             },
         )
         .map_err(|e| e.to_string())?;
+        // E2E: "cérebro" Replay determinístico (sem rede, sem chave) — só com a feature de teste E a env
+        #[cfg(feature = "e2e-testkit")]
+        if std::env::var_os("CAPIA_AI_DEMO_BRAIN").is_some() {
+            svc.install_demo_autonomy();
+        }
         Ok(Self { svc: Arc::new(svc) })
     }
 }

@@ -124,6 +124,11 @@ pub struct RunPolicy {
     pub acquire_order: Vec<AcquireSource>,
     /// Rodadas de perguntas ao usuário antes de seguir mesmo com dúvidas abertas.
     pub max_question_rounds: u32,
+    /// O Critic olha quadros amostrados da timeline (precisa de modelo com visão; senão degrada
+    /// de forma explícita e o Review registra por quê).
+    pub critic_vision: bool,
+    /// Teto de quadros por deliverable e Review (1..=12).
+    pub critic_max_frames: u32,
 }
 
 impl Default for RunPolicy {
@@ -148,6 +153,8 @@ impl Default for RunPolicy {
                 AcquireSource::Generate,
             ],
             max_question_rounds: 2,
+            critic_vision: true,
+            critic_max_frames: super::vision::DEFAULT_MAX_FRAMES,
         }
     }
 }
