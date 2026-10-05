@@ -1,0 +1,132 @@
+name: Release (Windows)
+
+# Assina SOMENTE quando os segredos existem. Sem eles o resultado é um artefato DEV/TEST rotulado e o job
+# declara `signing: external_pending` — nunca uma release "assinada" de mentira. O FFmpeg de release precisa ser a
+# build LGPL aprovada (ADR-032), verificada por hash e por tools/release/verify-ffmpeg-license.mjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ffmpeg_url:
+        description: "URL (https) do zip da build FFmpeg LGPL aprovada (com ffmpeg-build.json e licenças)"
+        required: true
+      ffmpeg_sha256:
+        description: "SHA-256 do zip"
+        required: true
+      channel:
+        description: "Canal do manifesto de atualização"
+        default: stable
+        type: choice
+        options: [stable, beta]
+      update_base_url:
+        description: "URL base (https) onde o instalador será publicado"
+        required: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CAPIA_BUILD_ID: ${{ github.run_id }}
+  CAPIA_GIT_SHA: ${{ github.sha }}
+  CAPIA_RELEASE_BUILD: "1"
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:version
+      - run: node --test "tools/release/*.test.mjs"
+
+      - name: Segredos disponíveis?
+        shell: pwsh
+        env:
+          PFX: ${{ secrets.CAPIA_SIGN_PFX_BASE64 }}
+          SEED: ${{ secrets.CAPIA_UPDATE_SIGNING_SEED_HEX }}
+        run: |
+          "HAS_CERT=$([bool]$env:PFX)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "HAS_UPDATE_KEY=$([bool]$env:SEED)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Baixar e verificar o FFmpeg aprovado
+        shell: pwsh
+        run: |
+          if (-not '${{ inputs.ffmpeg_url }}') { throw 'tag sem ffmpeg_url: use workflow_dispatch com a build aprovada' }
+          Invoke-WebRequest -Uri '${{ inputs.ffmpeg_url }}' -OutFile ffmpeg.zip -UseBasicParsing
+          $h = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne '${{ inputs.ffmpeg_sha256 }}'.ToLower()) { throw "SHA-256 do FFmpeg diverge: $h" }
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-approved -Force
+          node tools/release/verify-ffmpeg-license.mjs ffmpeg-approved --require-metadata --report ffmpeg-license-report.json
+
+      - name: SBOM e notices
+        run: node tools/release/sbom.mjs --out-dir dist-release --ffmpeg-dir ffmpeg-approved
+
+      - name: capia-server (sidecar)
+        shell: pwsh
+        run: |
+          cargo build --release -p capia-server
+          "SERVER_BIN=$PWD\target\release\capia-server.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - run: pnpm --filter @capia/desktop build
+      - name: Staging (WebView2: bootstrapper embutido)
+        run: node tools/release/stage-bundle.mjs --ffmpeg-dir ffmpeg-approved --server-bin $env:SERVER_BIN --webview embed --notices dist-release/THIRD_PARTY_NOTICES.txt
+      - name: Instalador NSIS
+        run: pnpm --filter @capia/desktop tauri build --bundles nsis --config src-tauri/tauri.installer.generated.json
+
+      - name: Coletar, assinar e verificar
+        shell: pwsh
+        env:
+          CAPIA_SIGN_PFX_BASE64: ${{ secrets.CAPIA_SIGN_PFX_BASE64 }}
+          CAPIA_SIGN_PFX_PASSWORD: ${{ secrets.CAPIA_SIGN_PFX_PASSWORD }}
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-release | Out-Null
+          $s = Get-ChildItem target/release/bundle/nsis -Filter *-setup.exe | Select-Object -First 1
+          Copy-Item $s.FullName dist-release\
+          $f = Get-ChildItem dist-release -Filter *-setup.exe | Select-Object -First 1
+          ./tools/release/sign.ps1 -Path $f.FullName -ReportPath dist-release/signing.json
+          $unsigned = Get-ChildItem dist-release -Filter *UNSIGNED-DEV-TEST-ONLY*
+          if ($unsigned) {
+            Remove-Item $f.FullName -Force
+            ./tools/release/verify-signature.ps1 -Path $unsigned[0].FullName -Require any -ReportPath dist-release/signature-verification.json
+            Write-Host '::warning::signing: external_pending — certificado de produção ausente; artefato DEV/TEST'
+          } else {
+            ./tools/release/verify-signature.ps1 -Path $f.FullName -Require valid -ReportPath dist-release/signature-verification.json
+          }
+
+      - name: Smoke do instalador
+        shell: pwsh
+        run: |
+          $f = Get-ChildItem dist-release -Filter *setup*.exe | Select-Object -First 1
+          ./tools/release/installer-smoke.ps1 -Installer $f.FullName -ReportPath dist-release/smoke-report.json
+
+      - name: Manifesto de atualização assinado (só com a chave de update real)
+        if: env.HAS_UPDATE_KEY == 'True' && env.HAS_CERT == 'True'
+        shell: pwsh
+        env:
+          CAPIA_UPDATE_SIGNING_SEED_HEX: ${{ secrets.CAPIA_UPDATE_SIGNING_SEED_HEX }}
+          CAPIA_UPDATE_KEY_ID: ${{ secrets.CAPIA_UPDATE_KEY_ID }}
+        run: |
+          $f = Get-ChildItem dist-release -Filter *-setup.exe | Where-Object { $_.Name -notmatch 'UNSIGNED' } | Select-Object -First 1
+          $v = node -p "require('./package.json').version"
+          node tools/release/make-update-manifest.mjs --artifact $f.FullName --version $v --channel '${{ inputs.channel || 'stable' }}' --url "${{ inputs.update_base_url }}/$($f.Name)" --out dist-release/update-manifest.json
+
+      - name: Hashes
+        run: node tools/release/hashes.mjs dist-release --out dist-release/SHA256SUMS.txt --json dist-release/hashes.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            dist-release/**
+            ffmpeg-license-report.json
