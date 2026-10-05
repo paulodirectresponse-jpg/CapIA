@@ -473,3 +473,21 @@ fn a_real_server_process_prints_the_bootstrap_token_once_and_never_leaks_it_else
     assert!(hits.is_empty(), "{hits:?}");
     assert!(names_containing(dir.path(), &tok).is_empty());
 }
+
+#[test]
+fn error_bodies_redact_secrets_even_when_the_message_carries_one() {
+    use capia_server::error::ApiErr;
+    capia_secrets::register_global(CANARY);
+    // defesa em profundidade: mesmo que uma mensagem/detalhe carregue o segredo (um bug futuro de
+    // handler), o corpo público da API nunca o mostra
+    let e = ApiErr::bad_request(format!("failed for {CANARY}")).with_details(json!({
+        "echo": CANARY, "nested": {"list": [CANARY, "ok"]}
+    }));
+    let body = e.body("req_x").to_string();
+    assert!(!body.contains(CANARY), "{body}");
+    assert!(body.contains("[REDACTED]"));
+    assert!(
+        body.contains("\"ok\""),
+        "unrelated details must survive: {body}"
+    );
+}

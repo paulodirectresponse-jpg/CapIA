@@ -2156,6 +2156,11 @@ fn hostile_json_bodies_never_cause_a_5xx() {
             whole(&r)
         );
     }
+    // aninhamento válido (objetos) acima do limite: recusado pelo servidor, com o motivo
+    let deep = format!("{}1{}", "{\"a\":".repeat(40), "}".repeat(40));
+    let r = post(deep.as_bytes());
+    assert_eq!(r.status, 400, "{}", String::from_utf8_lossy(&r.body));
+    assert!(String::from_utf8_lossy(&r.body).contains("nested too deeply"));
     // chaves duplicadas: vale a última, e a validação (escopos!) vê o MESMO valor que o handler
     let weak = s.token("weak", &["admin:tokens"]);
     let dup = s.call_as(&weak, "POST", "/v1/tokens", None);
@@ -2965,4 +2970,20 @@ fn a_burst_of_connections_is_bounded_in_threads_and_fds_and_ends_with_503_not_gr
     assert!(fe <= f0 + 20, "fd leak: {f0} → {fe}");
     let _ = child.kill();
     let _ = child.wait();
+}
+
+#[cfg(unix)]
+#[test]
+fn data_dir_is_private_to_the_owner() {
+    use std::os::unix::fs::PermissionsExt;
+    let s = start("perm", |_| {});
+    let mode = std::fs::metadata(s.dir.path())
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(
+        mode & 0o077,
+        0,
+        "data dir is accessible to group/others: {mode:o}"
+    );
 }

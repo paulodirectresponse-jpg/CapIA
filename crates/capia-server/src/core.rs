@@ -150,6 +150,13 @@ impl Core {
         cfg.validate()?;
         std::fs::create_dir_all(&cfg.data_dir)
             .map_err(|e| format!("cannot create the data directory: {e}"))?;
+        // projetos, mídia e `server.db` são do usuário: outro usuário local não entra (Unix; no
+        // Windows vale a ACL herdada do perfil)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let _ = std::fs::set_permissions(&cfg.data_dir, std::fs::Permissions::from_mode(0o700));
+        }
         for sub in ["projects", "uploads", "exports"] {
             std::fs::create_dir_all(cfg.data_dir.join(sub))
                 .map_err(|e| format!("cannot create {sub}/: {e}"))?;
