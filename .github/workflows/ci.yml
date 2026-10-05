@@ -268,6 +268,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Fronteiras de arquitetura
         run: pnpm check:arch
+      - name: Documentação da API em dia com o catálogo (Fase 6)
+        run: pnpm check:docs
       - name: Licenças JS
         run: pnpm check:licenses
       - name: Licenças, bans e fontes Rust (cargo-deny)
