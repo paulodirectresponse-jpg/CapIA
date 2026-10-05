@@ -106,3 +106,16 @@ Arrastar arquivos/pastas → probe síncrono leve → asset criado imediatamente
 
 Implementado: identidade por conteúdo, hash em streaming, dedup (um asset por conteúdo por projeto), catálogo no `.capia` (schema 2), import atômico, online/offline/modified, relink por conteúdo, `verify`, cache `CacheKey`/`CacheDir` e miniatura (ADR-046..049).
 **Divergências conscientes:** (1) hash = **SHA-256 do arquivo inteiro no import** (sem fingerprint BLAKE3 amostrado + job de hash completo em background — não há jobs ainda; o prefixo `sha256:` deixa a troca como migração futura); (2) o `AssetId` é derivado do hash na criação (`ast_<32 hex>`), não há `AssetVersion`/`MediaFile` separados ainda; (3) o status `Missing` não existe (só `offline`); (4) *force-relink*, relink em lote por pasta e busca por nome+tamanho ficam para depois. Itens das §3, §6–§8 (Global Library, Asset Gateway, mídia gerada, análises) seguem fora de escopo.
+
+## 11. Fase 5 — Asset Gateway implementado (ADR-093..096)
+
+Implementação em `crates/capia-intelligence/src/autonomy/gateway.rs` e `generation.rs`; download em `crates/capia-ai/src/fetch.rs`. Onde diverge do §6/§7 acima, vale esta seção.
+
+- **Adapters** (`AssetGatewayAdapter`): `LocalLibrary` (pasta local), `ApprovedUrl` (allow-list de hosts por adapter) e `ReplayCatalog` (testes/dev). Sem adapters de downloader/sidecar nesta fase; adapter desligado ⇒ o app continua, o orquestrador replaneja (need opcional) ou vai a `WAITING_USER` (need crítica; política `on_critical_unavailable`).
+- **Needs tipados:** o Brain não busca por URL; o Planner declara `AssetNeed` (finalidade, tipo, ordem de aquisição da política `acquire_order` (padrão `project → library → gateway → generate`)). Candidatos são ranqueados (componentes persistidos) e o metadado externo é **dado não confiável** (nunca instrução, nunca memória).
+- **`SafeFetcher`:** `https`, host da allow-list a cada redirect, DNS sem IP privado/link-local/metadata, tipo de conteúdo permitido, teto de bytes durante o stream, hash SHA-256 em streaming, `*.part` + `rename`, cancelamento real, sem credencial seguindo redirect.
+- **Licença:** `license_verdict`: `KnownAllowed/UserProvided/Generated` permitem; `Unknown` exige aprovação (padrão); `KnownRestricted` rejeita (padrão) ou pede decisão. Efeitos pagos reservam orçamento antes.
+- **Proveniência:** `ai_provenance(asset_id, run_id, kind, content_hash, json)` — adapter, fonte, licença/termos, hash, run; para geração, prompt, modelo, parâmetros e custo. Consulta por `ai.run.provenance`.
+- **Mídia durável:** o arquivo adquirido/gerado vai de staging (`<projeto>.capia-cache/autonomy/staging`) para `<projeto>-media/ai/<sha>.bin` (**durável**; o cache é descartável e o catálogo guarda o caminho), e entra pelo sistema de assets (hash + probe + documento + catálogo na MESMA transação; `EditorApi::agent_import_*`, só Rust) sob atribuição da Run (efeito `imp:*`). Falha nunca deixa asset parcial válido (a identidade é o conteúdo, ADR-046). Versões novas de mídia gerada nunca sobrescrevem a anterior.
+- **Geração:** opt-in (desligada por padrão), com aprovação e orçamento; `job_id` persistido e consultado antes de novo submit.
+- **Limpeza:** `ai.run.cleanup` lista candidatos (assets da Run); remover é ação do usuário, não da IA.

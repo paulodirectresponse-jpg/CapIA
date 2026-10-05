@@ -183,3 +183,20 @@ O schema permanece **3**. Novidades **fora do documento e do undo**: (a) derivad
 ## Fase 4 — persistência de IA (schema 4)
 
 `ai_records(kind, id, version, parent, schema_version, created_ms, updated_ms, json)` — transcrições (`transcript`), gramáticas (`reference_grammar`), `demand_spec`, tarefas do assistente (`assistant_task`); `ai_usage` — uma linha por chamada (tokens, custo conhecido, latência, status; custo desconhecido ≠ 0). **Fora do documento e do undo.** Global do app: `AppDb` (kv `ai/registry`; sem segredos). Ver ADR-082.
+
+## Fase 5 — autonomia (schema 5, ADR-087)
+
+Migration `m005_autonomy` (aditiva, só para frente; `CURRENT_SCHEMA_VERSION = 5`). **Nada** abaixo entra no documento nem no undo; nenhum segredo é gravado (redação na escrita).
+
+| Tabela | Chave | Conteúdo |
+|---|---|---|
+| `ai_runs` | `run_id` | cursor da Run: `status`, `stage`, `revision` (CAS), `parent_run_id`, `variant_group`, JSON da Run (entradas, política, orçamento, planos, decisões, aprovações) |
+| `ai_run_stages` | `(run_id, seq)`; `UNIQUE(idem_key)` | uma linha por execução de stage: `attempt`, digests de entrada/saída, `status` (`started/completed/failed/cancelled/interrupted`) |
+| `ai_run_events` | `(run_id, seq)` | eventos duráveis da Run (UI consome por `ai.run.events`) |
+| `ai_side_effects` | `effect_key` | livro de efeitos (`llm:/gw:/imp:/gen:`): `intent/submitted/done/failed`, `external_id` (ticket/job); `INSERT OR IGNORE` ⇒ primeira tentativa vence |
+| `ai_provenance` | `asset_id` | origem de cada asset adquirido/gerado (`run_id`, `kind`, `content_hash`, JSON: adapter, fonte, licença, prompt/modelo/custo) |
+| `ai_memory` | `id` | memória de **projeto** (`scope` só `project`; `proposed/active/rejected/archived`) |
+| `ai_memory_log` | `seq` | auditoria de memória (evento, ator, run; exclusão guarda só digest) |
+| `ai_budget_ledger` | `seq` | lançamentos `reserve/settle/release` em micro-unidades por `(run_id, reservation_id)` |
+
+Memória de **User/Client** vive no `AppDb` global (kv `memory.user`/`memory.client`), não no projeto. Mídia adquirida/gerada fica em `<projeto>-media/ai/<sha>.bin` (durável; fora do `.capia` e do cache descartável) e é referenciada pelo catálogo de assets (schema 2). Estado de Run é operacional como jobs: reabrir marca `started → interrupted` e `Running → Paused`, nunca `completed`.

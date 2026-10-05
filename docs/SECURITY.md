@@ -95,3 +95,22 @@ Todo arquivo de mídia e toda saída do ffprobe são **entrada não confiável**
 
 ---
 **Estado de implementação (Fase 4):** fronteira de segredos (ADR-078), host binding/SSRF/TLS, Tool gate (ADR-081), `untrusted_data` e Interpreter sem tools (ADR-085); suíte `tools/phase4-acceptance/security/run.mjs`.
+
+## Fase 5 — superfícies novas da autonomia (ADR-087..099)
+
+| Superfície | Ameaça | Controle | Evidência |
+|---|---|---|---|
+| Brief hostil (DOCX/PDF/TXT, transcrição, nomes de arquivo) | injeção de instrução | blocos `untrusted_data`; Producer/Planner/Critic **sem tools**; lista fechada de comandos; Editor determinístico | `autonomy_security.rs::hostile_brief_stays_inside_untrusted_blocks_…` |
+| Metadados do Gateway (título, descrição, licença declarada) | injeção, licença forjada | metadado = dado não confiável (nunca instrução nem memória); licença desconhecida → aprovação; restrita → rejeitada | `autonomy_scenarios.rs::known_license_free_assets_…`, unitários `autonomy::gateway` |
+| Downloads | SSRF, redirect, arquivo gigante/tipo errado, parcial | `SafeFetcher` (allow-list a cada redirect, DNS filtrado, tipo, bytes no stream, `*.part` + `rename`); a mídia é entrada hostil (probe isolado, ADR-047) | `capia-ai/tests/fetch.rs` |
+| Modelo hostil | gastar, buscar, promover memória sem humano | gate de aprovações presas a digest; orçamento reservado antes; `UserApproval` só pelo serviço | `autonomy_security.rs::a_hostile_model_cannot_spend_fetch_or_promote_memory_without_a_human` |
+| Runs aninhadas/recursivas | explosão de gasto | nenhuma Run cria Run; variantes só por `ai.run.variants` explícito, a partir de Run concluída, com teto por grupo | `autonomy_security.rs` ("no nested/recursive run"), `autonomy_variants.rs` |
+| Gasto | estouro por retry/corrida/crash | livro de orçamento atômico (`IMMEDIATE`), chave de efeito primeira-vence, preço desconhecido ≠ zero, geração só com aprovação | `autonomy_store.rs`, `autonomy_budget.rs`, `autonomy_properties.rs` |
+| Envenenamento de memória | brief/saída de modelo grava preferência persistente | IA só propõe; User/Client só por aprovação humana; Client exige `client_id`; conteúdo sanitizado e limitado; rejeitado não ressuscita | `autonomy_memory.rs`, `autonomy_properties.rs` |
+| Kill/crash/resume | edição, download ou geração duplicados; retomada sem o usuário saber | CAS por `revision`; livros de efeitos; `recover()` pausa e nunca auto-retoma; job de geração consultado antes de submeter | `autonomy_crash.rs`, `autonomy_crash_acquire.rs`, `autonomy_kill.rs` |
+| Integridade preview/apply | aplicar plano alterado ou com outro ator | token preso a ator + digest; aprovação presa ao digest do plano | `autonomy_security.rs::preview_apply_integrity_…` |
+| Segredos | vazamento por Run/eventos/registros | canário em projeto, cache, eventos e registros; redação central | `autonomy_security.rs::a_secret_canary_never_reaches_…` |
+| Undo seletivo | desfazer edição manual junto | só humano pede; conflitos por entidade e dependência; `safe` falha, `partial` pula | `selective_undo.rs` |
+| Failpoints | superfície de teste no produto | feature `failpoints` **fora** do build normal; no-op sem a feature | `autonomy/failpoint.rs` |
+
+Regras: sem shell/filesystem/HTTP genérico/segredo como tool (inalterado); a UI fala com `ai.run/memory/gateway/generation` só por `aiController`; `Session::agent_*` e `agent_import_*` são só Rust. **Fora desta fase:** pentest, API local autenticada (Fase 6).

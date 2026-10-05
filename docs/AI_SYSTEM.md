@@ -214,3 +214,19 @@ Regras anticontaminação:
 
 ---
 **Estado de implementação (Fase 4):** Tool System (`capia-ai::tools`), Demand Interpreter, Reference Analyzer, assistente pontual, transcrição/legendas/silêncio/cenas — ver ADR-081..086 e `docs/STATUS.md`. Fora desta fase: AI Run autônomo, Producer/Planner/Critic, variantes, memória autônoma, Asset Gateway completo (Fase 5).
+
+## 12. Fase 5 — AI Run autônoma (implementado; ADR-087..099)
+
+Esta seção descreve o que **existe em código** (`crates/capia-intelligence/src/autonomy/`); onde diverge dos §3/§4/§9 acima, vale esta seção.
+
+- **AI Run persistente** (schema 5): estágios `UNDERSTAND → PLAN → VALIDATE_PLAN → ACQUIRE → EDIT → REVIEW → CORRECT → DONE` e estados `pending/running/waiting_user/paused/failed/cancelled/completed`. Transições só pela tabela fechada `machine::transition`; cursor atômico (CAS por `revision`); cada execução de stage é uma linha em `ai_run_stages` com chave de idempotência. `recover()` converte `Running → Paused` e stages `started → interrupted`; **nunca retoma sozinho** (`ai.run.resume`).
+- **Ator `run:<id>`** e `operation_id`s determinísticos (`<run>:<ns>:<chave>:…`): retry/resume nunca duplicam edição. Escrita só em `EDIT`/`CORRECT`, só por `preview → apply_plan`, só após `VALIDATE_PLAN` válido e aprovações presas ao digest do plano.
+- **Papéis:** Producer → `ProductionPlan`; Planner → `EditPlan` por deliverable; Critic semântico → achados com evidência. Todos **sem tools**, prompts versionados, saída por JSON Schema, entradas externas em `untrusted_data`. **O Editor não é LLM**: compila `EditPlan` em comandos de forma determinística (tempo do plano em ms inteiros → `Ticks`). Checkpoints humanos por `RunPolicy` (padrões: plano sempre aprovado; DemandSpec só se houver perguntas; gasto acima de 1 000 000 micros sempre; geração sempre com aprovação; licença desconhecida pede aprovação).
+- **REVIEW → CORRECT:** checagens determinísticas (duração, placeholders, assets offline, CTA, conteúdo proibido, safe area, buracos, beats ausentes, formato) + achados semânticos; correção por vocabulário **fechado** (`TrimToDuration`, `AddCtaText`, `DeleteClip`, `SetProperty`, `SetClipEnabled`); ciclos limitados; correção que não ajuda/oscilação → `WAITING_USER`. *Nota:* o Critic semântico atual trabalha com digest/estrutura da timeline e do DemandSpec; a amostragem de quadros para revisão visual descrita no §3 **não está implementada** na Fase 5.
+- **Livros:** efeitos colaterais (`ai_side_effects`; chaves `llm:/gw:/imp:/gen:`; a primeira tentativa vence) e orçamento (`ai_budget_ledger`: reserva/liquidação/liberação; teto respeitado sob concorrência; preço desconhecido ≠ zero).
+- **Memória (§9 implementado):** 4 escopos com precedência Project > Client > User > System; a IA só propõe; User/Client só ativam por `UserApproval` (ação explícita da UI); Client exige `client_id`; rejeitado/arquivado não ressuscita; correções repetidas propõem após 3 sinais e nunca ativam; Project proposto pela IA só ativa com `project_memory_auto_activate`. Project em `ai_memory`; User/Client no `AppDb`. Auditoria em `ai_memory_log` (exclusão guarda só digest).
+- **Asset Gateway e geração:** ver `ASSET_SYSTEM.md §6/§7` (adapters `LocalLibrary`, `ApprovedUrl`, `ReplayCatalog`; `SafeFetcher`; licença; proveniência; geração opt-in).
+- **Variantes:** `ai.run.variants` cria Runs filhas em `variant_group` (estratégias `hook_plus_master`, `shared_master`, `format_variant`); uma Run nunca cria outra por conta própria.
+- **Undo seletivo por Run:** `history.undo_report`/`history.undo_selective` com `actor_id = run:<id>` (ver `COMMAND_SYSTEM.md`).
+- **Superfície `ai.*`:** `ai.run.*`, `ai.memory.*`, `ai.gateway.*`, `ai.generation.set_enabled`. Sem a IA (ou com `ai.enabled=false`) Runs são recusadas e o editor funciona igual.
+- **Não existe:** AI Run sem humano na aprovação (a política padrão exige plano aprovado), memória autônoma ativa, fine-tuning, integração REST/MCP (Fase 6).

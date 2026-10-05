@@ -128,3 +128,11 @@ O **Brain continua a autoridade**: modelos auxiliares são chamados *como tools*
 
 ---
 **Estado de implementação (Fase 4):** OpenAI-compatível, Anthropic, Google, Replay e whisper.cpp implementados com suíte de contrato comum; probe real; Router com privacidade/orçamento; fallback só configurado (ADR-079/080).
+
+## 10. Fase 5 — provedores de geração e fronteira de rede
+
+- **Brain/Router inalterados** (ADR-080): as Runs usam o `Capability Router` e **só** o fallback configurado; papéis Producer/Planner/Critic pedem `structured_output` sem tools.
+- **Geradores** (imagem/vídeo/TTS) são providers de **job** distintos do Brain, num `GenerationRegistry` **desligado por padrão** (`ai.generation.set_enabled`, persistido). Contrato: submit com `idempotency_key` determinística → `job_id` → `poll`/lookup. O `job_id` é gravado no livro de efeitos antes de qualquer espera; após crash só se consulta. Há provider **Replay** de geração para testes; **nenhum adapter de geração real** foi integrado/testado nesta fase.
+- **Rede:** além dos providers de IA, o único código de rede do produto é o `SafeFetcher` (`capia-ai/src/fetch.rs`), usado pelos adapters do Gateway; o modelo nunca recebe `http.get`.
+- **Custo:** reserva antes, liquidação com o custo real depois (`ai_budget_ledger`); estimativa desconhecida nunca é tratada como zero; teto de gasto por Run (`RunBudget`) com decisão humana ao estourar.
+- **Pendente externo:** smoke com providers/chaves reais (Brain e geração) — ver `STATUS.md`.

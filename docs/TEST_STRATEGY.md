@@ -156,3 +156,21 @@ Regressões > 10% falham o CI de benchmark (rodado em máquina dedicada, não em
 ## Fase 4 — testes de IA
 
 Sem credenciais externas no CI: Replay (digest/roteiro/respondedor) + servidores HTTP falsos que falam o protocolo de cada fabricante (suíte de contrato idêntica para OpenAI-compatível, Anthropic, Google). Segurança: `capia-ai/tests/security.rs`, `capia-intelligence/tests/{service,assistant,demand_flow}.rs`, UI (`architecture.test.ts`, `aiController.test.ts`, `AiPanel.test.tsx`), E2E (`packages/e2e/tests/ai.spec.ts`), tudo agregado por `tools/phase4-acceptance/security/run.mjs`. Qualidade: corpus de cenas anotado por construção + *held-out*; 10 briefings em modo Replay. Qualidade de LLM real, corpus real e smoke com chaves reais são **externos** e opcionais.
+
+## Fase 5 — testes de autonomia (ADR-099)
+
+Sem rede e sem chave no CI: Replay (Brain por papel), catálogo e geração Replay, servidores HTTP falsos para o `SafeFetcher`, FFmpeg local.
+
+| Camada | Arquivos | O que cobre |
+|---|---|---|
+| Store | `capia-store/tests/autonomy_store.rs` | CAS do cursor, `started → interrupted`, claim de efeito (primeiro vence), reservas paralelas ≤ teto, settle/release, redação, migração schema 4 → 5 |
+| Run ponta a ponta | `capia-intelligence/tests/autonomy_run.rs`, `autonomy_scenarios.rs`, `autonomy_budget.rs`, `autonomy_service.rs` | caminho feliz, perguntas, aprovações, replan limitado, gateway/licença, geração, drift manual, cancelamento, REVIEW→CORRECT, pausa, orçamento no limite, pipeline pelo serviço `ai.*`, AI Off |
+| Crash/kill | `autonomy_crash.rs`, `autonomy_crash_acquire.rs`, `autonomy_kill.rs` | failpoints em processo por fronteira de stage/efeito; SIGKILL real de processo-filho estacionado (`CAPIA_FAILPOINT_MODE=park`) e retomada em outro processo; invariante: sem duplicar edição/download/geração e timeline final = execução limpa |
+| Segurança | `autonomy_security.rs`, `capia-ai/tests/fetch.rs` | brief/modelo hostis, canário, integridade preview/apply, cancelamento tardio, AI Off, SSRF/redirect/tamanho/tipo/allow-list |
+| Memória/variantes | `autonomy_memory.rs`, `autonomy_variants.rs` | escopos, promoção, precedência, isolamento; variantes editáveis e undo seletivo |
+| Motor | `capia-commands/tests/selective_undo.rs` | conflitos por entidade/dependência, `safe`/`partial`, ator sem permissão |
+| Propriedades | `autonomy_properties.rs` (`CAPIA_PROP_CASES`) | caminhadas na máquina nunca quebram o gate de escrita; ledger ≤ teto; User/Client nunca ativos sem humano |
+| UI/E2E | `AiRunsPanel.test.tsx`, `aiController.test.ts`, `architecture.test.ts`, `packages/e2e/tests/autonomy.spec.ts` | Runs só por controladores; proposta inativa até clique; geração/fontes desligadas; fluxo brief → plano aprovado → timeline editável → undo seletivo |
+| Aceitação | `node tools/phase5-acceptance/run-all.mjs` | 5 suítes automáticas + validador de demandas reais (`pending_external` sem resultados humanos) |
+
+`failpoints` é feature **só de teste** (o dev-dependency do crate a habilita). **Externo, não automatizável:** ≥ 10 demandas reais avaliadas por humano, providers/chaves reais.

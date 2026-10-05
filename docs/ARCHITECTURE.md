@@ -233,3 +233,19 @@ Regras: a UI nunca escreve fora do Command Engine (teste de fronteira); preferê
 ## Fase 4 — camada de IA (implementada)
 
 `capia-secrets` (folha) → `capia-ai` (providers, registry, router, dispatcher, tools; único HTTP de saída) → `capia-intelligence` (pipelines + assistente + serviço `ai.*`; cliente do Engine API) → hospedado pelos composition roots `capia-devserver`/`capia-desktop`. A matriz está em `tools/check-architecture.mjs`; o núcleo puro (time/model/commands) continua sem rede/IA. Decisões: ADR-078..086. A UI só fala `ai.*` por `store/aiController.ts`.
+
+## Fase 5 — autonomia (implementada; ADR-087..099)
+
+Sem crate novo: a autonomia é o módulo `autonomy/` **dentro de `capia-intelligence`** (cliente do Engine API; também usa `capia-store` para `AutonomyStore`/`AppDb`). Mapa:
+
+| Onde | Módulo | Papel |
+|---|---|---|
+| `capia-intelligence/src/autonomy/` | `machine`, `model`, `orchestrator`, `stages`, `plan`, `roles`, `critic`, `memory`, `gateway`, `generation`, `failpoint` | máquina de estados e cursor, Run/política/orçamento, handlers de stage, compilador `EditPlan → comandos`, papéis de LLM sem tools, Critic, memória de 4 escopos, Asset Gateway, geração, failpoints (feature, só testes) |
+| `capia-intelligence/src/service/` | `autonomy_api.rs`, `demo.rs` | `ai.run.*`/`ai.memory.*`/`ai.gateway.*`/`ai.generation.*`; "cérebro" Replay só com feature `testkit` |
+| `capia-store/src/` | `autonomy.rs`, `schema.rs` (`m005_autonomy`) | `AutonomyStore`: Runs com CAS, stages, eventos, efeitos, proveniência, memória de projeto, ledger |
+| `capia-ai/src/` | `fetch.rs` (`SafeFetcher`) | **único** código de rede fora dos providers de IA, usado pelos adapters do Gateway |
+| `capia-commands/src/engine.rs` | `selective_undo_report/selective_undo` | undo seletivo por entradas/ator (nova entrada) |
+| `capia-editor-api/src/lib.rs` | `history.undo_report/undo_selective`; `agent_import_*` (só Rust) | undo seletivo na Engine API; import de asset do Gateway |
+| `packages/editor-ui`, `packages/engine-bindings` | `AiRunsPanel`, `aiController` (runs/memory/gateway), `controller.undoRun`, `ai.ts` | UI Runs/Memory/Sources; só via controladores |
+
+Regras de dependência (inalteradas, verificadas por `pnpm check:arch`): `capia-secrets → capia-ai (HTTP: providers + SafeFetcher) → capia-intelligence (orquestra) → composition roots`; `capia-ai` **não** conhece projeto/documento/Gateway; o `capia-intelligence` não faz rede por conta própria; `unsafe` continua só em `capia-webview-surface`/`capia-timeline-wasm`. A feature `failpoints` nunca é habilitada no build de produto.

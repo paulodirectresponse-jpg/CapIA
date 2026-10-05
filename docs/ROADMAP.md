@@ -90,7 +90,7 @@ Escopo: shell UI + design system, `ui-timeline` (canvas), painel Project (árvor
 
 ## FASE 4 — Inteligência (IA assistida, um passo por vez)
 
-**Estado da Fase 4: `ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase4-intelligence`; ver `docs/STATUS.md`; CI: run 83, commit `02b8490`, 6/6 jobs verdes). Fase 5 **não** iniciada.
+**Estado da Fase 4: `ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase4-intelligence`; ver `docs/STATUS.md`; CI: run 83, commit `02b8490`, 6/6 jobs verdes). Fase 5 em integração (ver abaixo).
 
 **Objetivo:** camada de IA configurável e segura; IA executa tarefas pontuais como transações.
 
@@ -113,12 +113,17 @@ Escopo: `capia-secrets` (Credential Manager), Provider abstraction (OpenAI-compa
 
 Escopo: AI Orchestrator (state machine, AI Run persistente/retomável), Producer, Planner (EditPlan), VALIDATE_PLAN via dry-run, Editor (transações), Critic (frames + digest), loop de correção, checkpoints humanos, orçamentos, Memory (4 escopos, propostas, aprovação), Asset Gateway + adapters iniciais, geração de mídia com proveniência/versões, `generate_variants`, undo seletivo por ator.
 
+**Estado da Fase 5: `PHASE 5 ENGINEERING IN INTEGRATION`** (branch `claude/phase5-autonomy`; ver `docs/STATUS.md`; ADR-087..099; especificações em `docs/phase5/`). CI no HEAD final: a preencher. Fase 6 **não** iniciada.
+
 **Critérios de conclusão:**
 - [ ] Em ≥ 10 demandas reais de teste: produz as variações pedidas, 100% editáveis, com custo exibido antes da execução; avaliação humana média ≥ "utilizável com ajustes leves".
-- [ ] Nenhuma escrita na timeline antes de plano validado (verificado por auditoria de Runs).
-- [ ] Run interrompido (kill) retoma do último stage sem duplicar edições.
-- [ ] Memória: nenhuma promoção a Client/User sem aprovação (teste automatizado).
-- [ ] Adapter do Gateway desligado → app funciona, erro claro, fallback quando configurado.
+  - [ ] **PENDENTE EXTERNO:** ≥ 10 demandas reais avaliadas por humano (nota 1–5, média ≥ 4,0), com provider real, validadas por `node tools/phase5-acceptance/real-demands/validate.mjs --file <resultados.json>`. A parte de engenharia (variações editáveis, custo antes da aprovação) tem testes em modo Replay: `autonomy_variants.rs`, `autonomy_budget.rs`, `autonomy_service.rs`.
+- [x] Nenhuma escrita na timeline antes de plano validado (verificado por auditoria de Runs). *(`autonomy_properties.rs::random_walks_over_the_state_machine_never_break_the_write_gates`, `autonomy_scenarios.rs::plan_approval_gates_every_write_and_reject_change_and_approve_all_work`, `autonomy_security.rs::preview_apply_integrity_…`)*
+- [x] Run interrompido (kill) retoma do último stage sem duplicar edições. *(`autonomy_crash.rs`, `autonomy_crash_acquire.rs`, `autonomy_kill.rs` — SIGKILL real + retomada em outro processo)*
+- [x] Memória: nenhuma promoção a Client/User sem aprovação (teste automatizado). *(`autonomy_memory.rs`, `autonomy_properties.rs::random_memory_operations_never_activate_user_or_client_without_a_human`)*
+- [x] Adapter do Gateway desligado → app funciona, erro claro, fallback quando configurado. *(`autonomy_scenarios.rs::a_disabled_gateway_never_breaks_the_app_and_optional_needs_fall_back_by_replanning`, `autonomy_service.rs`)*
+
+Escopo entregue (engenharia): AI Run persistente/retomável (schema 5), livros de efeitos e orçamento, Producer/Planner/Critic sem tools, Editor determinístico, loop REVIEW→CORRECT limitado, checkpoints humanos, Memory (4 escopos), Asset Gateway (LocalLibrary/ApprovedUrl/ReplayCatalog) com `SafeFetcher`, geração opt-in com proveniência, variantes (`ai.run.variants`), undo seletivo por ator e UI Runs/Memory/Sources. **Ainda externo:** providers/chaves reais, fontes reais de stock e avaliação humana. Critério "CI verde" não é marcado aqui.
 
 ---
 

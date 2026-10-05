@@ -1,8 +1,49 @@
 # STATUS
 
-**Última atualização:** 2026-10-05 · **Fase atual:** FASE 4 — Inteligência · **Estado: `PHASE 4 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase4-intelligence`; evidência de CI na seção "Fase 4"). Fase 3 permanece `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING` (3 usuários reais, residual de GPU/P2 e decisão jurídica de H.264 continuam **pendentes e não marcados**). **Fase 5 NÃO iniciada.**
+**Última atualização:** 2026-10-05 · **Fase atual:** FASE 5 — Autonomia · **Estado: `PHASE 5 ENGINEERING IN INTEGRATION`** (branch `claude/phase5-autonomy`; rótulo final decidido pelo agente principal; seção "Fase 5" abaixo). Fase 4 permanece `PHASE 4 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING` e Fase 3 `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING` (pendências **não marcadas**). **Fase 6 NÃO iniciada.**
 
 > **Fase 3 (engenharia):** editor manual utilizável de ponta a ponta — shell + design system, `ui-timeline` em canvas virtualizado, projeto/sequences/nested, biblioteca com arrastar-e-soltar, edição manual completa, inspector + keyframes, texto/legendas/transições/áudio, preview P2, histórico, relink, export + deliverables, atalhos, pt-BR/en — tudo por **comandos do Command Engine**. Branch `claude/phase3-editor` (sem PR: não solicitado). **Pendências inevitáveis (humanas/hardware):** (1) teste com ≥ 3 usuários reais (`tools/phase3-acceptance/`); (2) residual de CPU/pacing do P2 em GPU real (`tools/phase3-acceptance/gpu-residual.ps1`); (3) decisão de produto/jurídica de `OUTPUT-H264` (patentes, OpenH264, qualidade de produção) — a **engenharia** do caminho H.264 está integrada e testada no CI Windows.
+
+## Fase 5 — Autonomia: o que existe
+
+> Especificações: `docs/phase5/` · decisões: ADR-087..099 · pacote de aceitação: `tools/phase5-acceptance/`. **CI no HEAD final: a preencher** (o agente principal registra aqui o run/commit verde; nada nesta seção afirma CI verde).
+
+| Área | Estado (engenharia) | Evidência (arquivos de teste) |
+|---|---|---|
+| Schema 5 / `AutonomyStore` | `ai_runs`, `ai_run_stages`, `ai_run_events`, `ai_side_effects`, `ai_provenance`, `ai_memory`, `ai_memory_log`, `ai_budget_ledger`; migração aditiva de projetos v4 | `capia-store/tests/autonomy_store.rs` |
+| AI Run (máquina de estados) | `UNDERSTAND→PLAN→VALIDATE_PLAN→ACQUIRE→EDIT→REVIEW→CORRECT→DONE` + `WAITING_USER/PAUSED/FAILED/CANCELLED`; tabela de transição fechada; cursor atômico (CAS por `revision`); `recover()` → `Running→Paused`, nunca auto-resume; ator `run:<id>` | `autonomy_run.rs`, `autonomy_scenarios.rs`, `autonomy_properties.rs`, unitários `autonomy::machine` |
+| Idempotência e orçamento | livro de efeitos (`llm:/gw:/imp:/gen:`, primeira tentativa vence) e livro de orçamento (reserva/liquidação/liberação, atômico) | `autonomy_store.rs`, `autonomy_budget.rs`, `autonomy_properties.rs` |
+| Producer / Planner / Editor / Critic | papéis de LLM sem tools (`untrusted_data`); Editor = compilador determinístico `EditPlan → comandos`; escrita só por `preview → apply_plan` após plano validado; Critic determinístico + semântico; REVIEW→CORRECT limitado com vocabulário fechado | `autonomy_scenarios.rs`, `autonomy_security.rs`, unitários `autonomy::{plan,critic,roles}` |
+| Memória (4 escopos) | System/User/Client/Project; promoção só por `UserApproval`; precedência Project>Client>User>System; Client exige `client_id`; rejeitado não ressuscita | `autonomy_memory.rs`, `autonomy_properties.rs`, `AiRunsPanel.test.tsx` |
+| Asset Gateway + geração | adapters `LocalLibrary`/`ApprovedUrl`/`ReplayCatalog`; `SafeFetcher` (única rede além dos providers); veredito de licença; proveniência; mídia em `<projeto>-media/ai/` (durável); geração opt-in (desligada por padrão), com aprovação + orçamento e job consultado antes de novo submit | `capia-ai/tests/fetch.rs`, `autonomy_scenarios.rs`, `autonomy_crash_acquire.rs`, `autonomy_service.rs` |
+| Undo seletivo | `selective_undo_report/selective_undo` (nova entrada; modos `safe`/`partial`; conflitos por entidade **e** por dependência); `history.undo_report`/`history.undo_selective` por `entries` ou `actor_id` | `capia-commands/tests/selective_undo.rs`, `autonomy_variants.rs` |
+| Variantes | `ai.run.variants` (Runs filhas em grupo; `hook_plus_master`/`shared_master`/`format_variant`; sequences distintas e editáveis) | `autonomy_variants.rs` |
+| Crash/kill | failpoints (feature `failpoints`, só testes) em processo + SIGKILL real com retomada em outro processo | `autonomy_crash.rs`, `autonomy_crash_acquire.rs`, `autonomy_kill.rs` |
+| Serviço `ai.*` | `ai.run.*`, `ai.memory.*`, `ai.gateway.*`, `ai.generation.set_enabled`; AI Off recusa Runs e o editor segue | `autonomy_service.rs` |
+| UI | painéis Runs/Memory/Sources, só por `aiController.ts`; undo de Run por `controller.undoRun`; geração/fontes desligadas por padrão | `AiRunsPanel.test.tsx`, `aiController.test.ts`, `architecture.test.ts`, `packages/e2e/tests/autonomy.spec.ts` |
+| Pacote de aceitação | `tools/phase5-acceptance/` (`autonomy`, `crash-resume`, `security`, `gateway`, `memory`, `real-demands`, `run-all.mjs`) | `real-demands/validate.test.mjs` |
+
+### Critérios de saída (ROADMAP Fase 5) — evidência
+| Critério | Resultado |
+|---|---|
+| ≥ 10 demandas reais, variações 100 % editáveis, custo antes, média humana ≥ "utilizável com ajustes leves" | **PENDENTE EXTERNO.** A engenharia (custo estimado antes da aprovação, variações editáveis) tem testes em Replay; a avaliação humana **não foi executada** |
+| Nenhuma escrita antes de plano validado | testes: `autonomy_properties.rs::random_walks_over_the_state_machine_never_break_the_write_gates`, `autonomy_scenarios.rs::plan_approval_gates_every_write_…` |
+| Run interrompida (kill) retoma sem duplicar | testes: `autonomy_kill.rs`, `autonomy_crash.rs`, `autonomy_crash_acquire.rs` |
+| Nenhuma promoção a Client/User sem aprovação | testes: `autonomy_memory.rs`, `autonomy_properties.rs::random_memory_operations_…` |
+| Adapter do Gateway desligado → app funciona, erro claro, fallback | teste: `autonomy_scenarios.rs::a_disabled_gateway_never_breaks_the_app_…` |
+
+### Pendências (exatas) para `PHASE 5 COMPLETE`
+1. **≥ 10 demandas reais avaliadas por um humano**, média ≥ 4,0, validadas por `node tools/phase5-acceptance/real-demands/validate.mjs --file <resultados.json>` (sem arquivo: `pending_external`).
+2. **Providers e chaves reais** (Brain real, provider de geração real, fontes reais do Gateway): nenhum teste da Fase 5 usa rede externa; qualidade/custo/latência reais **não medidos**.
+3. Checagem humana no desktop **Windows real** do fluxo Run → aprovação → timeline → undo seletivo, se exigida pelo PO (E2E usa devserver + Replay).
+4. **CI no HEAD final: a preencher.**
+5. Pendências da Fase 4 (LLM real no DemandSpec, corpus real de cenas, STT real) e da Fase 3 (3 usuários, residual de GPU/P2, decisão jurídica de H.264) **continuam abertas**.
+
+### Limitações conhecidas (Fase 5)
+- Fontes do Gateway são locais/URL aprovada/catálogo Replay; não há marketplace de stock real integrado.
+- `service/demo.rs` (feature `testkit`) é só dev/E2E; o produto sem provider configurado falha com erro claro.
+- Fase 6 (REST/MCP/Webhooks, instalador) **não iniciada**.
+
 
 ## Fase 4 — Inteligência (IA assistida): o que existe
 

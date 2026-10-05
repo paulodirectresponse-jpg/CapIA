@@ -196,3 +196,11 @@ Novos comandos (todos com `operation_id`, validados e invertíveis): `set_text`,
 ## Fase 4 — entradas de IA no Command Engine
 
 `Session::agent_preview(actor, label, commands)` e `Session::agent_apply(actor, token)` (só Rust) são as **únicas** portas de escrita da IA: `Actor::Agent` recebe `PREVIEW_REQUIRED` em `execute`. O token HMAC fica preso ao ator; o apply refaz o plano sobre o estado atual e falha com `PLAN_STATE_CHANGED` se o diff mudou. `operation_id` derivado de tarefa+passo+índice ⇒ retry após commit é idempotente (`replayed`). Lista fechada de comandos permitidos ao assistente: ADR-081.
+
+## Fase 5 — atores de Run e undo seletivo (ADR-090, ADR-095)
+
+- **Ator de Run:** cada AI Run escreve como `Actor::agent("run:<id>")`; o token de `preview → apply_plan` fica preso a esse ator e ao digest do plano. `operation_id`s da IA são derivados (`<run>:<ns>:<chave>:…`) — nunca escolhidos pelo modelo; reenvio é idempotente.
+- **Undo seletivo** (`Engine::selective_undo_report` / `selective_undo`): desfaz entradas **escolhidas** (por ids ou por `actor_id`, ex. `run:<id>`) aplicando as `inverse_ops` como **nova entrada** de histórico (autor = quem pediu; ela mesma desfazível; histórico nunca reescrito). **Conflito** = entrada posterior não selecionada que (a) toca as mesmas entidades ou (b) perderia entidades por dependência (a inversa deixa de aplicar limpa, ou removeria sequence/track/clip usada por entrada posterior, ex.: faixa manual dentro de sequence criada pela IA). Modos: `Safe` (tudo ou nada → `CONFLICT`) e `Partial` (pula as entradas em conflito; só prossegue se o resultado for válido). Só ator humano pode pedir: `Agent`/`Api` recebem `PREVIEW_REQUIRED`. Edição manual incompatível nunca é sobrescrita em silêncio.
+- **Engine API:** `history.undo_report` (somente leitura: `entries` + `conflicts` com `blocked_by`, ator e entidades) e `history.undo_selective` (`entries` **ou** `actor_id`, exatamente um; `mode`; `label`). UI: `controller.undoRun(runId, "safe"|"partial")` e `undoRunReport`.
+- **Import do Gateway:** `EditorApi::agent_import_begin/poll/cancel` são só Rust (não existem em `call`/`begin`).
+- Testes: `capia-commands/tests/selective_undo.rs`, `capia-intelligence/tests/autonomy_variants.rs`.
