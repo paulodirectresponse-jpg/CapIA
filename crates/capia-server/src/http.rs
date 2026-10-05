@@ -273,7 +273,11 @@ pub fn read_request(r: &mut Reader) -> Result<Option<Request>, HeadError> {
         {
             return Err(he(400, "BAD_REQUEST", "malformed header name"));
         }
-        headers.push((k.to_ascii_lowercase(), v.trim().to_owned()));
+        // OWS do HTTP é só espaço/TAB (nada de NBSP/Unicode)
+        headers.push((
+            k.to_ascii_lowercase(),
+            v.trim_matches([' ', '\t']).to_owned(),
+        ));
     }
     let count = |n: &str| headers.iter().filter(|(k, _)| k == n).count();
     if headers.iter().any(|(k, _)| k == "transfer-encoding") {
@@ -283,11 +287,12 @@ pub fn read_request(r: &mut Reader) -> Result<Option<Request>, HeadError> {
             "Transfer-Encoding is not supported: send Content-Length",
         ));
     }
-    if count("content-length") > 1 || count("host") > 1 {
+    // `Authorization` duplicado é ambíguo (qual vale?): recusado, como Content-Length/Host
+    if count("content-length") > 1 || count("host") > 1 || count("authorization") > 1 {
         return Err(he(
             400,
             "BAD_REQUEST",
-            "duplicate Content-Length/Host header",
+            "duplicate Content-Length/Host/Authorization header",
         ));
     }
     let content_length = match headers.iter().find(|(k, _)| k == "content-length") {

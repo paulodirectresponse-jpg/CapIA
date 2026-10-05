@@ -536,7 +536,10 @@ fn handle(
 fn bearer(req: &Request) -> Option<&str> {
     let h = req.header("authorization")?;
     let (scheme, tok) = h.split_once(' ')?;
-    scheme.eq_ignore_ascii_case("bearer").then_some(tok.trim())
+    // só espaço ASCII é aparado: NBSP/Unicode ao redor do segredo não é "o mesmo token"
+    scheme
+        .eq_ignore_ascii_case("bearer")
+        .then_some(tok.trim_matches([' ', '\t']))
 }
 
 fn upload(
