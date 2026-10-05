@@ -34,7 +34,7 @@ getrandom.workspace = true
 sha2 = "0.10"
 base64 = "0.22"
 jsonschema = { version = "0.30", default-features = false }
-tokio = { version = "1", default-features = false, features = ["rt", "time"] }
+tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread", "time", "net"] }
 
 [dev-dependencies]
 capia-server = { path = ".", features = ["testkit"] }
