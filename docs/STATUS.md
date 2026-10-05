@@ -42,6 +42,9 @@
 ### Limitações conhecidas (Fase 5)
 - Fontes do Gateway são locais/URL aprovada/catálogo Replay; não há marketplace de stock real integrado.
 - `service/demo.rs` (feature `testkit`) é só dev/E2E; o produto sem provider configurado falha com erro claro.
+- **Critic sem visão:** o Critic usa checagens determinísticas + digest da timeline + transcrição (via LLM de texto); **amostragem de quadros para modelo de visão não foi implementada** (a especificação original cita `render.frame`; fica como evolução, não como critério de saída automatizável).
+- O E2E `autonomy.spec.ts` roda no devserver (Linux) com o cérebro demo; **no alvo Windows/Tauri ele é pulado** (o app real nunca carrega o cérebro de demonstração). A cobertura Windows da Fase 5 é: suíte Rust completa (inclui crash/kill real e propriedades) no job Windows + E2E de editor existente.
+- Correções encontradas pelos próprios testes da fase (registradas por honestidade): mídia adquirida ficava só no cache descartável (agora `<projeto>-media/ai/`); gramática de referência e transcrições não chegavam ao Planner/Critic (busca por sujeito do registro); undo seletivo não reportava perda por dependência.
 - Fase 6 (REST/MCP/Webhooks, instalador) **não iniciada**.
 
 
