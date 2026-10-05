@@ -510,11 +510,7 @@ impl Orchestrator {
         self.reset_flags(&run_id);
         let flags = self.flags_for(&run_id);
         let started = Instant::now();
-        loop {
-            let run = match self.load(&run_id) {
-                Ok(r) => r,
-                Err(_) => break,
-            };
+        while let Ok(run) = self.load(&run_id) {
             if matches!(run.status, RunStatus::Pending) {
                 let mut r = run;
                 r.status = RunStatus::Running;

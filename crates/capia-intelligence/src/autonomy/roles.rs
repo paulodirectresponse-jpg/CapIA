@@ -271,6 +271,7 @@ pub async fn run_producer(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_planner(
     ctx: &IntelCtx,
     task: &TaskCtx,
@@ -539,6 +540,7 @@ pub async fn run_semantic_critic(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::*;
 
     #[test]

@@ -45,6 +45,7 @@ pub fn user_of(req: &ChatRequest) -> String {
 }
 
 /// Roteiro do "modelo". Cada campo é uma função do estado do teste.
+#[allow(clippy::type_complexity)]
 pub struct Script {
     pub demand: Box<dyn Fn() -> Value + Send + Sync>,
     pub producer: Box<dyn Fn() -> Value + Send + Sync>,

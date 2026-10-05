@@ -83,6 +83,7 @@ fn brief_facts(s: &DemandSpec, run: &AiRun) -> BriefFacts {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn pending(
     run: &AiRun,
     id: String,
@@ -880,7 +881,7 @@ impl Orchestrator {
         if plan_gate && !Self::approved(run, DecisionKind::PlanApproval, &plan_digest) {
             let d = pending(
                 run,
-                format!("dec-{}-plan-{}", run.id, &short(&plan_digest)),
+                format!("dec-{}-plan-{}", run.id, short(&plan_digest)),
                 DecisionKind::PlanApproval,
                 "Approve this production and edit plan before anything is written?",
                 vec![
@@ -899,7 +900,7 @@ impl Orchestrator {
         if spend_gate && !Self::approved(run, DecisionKind::SpendApproval, &plan_digest) {
             let d = pending(
                 run,
-                format!("dec-{}-spend-{}", run.id, &short(&plan_digest)),
+                format!("dec-{}-spend-{}", run.id, short(&plan_digest)),
                 DecisionKind::SpendApproval,
                 "The estimated spend is above the approval threshold. Approve it?",
                 vec![
@@ -1308,10 +1309,10 @@ impl Orchestrator {
         let (state, prior) = match claim {
             Claim::New(_) => ("intent".to_owned(), Value::Null),
             Claim::Existing(e) => {
-                if e.state == "done" {
-                    if let Some(a) = e.external_id {
-                        return Ok(NeedResult::Resolved(a));
-                    }
+                if e.state == "done"
+                    && let Some(a) = e.external_id
+                {
+                    return Ok(NeedResult::Resolved(a));
                 }
                 if e.state == "failed" {
                     let _ = self.store.ledger_release(&run.id, &ekey, now_ms());
@@ -1634,10 +1635,10 @@ impl Orchestrator {
         let (state, job_prior) = match claim {
             Claim::New(_) => ("intent".to_owned(), None),
             Claim::Existing(e) => {
-                if e.state == "done" {
-                    if let Some(a) = e.external_id {
-                        return Ok(NeedResult::Resolved(a));
-                    }
+                if e.state == "done"
+                    && let Some(a) = e.external_id
+                {
+                    return Ok(NeedResult::Resolved(a));
                 }
                 if e.state == "failed" {
                     let _ = self.store.ledger_release(&run.id, &key, now_ms());

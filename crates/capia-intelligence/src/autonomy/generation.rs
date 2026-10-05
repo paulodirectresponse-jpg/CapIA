@@ -367,6 +367,7 @@ pub fn idempotency_key(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::*;
 
     fn req(key: &str) -> GenRequest {

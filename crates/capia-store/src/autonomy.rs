@@ -8,6 +8,7 @@
 //! * `claim_effect` é atômico (`INSERT OR IGNORE`): duas tentativas do mesmo efeito (resume,
 //!   retry, callback duplicado) enxergam **o mesmo** registro — só a primeira executa;
 //! * nenhum segredo: valores registrados no `capia-secrets` são redigidos antes de gravar.
+//!
 //! Nada aqui é documento nem undo.
 
 use crate::error::{StoreError, StoreErrorCode, StoreResult};
@@ -366,6 +367,7 @@ impl AutonomyStore {
 
     // ---- runs ---------------------------------------------------------------------------------
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_run(
         &self,
         run_id: &str,
