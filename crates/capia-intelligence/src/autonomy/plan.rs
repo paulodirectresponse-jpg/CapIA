@@ -393,7 +393,9 @@ impl Inventory {
                     id: id.to_owned(),
                     name: a["name"].as_str().unwrap_or("").to_owned(),
                     duration_ticks: a["duration"].as_i64(),
-                    has_video: a["has_video"].as_bool().unwrap_or(kind == "video" || kind == "image"),
+                    has_video: a["has_video"]
+                        .as_bool()
+                        .unwrap_or(kind == "video" || kind == "image"),
                     has_audio: a["has_audio"].as_bool().unwrap_or(kind == "audio"),
                     online: status == "online",
                     is_image: kind == "image",
@@ -535,7 +537,13 @@ fn clip_text(s: &str, max: usize) -> String {
 fn slug(s: &str) -> String {
     let mut out: String = s
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .take(40)
         .collect();
     if out.is_empty() {
@@ -622,6 +630,10 @@ pub fn validate_production_plan(p: &ProductionPlan) -> Result<(), PlanError> {
     }
     for d in &p.deliverables {
         for r in d.master.iter().chain(d.variant_of.iter()) {
+            // master pode ser uma sequence JÁ existente (`seq:<id>`), p.ex. o master de uma Run anterior
+            if r.starts_with("seq:") && d.master.as_ref() == Some(r) {
+                continue;
+            }
             if !keys.contains(r) || r == &d.key {
                 return Err(PlanError::new(
                     "PLAN_BAD_REFERENCE",
@@ -647,7 +659,10 @@ pub fn validate_production_plan(p: &ProductionPlan) -> Result<(), PlanError> {
         while let Some(m) = cur {
             hops += 1;
             if m == d.key || hops > p.deliverables.len() {
-                return Err(PlanError::new("PLAN_MASTER_CYCLE", "master references form a cycle"));
+                return Err(PlanError::new(
+                    "PLAN_MASTER_CYCLE",
+                    "master references form a cycle",
+                ));
             }
             cur = p.deliverable(&m).and_then(|x| x.master.clone());
         }
@@ -738,7 +753,10 @@ pub fn edit_plan_from(
 /// Validação **estrutural** (sem inventário): ids, durações, formato, limites.
 pub fn validate_edit_plan_shape(p: &EditPlan) -> Result<(), PlanError> {
     if !matches!(p.format.fps, 24 | 25 | 30 | 60) {
-        return Err(PlanError::new("PLAN_FORMAT", "fps must be 24, 25, 30 or 60"));
+        return Err(PlanError::new(
+            "PLAN_FORMAT",
+            "fps must be 24, 25, 30 or 60",
+        ));
     }
     if !(16..=7680).contains(&p.format.width) || !(16..=7680).contains(&p.format.height) {
         return Err(PlanError::new("PLAN_FORMAT", "frame size out of range"));
@@ -817,7 +835,10 @@ pub fn validate_edit_plan_shape(p: &EditPlan) -> Result<(), PlanError> {
         }
     }
     if p.beats.iter().all(|b| b.layer != Layer::Main) {
-        return Err(PlanError::new("PLAN_BEATS", "the plan needs at least one main beat"));
+        return Err(PlanError::new(
+            "PLAN_BEATS",
+            "the plan needs at least one main beat",
+        ));
     }
     Ok(())
 }
@@ -945,7 +966,9 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
         .unwrap_or_else(|| sequence_id_for(env.run_id, &p.deliverable_key));
     let create = p.target_sequence.is_none();
     let fps = p.format.fps;
-    let op = |kind: &str, i: usize| format!("{}:{}:{}:{kind}:{i}", env.run_id, env.ns, p.deliverable_key);
+    let op = |kind: &str, i: usize| {
+        format!("{}:{}:{}:{kind}:{i}", env.run_id, env.ns, p.deliverable_key)
+    };
     let mut cmds: Vec<Value> = Vec::new();
     let mut n = 0usize;
     let mut push = |cmds: &mut Vec<Value>, kind: &str, v: Value| {
@@ -964,16 +987,20 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
         );
     }
     let mut tracks_made: BTreeSet<&str> = BTreeSet::new();
-    let mut ensure_track =
-        |cmds: &mut Vec<Value>, push: &mut dyn FnMut(&mut Vec<Value>, &str, Value), name: &'static str, kind: &str, role: &str, label: &str| {
-            if create && tracks_made.insert(name) {
-                push(
-                    cmds,
-                    "track",
-                    json!({"type": "add_track", "sequence": sid, "id": tid(name), "kind": kind, "role": role, "name": label}),
-                );
-            }
-        };
+    let mut ensure_track = |cmds: &mut Vec<Value>,
+                            push: &mut dyn FnMut(&mut Vec<Value>, &str, Value),
+                            name: &'static str,
+                            kind: &str,
+                            role: &str,
+                            label: &str| {
+        if create && tracks_made.insert(name) {
+            push(
+                cmds,
+                "track",
+                json!({"type": "add_track", "sequence": sid, "id": tid(name), "kind": kind, "role": role, "name": label}),
+            );
+        }
+    };
     let mut unresolved = Vec::new();
     let mut clip_count = 0usize;
     let mut cursor_ms: i64 = 0;
@@ -1011,7 +1038,12 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
                         let (hv, ha) = info.map_or((true, true), |i| (i.has_video, i.has_audio));
                         let image = info.is_some_and(|i| i.is_image);
                         if image {
-                            (json!({"type": "image", "asset": id}), false, false, b.role.clone())
+                            (
+                                json!({"type": "image", "asset": id}),
+                                false,
+                                false,
+                                b.role.clone(),
+                            )
                         } else if !hv && ha {
                             (
                                 json!({"type": "media", "asset": id, "has_video": false, "has_audio": true}),
@@ -1056,11 +1088,12 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
             .asset
             .as_ref()
             .map_or(0, |a| align_start(a.source_in_ms, fps));
-        let source_in = if is_placeholder || matches!(content["type"].as_str(), Some("solid" | "image")) {
-            0
-        } else {
-            source_in
-        };
+        let source_in =
+            if is_placeholder || matches!(content["type"].as_str(), Some("solid" | "image")) {
+                0
+            } else {
+                source_in
+            };
         pushf(
             &mut cmds,
             "clip",
@@ -1116,7 +1149,9 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
             );
         }
         for c in &b.captions {
-            ensure_track(&mut cmds, &mut pushf, "CP", "visual", "captions", "Captions");
+            ensure_track(
+                &mut cmds, &mut pushf, "CP", "visual", "captions", "Captions",
+            );
             let id = format!("{}_{}", tid("k"), text_clip_idx);
             text_clip_idx += 1;
             pushf(
@@ -1201,11 +1236,18 @@ pub fn compile_production(
         let mut c = compile_edit_plan(env, ep)?;
         let master = d.and_then(|d| d.master.clone());
         if let Some(mk) = &master {
-            let Some(m) = compiled.get(mk) else {
+            let existing = mk.strip_prefix("seq:");
+            let compiled_master = compiled.get(mk);
+            if existing.is_none() && compiled_master.is_none() {
                 return Err(PlanError::new(
                     "PLAN_MASTER_ORDER",
                     format!("master `{mk}` must be compiled before `{key}`"),
                 ));
+            }
+            let (m_seq, m_dur) = match (existing, compiled_master) {
+                (Some(id), _) => (id.to_owned(), 0),
+                (None, Some(m)) => (m.sequence_id.clone(), m.duration_ticks),
+                (None, None) => unreachable!("checked above"),
             };
             let fps = ep.format.fps;
             let hook_end = c.duration_ticks;
@@ -1218,11 +1260,11 @@ pub fn compile_production(
             c.commands.push(json!({
                 "operation_id": format!("{}:{}:{}:master:{}", env.run_id, env.ns, key, n + 1),
                 "type": "insert_nested", "track": track, "start": hook_end.div_euclid(frame_ticks(fps)) * frame_ticks(fps),
-                "sequence": m.sequence_id, "id": format!("{}_master", c.sequence_id),
+                "sequence": m_seq, "id": format!("{}_master", c.sequence_id),
                 "name": format!("master:{mk}"), "follow_length": true
             }));
             c.clip_count += 1;
-            c.duration_ticks += m.duration_ticks;
+            c.duration_ticks += m_dur;
         }
         compiled.insert(key.clone(), c.clone());
         // mesma transação do master quando houver
@@ -1231,7 +1273,9 @@ pub fn compile_production(
                 units[i].deliverables.push(key.clone());
                 units[i].commands.extend(c.commands.clone());
                 units[i].unresolved.extend(c.unresolved.clone());
-                units[i].sequences.push((key.clone(), c.sequence_id.clone()));
+                units[i]
+                    .sequences
+                    .push((key.clone(), c.sequence_id.clone()));
             }
             None => units.push(TxUnit {
                 deliverables: vec![key.clone()],
@@ -1388,15 +1432,28 @@ mod tests {
     fn compile_is_deterministic_and_marks_placeholders() {
         let inv = inv();
         let res = BTreeMap::new();
-        let env = CompileEnv { run_id: "run-1", ns: "p1", inventory: &inv, resolutions: &res };
+        let env = CompileEnv {
+            run_id: "run-1",
+            ns: "p1",
+            inventory: &inv,
+            resolutions: &res,
+        };
         let ep = edit(beats());
         let a = compile_edit_plan(&env, &ep).unwrap();
         let b = compile_edit_plan(&env, &ep).unwrap();
         assert_eq!(a.commands, b.commands);
         assert_eq!(a.unresolved, vec!["broll1".to_owned()]);
-        assert!(a.commands.iter().any(|c| c["clip"]["name"] == "PLACEHOLDER:broll1"));
+        assert!(
+            a.commands
+                .iter()
+                .any(|c| c["clip"]["name"] == "PLACEHOLDER:broll1")
+        );
         // todos os operation_ids são únicos e prefixados pela Run/namespace
-        let ids: BTreeSet<_> = a.commands.iter().map(|c| c["operation_id"].as_str().unwrap().to_owned()).collect();
+        let ids: BTreeSet<_> = a
+            .commands
+            .iter()
+            .map(|c| c["operation_id"].as_str().unwrap().to_owned())
+            .collect();
         assert_eq!(ids.len(), a.commands.len());
         assert!(ids.iter().all(|i| i.starts_with("run-1:p1:main:")));
         assert_eq!(a.duration_ticks, 10_000 * TICKS_PER_MS);
@@ -1407,25 +1464,52 @@ mod tests {
         let mut inv = inv();
         inv.assets.insert(
             "stock".into(),
-            AssetInfo { id: "stock".into(), name: "s".into(), duration_ticks: Some(20_000 * TICKS_PER_MS),
-                        has_video: true, has_audio: true, online: true, is_image: false },
+            AssetInfo {
+                id: "stock".into(),
+                name: "s".into(),
+                duration_ticks: Some(20_000 * TICKS_PER_MS),
+                has_video: true,
+                has_audio: true,
+                online: true,
+                is_image: false,
+            },
         );
         let mut res = BTreeMap::new();
         res.insert("broll1".to_owned(), "stock".to_owned());
-        let env = CompileEnv { run_id: "run-1", ns: "p2", inventory: &inv, resolutions: &res };
+        let env = CompileEnv {
+            run_id: "run-1",
+            ns: "p2",
+            inventory: &inv,
+            resolutions: &res,
+        };
         let c = compile_edit_plan(&env, &edit(beats())).unwrap();
         assert!(c.unresolved.is_empty());
-        let clip = c.commands.iter().find(|c| c["clip"]["id"].as_str().is_some_and(|i| i.ends_with("_body"))).unwrap();
+        let clip = c
+            .commands
+            .iter()
+            .find(|c| {
+                c["clip"]["id"]
+                    .as_str()
+                    .is_some_and(|i| i.ends_with("_body"))
+            })
+            .unwrap();
         assert_eq!(clip["clip"]["content"]["asset"], "stock");
         // namespace novo ⇒ operation ids novos (nova versão do plano)
-        assert!(c.commands[0]["operation_id"].as_str().unwrap().contains(":p2:"));
+        assert!(
+            c.commands[0]["operation_id"]
+                .as_str()
+                .unwrap()
+                .contains(":p2:")
+        );
     }
 
     #[test]
     fn semantic_validation_catches_unknown_offline_and_out_of_range() {
         let mut i = inv();
-        let ep = edit(json!([{"id": "a", "role": "hook", "duration_ms": 3000, "asset": {"asset_id": "ghost", "source_in_ms": 0}},
-                              {"id": "b", "role": "body", "duration_ms": 5000, "asset": {"asset_id": "raw", "source_in_ms": 58000}}]));
+        let ep = edit(
+            json!([{"id": "a", "role": "hook", "duration_ms": 3000, "asset": {"asset_id": "ghost", "source_in_ms": 0}},
+                              {"id": "b", "role": "body", "duration_ms": 5000, "asset": {"asset_id": "raw", "source_in_ms": 58000}}]),
+        );
         let errs = validate_edit_plan_semantics(&ep, &i, &[]);
         let codes: Vec<_> = errs.iter().map(|e| e.code).collect();
         assert!(codes.contains(&"PLAN_ASSET_UNKNOWN"), "{codes:?}");
@@ -1448,11 +1532,24 @@ mod tests {
         for b in bad {
             assert!(edit_plan_from(&b, "e".into(), 1, "m").is_err(), "{b}");
         }
-        assert!(production_plan_from(&json!({"strategy": "s", "deliverables": [], "asset_needs": []}), "p".into(), 1, None).is_err());
+        assert!(
+            production_plan_from(
+                &json!({"strategy": "s", "deliverables": [], "asset_needs": []}),
+                "p".into(),
+                1,
+                None
+            )
+            .is_err()
+        );
         let cyc = json!({"strategy": "s", "asset_needs": [], "deliverables": [
             {"key": "a", "sequence_strategy": "shared_master", "master": "b"},
             {"key": "b", "sequence_strategy": "shared_master", "master": "a"}]});
-        assert_eq!(production_plan_from(&cyc, "p".into(), 1, None).unwrap_err().code, "PLAN_MASTER_CYCLE");
+        assert_eq!(
+            production_plan_from(&cyc, "p".into(), 1, None)
+                .unwrap_err()
+                .code,
+            "PLAN_MASTER_CYCLE"
+        );
     }
 
     #[test]
@@ -1474,12 +1571,25 @@ mod tests {
                 id.into(), 1, k,
             ).unwrap()
         };
-        let edits = vec![mk("hook_a", "e2"), mk("body_master", "e1"), mk("hook_b", "e3")];
-        let env = CompileEnv { run_id: "run-1", ns: "p1", inventory: &inv, resolutions: &res };
+        let edits = vec![
+            mk("hook_a", "e2"),
+            mk("body_master", "e1"),
+            mk("hook_b", "e3"),
+        ];
+        let env = CompileEnv {
+            run_id: "run-1",
+            ns: "p1",
+            inventory: &inv,
+            resolutions: &res,
+        };
         let units = compile_production(&env, &pp, &edits).unwrap();
         assert_eq!(units.len(), 1, "shared master ⇒ one atomic transaction");
         assert_eq!(units[0].deliverables.len(), 3);
-        let nested: Vec<_> = units[0].commands.iter().filter(|c| c["type"] == "insert_nested").collect();
+        let nested: Vec<_> = units[0]
+            .commands
+            .iter()
+            .filter(|c| c["type"] == "insert_nested")
+            .collect();
         assert_eq!(nested.len(), 2);
         assert!(nested.iter().all(|c| c["follow_length"] == true));
         let master_seq = sequence_id_for("run-1", "body_master");
@@ -1498,11 +1608,18 @@ mod tests {
                 {"key": "a", "sequence_strategy": "standalone"}, {"key": "b", "sequence_strategy": "format_variant", "variant_of": "a"}]}),
             "pp".into(), 1, None,
         ).unwrap();
-        let mk = |k: &str| edit_plan_from(
+        let mk = |k: &str| {
+            edit_plan_from(
             &json!({"format": {"width": 1080, "height": 1920}, "estimated_duration_ms": 2000,
                     "beats": [{"id": "b1", "role": "x", "duration_ms": 2000, "asset": {"asset_id": "raw", "source_in_ms": 0}}]}),
-            format!("e_{k}"), 1, k).unwrap();
-        let env = CompileEnv { run_id: "r", ns: "p1", inventory: &inv, resolutions: &res };
+            format!("e_{k}"), 1, k).unwrap()
+        };
+        let env = CompileEnv {
+            run_id: "r",
+            ns: "p1",
+            inventory: &inv,
+            resolutions: &res,
+        };
         let units = compile_production(&env, &pp, &[mk("a"), mk("b")]).unwrap();
         assert_eq!(units.len(), 2);
         let missing = compile_production(&env, &pp, &[mk("a")]).unwrap_err();

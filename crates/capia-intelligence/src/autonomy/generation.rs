@@ -72,8 +72,14 @@ pub enum GenStatus {
     Pending,
     Running,
     /// Pronto: o provider escreveu o arquivo em `path` (staging).
-    Done { path: PathBuf, content_type: Option<String> },
-    Failed { message: String, retryable: bool },
+    Done {
+        path: PathBuf,
+        content_type: Option<String>,
+    },
+    Failed {
+        message: String,
+        retryable: bool,
+    },
 }
 
 #[async_trait]
@@ -86,7 +92,12 @@ pub trait GenerationProvider: Send + Sync {
     async fn lookup(&self, idempotency_key: &str) -> Result<Option<String>, GenError>;
     /// Submete (idempotente na própria chave quando o provider suportar). Devolve o `job_id`.
     async fn submit(&self, req: &GenRequest) -> Result<String, GenError>;
-    async fn poll(&self, job_id: &str, staging: &Path, cancel: &CancelToken) -> Result<GenStatus, GenError>;
+    async fn poll(
+        &self,
+        job_id: &str,
+        staging: &Path,
+        cancel: &CancelToken,
+    ) -> Result<GenStatus, GenError>;
     async fn cancel(&self, job_id: &str) -> Result<(), GenError>;
 }
 
@@ -96,28 +107,45 @@ impl core::fmt::Debug for dyn GenerationProvider {
     }
 }
 
-#[derive(Default)]
 pub struct GenerationRegistry {
-    providers: Vec<Arc<dyn GenerationProvider>>,
+    providers: Mutex<Vec<Arc<dyn GenerationProvider>>>,
     enabled: Mutex<bool>,
+}
+
+impl Default for GenerationRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl core::fmt::Debug for GenerationRegistry {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("GenerationRegistry")
-            .field("providers", &self.providers.iter().map(|p| p.id()).collect::<Vec<_>>())
+            .field(
+                "providers",
+                &self
+                    .providers
+                    .lock()
+                    .map(|v| v.iter().map(|p| p.id()).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+            )
             .finish_non_exhaustive()
     }
 }
 
 impl GenerationRegistry {
     pub fn new() -> Self {
-        Self { providers: Vec::new(), enabled: Mutex::new(true) }
+        Self {
+            providers: Mutex::new(Vec::new()),
+            enabled: Mutex::new(true),
+        }
     }
 
-    pub fn register(&mut self, p: Arc<dyn GenerationProvider>) {
-        self.providers.retain(|x| x.id() != p.id());
-        self.providers.push(p);
+    pub fn register(&self, p: Arc<dyn GenerationProvider>) {
+        if let Ok(mut v) = self.providers.lock() {
+            v.retain(|x| x.id() != p.id());
+            v.push(p);
+        }
     }
 
     pub fn set_enabled(&self, on: bool) {
@@ -135,15 +163,21 @@ impl GenerationRegistry {
         if !self.is_enabled() {
             return None;
         }
-        self.providers.iter().find(|p| p.kinds().contains(&k)).cloned()
+        self.providers
+            .lock()
+            .ok()
+            .and_then(|v| v.iter().find(|p| p.kinds().contains(&k)).cloned())
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn GenerationProvider>> {
-        self.providers.iter().find(|p| p.id() == id).cloned()
+        self.providers
+            .lock()
+            .ok()
+            .and_then(|v| v.iter().find(|p| p.id() == id).cloned())
     }
 
     pub fn available(&self) -> bool {
-        self.is_enabled() && !self.providers.is_empty()
+        self.is_enabled() && self.providers.lock().is_ok_and(|v| !v.is_empty())
     }
 }
 
@@ -171,7 +205,9 @@ struct JobState {
 
 impl core::fmt::Debug for ReplayGenerationProvider {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ReplayGenerationProvider").field("id", &self.id).finish_non_exhaustive()
+        f.debug_struct("ReplayGenerationProvider")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
     }
 }
 
@@ -232,11 +268,11 @@ impl GenerationProvider for ReplayGenerationProvider {
     }
 
     async fn lookup(&self, key: &str) -> Result<Option<String>, GenError> {
-        Ok(self
-            .jobs
-            .lock()
-            .ok()
-            .and_then(|j| j.iter().find(|(_, s)| s.key == key).map(|(id, _)| id.clone())))
+        Ok(self.jobs.lock().ok().and_then(|j| {
+            j.iter()
+                .find(|(_, s)| s.key == key)
+                .map(|(id, _)| id.clone())
+        }))
     }
 
     async fn submit(&self, req: &GenRequest) -> Result<String, GenError> {
@@ -250,22 +286,42 @@ impl GenerationProvider for ReplayGenerationProvider {
         let n = self.submits.fetch_add(1, Ordering::SeqCst) + 1;
         let job = format!("job-{}-{n}", self.id);
         if let Ok(mut j) = self.jobs.lock() {
-            j.insert(job.clone(), JobState { key: req.idempotency_key.clone(), polls_left: self.running_polls });
+            j.insert(
+                job.clone(),
+                JobState {
+                    key: req.idempotency_key.clone(),
+                    polls_left: self.running_polls,
+                },
+            );
         }
         Ok(job)
     }
 
-    async fn poll(&self, job_id: &str, staging: &Path, cancel: &CancelToken) -> Result<GenStatus, GenError> {
+    async fn poll(
+        &self,
+        job_id: &str,
+        staging: &Path,
+        cancel: &CancelToken,
+    ) -> Result<GenStatus, GenError> {
         self.polls.fetch_add(1, Ordering::SeqCst);
         if cancel.is_cancelled() {
             return Err(GenError::new("CANCELLED", "cancelled", false));
         }
         let left = {
-            let mut j = self.jobs.lock().map_err(|_| GenError::new("INTERNAL", "poisoned", false))?;
-            let s = j.get_mut(job_id).ok_or_else(|| GenError::new("NOT_FOUND", "unknown job", false))?;
+            let mut j = self
+                .jobs
+                .lock()
+                .map_err(|_| GenError::new("INTERNAL", "poisoned", false))?;
+            let s = j
+                .get_mut(job_id)
+                .ok_or_else(|| GenError::new("NOT_FOUND", "unknown job", false))?;
             if s.polls_left > 0 {
                 s.polls_left -= 1;
-                return Ok(if s.polls_left == 0 { GenStatus::Running } else { GenStatus::Pending });
+                return Ok(if s.polls_left == 0 {
+                    GenStatus::Running
+                } else {
+                    GenStatus::Pending
+                });
             }
             s.polls_left
         };
@@ -274,10 +330,17 @@ impl GenerationProvider for ReplayGenerationProvider {
             std::fs::create_dir_all(dir).map_err(|e| GenError::new("IO", e.to_string(), false))?;
         }
         let part = staging.with_extension("part");
-        let bytes: &[u8] = if self.invalid_output { &[] } else { &self.payload };
+        let bytes: &[u8] = if self.invalid_output {
+            &[]
+        } else {
+            &self.payload
+        };
         std::fs::write(&part, bytes).map_err(|e| GenError::new("IO", e.to_string(), false))?;
         std::fs::rename(&part, staging).map_err(|e| GenError::new("IO", e.to_string(), false))?;
-        Ok(GenStatus::Done { path: staging.to_path_buf(), content_type: Some("video/mp4".into()) })
+        Ok(GenStatus::Done {
+            path: staging.to_path_buf(),
+            content_type: Some("video/mp4".into()),
+        })
     }
 
     async fn cancel(&self, job_id: &str) -> Result<(), GenError> {
@@ -289,7 +352,13 @@ impl GenerationProvider for ReplayGenerationProvider {
 }
 
 /// Chave de idempotência determinística de um pedido de geração.
-pub fn idempotency_key(run_id: &str, need_id: &str, prompt: &str, model: &str, version: u32) -> String {
+pub fn idempotency_key(
+    run_id: &str,
+    need_id: &str,
+    prompt: &str,
+    model: &str,
+    version: u32,
+) -> String {
     format!(
         "gen:{run_id}:{need_id}:v{version}:{}",
         super::plan::digest_value(&serde_json::json!([prompt, model]))
@@ -318,7 +387,12 @@ mod tests {
 
     #[tokio::test]
     async fn the_same_key_never_creates_a_second_job() {
-        let p = ReplayGenerationProvider::new("g", vec![GenKind::Video], Some(500_000), b"video".to_vec());
+        let p = ReplayGenerationProvider::new(
+            "g",
+            vec![GenKind::Video],
+            Some(500_000),
+            b"video".to_vec(),
+        );
         let a = p.submit(&req("k1")).await.unwrap();
         let b = p.submit(&req("k1")).await.unwrap();
         assert_eq!(a, b);
@@ -334,7 +408,8 @@ mod tests {
     async fn polling_reaches_done_and_writes_a_staging_file() {
         let d = std::env::temp_dir().join(format!("capia-gen-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
-        let p = ReplayGenerationProvider::new("g", vec![GenKind::Video], None, b"video".to_vec()).with_running_polls(2);
+        let p = ReplayGenerationProvider::new("g", vec![GenKind::Video], None, b"video".to_vec())
+            .with_running_polls(2);
         let job = p.submit(&req("k")).await.unwrap();
         let cancel = CancelToken::new();
         let out = d.join("out.mp4");
@@ -348,16 +423,24 @@ mod tests {
             }
         }
         assert!(matches!(statuses.last(), Some(GenStatus::Done { .. })));
-        assert!(statuses.len() >= 3, "pending/running before done: {statuses:?}");
+        assert!(
+            statuses.len() >= 3,
+            "pending/running before done: {statuses:?}"
+        );
         assert_eq!(std::fs::read(&out).unwrap(), b"video");
         assert_eq!(p.estimate(&req("k")), None, "unknown price stays unknown");
     }
 
     #[test]
     fn the_registry_hides_providers_when_generation_is_off() {
-        let mut r = GenerationRegistry::new();
+        let r = GenerationRegistry::new();
         assert!(!r.available());
-        r.register(Arc::new(ReplayGenerationProvider::new("g", vec![GenKind::Video], Some(1), vec![1])));
+        r.register(Arc::new(ReplayGenerationProvider::new(
+            "g",
+            vec![GenKind::Video],
+            Some(1),
+            vec![1],
+        )));
         assert!(r.for_kind(GenKind::Video).is_some());
         assert!(r.for_kind(GenKind::Tts).is_none());
         r.set_enabled(false);

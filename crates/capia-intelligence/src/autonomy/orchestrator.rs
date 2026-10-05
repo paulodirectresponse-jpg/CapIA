@@ -10,11 +10,13 @@
 use super::failpoint::fp;
 use super::gateway::GatewayRegistry;
 use super::generation::GenerationRegistry;
-use super::machine::{IllegalTransition, Next, Outcome, RunErrorKind, RunStage, RunStatus, transition};
+use super::machine::{
+    IllegalTransition, Next, Outcome, RunErrorKind, RunStage, RunStatus, transition,
+};
 use super::memory::MemoryManager;
 use super::model::{
-    AiRun, ApprovalRecord, BudgetLimit, DecisionKind, DecisionOption, PendingDecision, RunBudget, RunErrorInfo,
-    RunInputs, RunPolicy, RunUsage,
+    AiRun, ApprovalRecord, BudgetLimit, DecisionKind, DecisionOption, PendingDecision, RunBudget,
+    RunErrorInfo, RunInputs, RunPolicy, RunUsage,
 };
 use super::roles::EffectCache;
 use crate::ctx::IntelCtx;
@@ -71,11 +73,13 @@ pub struct Orchestrator {
 
 impl core::fmt::Debug for Orchestrator {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("Orchestrator").field("project", &self.project).finish_non_exhaustive()
+        f.debug_struct("Orchestrator")
+            .field("project", &self.project)
+            .finish_non_exhaustive()
     }
 }
 
-pub(super) fn store_err(e: capia_store::StoreError) -> IntelError {
+pub(crate) fn store_err(e: capia_store::StoreError) -> IntelError {
     if e.code == StoreErrorCode::StoreConflict {
         IntelError::new("RUN_CONFLICT", e.message)
     } else {
@@ -98,11 +102,21 @@ pub(super) struct StageResult {
 
 impl StageResult {
     pub(super) fn ok(outcome: Outcome) -> Self {
-        Self { outcome, pending: None, events: Vec::new(), output: Value::Null }
+        Self {
+            outcome,
+            pending: None,
+            events: Vec::new(),
+            output: Value::Null,
+        }
     }
 
     pub(super) fn wait(d: PendingDecision) -> Self {
-        Self { outcome: Outcome::NeedsUser, pending: Some(d), events: Vec::new(), output: Value::Null }
+        Self {
+            outcome: Outcome::NeedsUser,
+            pending: Some(d),
+            events: Vec::new(),
+            output: Value::Null,
+        }
     }
 }
 
@@ -140,7 +154,8 @@ pub fn classify_resume(run: &AiRun) -> ResumeClass {
 
 impl Orchestrator {
     pub fn open(deps: Deps, project: PathBuf) -> IntelResult<Arc<Self>> {
-        let store = Arc::new(AutonomyStore::open(&project, Duration::from_secs(10)).map_err(store_err)?);
+        let store =
+            Arc::new(AutonomyStore::open(&project, Duration::from_secs(10)).map_err(store_err)?);
         let memory = MemoryManager::new(store.clone(), deps.app_db.clone());
         let mut staging = project.clone().into_os_string();
         staging.push("-cache");
@@ -174,9 +189,18 @@ impl Orchestrator {
     fn new_run_id(&self) -> String {
         let n = self.seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut h = <sha2::Sha256 as sha2::Digest>::new();
-        sha2::Digest::update(&mut h, format!("{}:{}:{n}", self.project.display(), now_ms()).as_bytes());
+        sha2::Digest::update(
+            &mut h,
+            format!("{}:{}:{n}", self.project.display(), now_ms()).as_bytes(),
+        );
         let d = sha2::Digest::finalize(h);
-        format!("run-{}", d[..5].iter().map(|b| format!("{b:02x}")).collect::<String>())
+        format!(
+            "run-{}",
+            d[..5]
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+        )
     }
 
     /// Evento durável + espelho ao vivo (a UI reconecta por snapshot + `events_after`).
@@ -192,8 +216,12 @@ impl Orchestrator {
     // ---- persistência -------------------------------------------------------------------------
 
     fn parse(row: &RunRow) -> IntelResult<AiRun> {
-        let mut run: AiRun = serde_json::from_value(row.json.clone())
-            .map_err(|e| IntelError::new("RUN_CORRUPTED", format!("run {} is unreadable: {e}", row.run_id)))?;
+        let mut run: AiRun = serde_json::from_value(row.json.clone()).map_err(|e| {
+            IntelError::new(
+                "RUN_CORRUPTED",
+                format!("run {} is unreadable: {e}", row.run_id),
+            )
+        })?;
         // o cursor autoritativo é o da linha (a coluna é o que o CAS protege)
         run.revision = row.revision;
         run.status = RunStatus::parse(&row.status)
@@ -240,8 +268,16 @@ impl Orchestrator {
         let run = self.load(run_id)?;
         let stages = self.store.list_stages(run_id).map_err(store_err)?;
         let effects = self.store.effects_for_run(run_id).map_err(store_err)?;
-        let prov = self.store.list_provenance(Some(run_id)).map_err(store_err)?;
-        let last_event = self.store.events_after(run_id, 0, 5_000).map_err(store_err)?.last().map_or(0, |e| e.seq);
+        let prov = self
+            .store
+            .list_provenance(Some(run_id))
+            .map_err(store_err)?;
+        let last_event = self
+            .store
+            .events_after(run_id, 0, 5_000)
+            .map_err(store_err)?
+            .last()
+            .map_or(0, |e| e.seq);
         Ok(json!({
             "run": run, "usage": self.usage_from_ledger(run_id, &run.usage),
             "stages": stages, "effects": effects.iter().map(|e| json!({"key": e.effect_key, "kind": e.kind, "state": e.state, "external_id": e.external_id})).collect::<Vec<_>>(),
@@ -305,7 +341,14 @@ impl Orchestrator {
         run.updated_ms = now_ms();
         let rev = self
             .store
-            .advance(&run.id, run.revision, &Self::row_update(run), stage_row, events, now_ms())
+            .advance(
+                &run.id,
+                run.revision,
+                &Self::row_update(run),
+                stage_row,
+                events,
+                now_ms(),
+            )
             .map_err(store_err)?;
         run.revision = rev;
         for (k, v) in events {
@@ -329,7 +372,10 @@ impl Orchestrator {
                 Err(e) => return Err(e),
             }
         }
-        Err(IntelError::new("RUN_CONFLICT", "the run keeps changing; try again"))
+        Err(IntelError::new(
+            "RUN_CONFLICT",
+            "the run keeps changing; try again",
+        ))
     }
 
     // ---- criação ------------------------------------------------------------------------------
@@ -343,7 +389,13 @@ impl Orchestrator {
         parent: Option<(&str, Option<&str>)>,
     ) -> IntelResult<AiRun> {
         let id = self.new_run_id();
-        let mut run = AiRun::new(id, self.project.display().to_string(), inputs, profile_id.to_owned(), now_ms());
+        let mut run = AiRun::new(
+            id,
+            self.project.display().to_string(),
+            inputs,
+            profile_id.to_owned(),
+            now_ms(),
+        );
         if let Some(p) = policy {
             run.policy = p;
         }
@@ -352,7 +404,8 @@ impl Orchestrator {
         }
         if let Some((parent_id, group)) = parent {
             run.parent_run_id = Some(parent_id.to_owned());
-            run.variant_group_id = Some(group.map_or_else(|| format!("vg-{parent_id}"), str::to_owned));
+            run.variant_group_id =
+                Some(group.map_or_else(|| format!("vg-{parent_id}"), str::to_owned));
         }
         self.store
             .create_run(
@@ -365,7 +418,11 @@ impl Orchestrator {
                 now_ms(),
             )
             .map_err(store_err)?;
-        self.emit(&run.id, "run_created", json!({"run_id": run.id, "parent": run.parent_run_id}));
+        self.emit(
+            &run.id,
+            "run_created",
+            json!({"run_id": run.id, "parent": run.parent_run_id}),
+        );
         Ok(run)
     }
 
@@ -424,7 +481,9 @@ impl Orchestrator {
     fn ledger_llm(&self, run_id: &str, key: &str, meta: &super::roles::RoleMeta) {
         let micros = meta.cost_micros.unwrap_or(0);
         let unknown = meta.cost_micros.is_none();
-        let _ = self.store.ledger_reserve(run_id, key, 0, None, &json!({"kind": "llm"}), now_ms());
+        let _ = self
+            .store
+            .ledger_reserve(run_id, key, 0, None, &json!({"kind": "llm"}), now_ms());
         let _ = self.store.ledger_settle(
             run_id,
             key,
@@ -456,7 +515,14 @@ impl Orchestrator {
                 r.status = RunStatus::Running;
                 r.started_ms.get_or_insert(now_ms());
                 let st = r.stage;
-                if self.save(&mut r, None, &[("run_started".into(), json!({"stage": st}))]).is_err() {
+                if self
+                    .save(
+                        &mut r,
+                        None,
+                        &[("run_started".into(), json!({"stage": st}))],
+                    )
+                    .is_err()
+                {
                     continue;
                 }
                 continue;
@@ -499,7 +565,10 @@ impl Orchestrator {
             r.status = RunStatus::Cancelled;
             r.pending = None;
             r.completed_ms = Some(now_ms());
-            Ok(((), vec![("run_cancelled".into(), json!({"stage": r.stage}))]))
+            Ok((
+                (),
+                vec![("run_cancelled".into(), json!({"stage": r.stage}))],
+            ))
         })
     }
 
@@ -529,7 +598,13 @@ impl Orchestrator {
                 stage: r.stage,
                 recoverable: kind.recoverable(),
             });
-            Ok(((), vec![("run_failed".into(), json!({"code": e.code, "message": e.message, "stage": r.stage}))]))
+            Ok((
+                (),
+                vec![(
+                    "run_failed".into(),
+                    json!({"code": e.code, "message": e.message, "stage": r.stage}),
+                )],
+            ))
         })
     }
 
@@ -557,7 +632,13 @@ impl Orchestrator {
                 && let Some(p) = gens.get(pid)
             {
                 let _ = p.cancel(&job).await;
-                let _ = store.update_effect(&e.effect_key, "failed", None, Some(&json!({"cancelled": true, "provider": pid})), now_ms());
+                let _ = store.update_effect(
+                    &e.effect_key,
+                    "failed",
+                    None,
+                    Some(&json!({"cancelled": true, "provider": pid})),
+                    now_ms(),
+                );
             }
             if e.kind == "import"
                 && e.state == "submitted"
@@ -574,7 +655,10 @@ impl Orchestrator {
         let t0 = Instant::now();
         let stage = run.stage;
         // limite de orçamento já atingido (custo/tokens/chamadas/tempo): para e pede decisão
-        if let Some(limit) = run.budget.exceeded(&self.usage_from_ledger(&run.id, &run.usage)) {
+        if let Some(limit) = run
+            .budget
+            .exceeded(&self.usage_from_ledger(&run.id, &run.usage))
+        {
             let d = self.budget_decision(&run, limit);
             return self.park_for_decision(run, d).await;
         }
@@ -602,11 +686,19 @@ impl Orchestrator {
             json: json!({"retry": attempt_label > 0}),
         };
         self.store.put_stage(&started_row).map_err(store_err)?;
-        self.emit(&run.id, "stage_started", json!({"stage": stage, "attempt": run.current_attempt}));
+        self.emit(
+            &run.id,
+            "stage_started",
+            json!({"stage": stage, "attempt": run.current_attempt}),
+        );
         fp!("autonomy_stage_started");
 
         let ic = {
-            let mut ic = IntelCtx::new(self.deps.engine.clone(), self.deps.ai.clone(), self.profile_for(&run));
+            let mut ic = IntelCtx::new(
+                self.deps.engine.clone(),
+                self.deps.ai.clone(),
+                self.profile_for(&run),
+            );
             ic.actor = capia_commands::Actor::agent(run.actor_id());
             ic
         };
@@ -633,9 +725,13 @@ impl Orchestrator {
         };
 
         fp!("autonomy_stage_output_before_persist");
-        let next = transition(stage, result.outcome).map_err(|IllegalTransition { from, outcome }| {
-            IntelError::new("ILLEGAL_TRANSITION", format!("{} --{outcome:?}-->", from.as_str()))
-        })?;
+        let next =
+            transition(stage, result.outcome).map_err(|IllegalTransition { from, outcome }| {
+                IntelError::new(
+                    "ILLEGAL_TRANSITION",
+                    format!("{} --{outcome:?}-->", from.as_str()),
+                )
+            })?;
         let mut events = result.events.clone();
         let out_digest = super::plan::digest_value(&result.output);
         match next {
@@ -645,7 +741,10 @@ impl Orchestrator {
                 run.status = RunStatus::Running;
                 run.pending = None;
                 run.resume_stage = None;
-                events.push(("stage_completed".into(), json!({"stage": stage, "outcome": result.outcome, "next": to})));
+                events.push((
+                    "stage_completed".into(),
+                    json!({"stage": stage, "outcome": result.outcome, "next": to}),
+                ));
             }
             Next::Wait { resume } => {
                 run.status = RunStatus::WaitingUser;
@@ -654,7 +753,10 @@ impl Orchestrator {
                 if let Some(p) = &run.pending {
                     events.push(("approval_required".into(), json!({"decision": p})));
                 }
-                events.push(("stage_completed".into(), json!({"stage": stage, "outcome": result.outcome, "waiting": true})));
+                events.push((
+                    "stage_completed".into(),
+                    json!({"stage": stage, "outcome": result.outcome, "waiting": true}),
+                ));
             }
             Next::Complete => {
                 run.stage = RunStage::Done;
@@ -667,7 +769,10 @@ impl Orchestrator {
             Next::Fail => {
                 run.status = RunStatus::Failed;
                 run.completed_ms = Some(now_ms());
-                events.push(("run_failed".into(), json!({"stage": stage, "error": run.error})));
+                events.push((
+                    "run_failed".into(),
+                    json!({"stage": stage, "error": run.error}),
+                ));
             }
             Next::Cancelled => {
                 run.status = RunStatus::Cancelled;
@@ -688,11 +793,19 @@ impl Orchestrator {
         Ok(matches!(next, Next::Go { .. }))
     }
 
-    async fn park_for_decision(self: &Arc<Self>, mut run: AiRun, d: PendingDecision) -> IntelResult<bool> {
+    async fn park_for_decision(
+        self: &Arc<Self>,
+        mut run: AiRun,
+        d: PendingDecision,
+    ) -> IntelResult<bool> {
         run.status = RunStatus::WaitingUser;
         run.resume_stage = Some(run.stage);
         run.pending = Some(d.clone());
-        self.save(&mut run, None, &[("approval_required".into(), json!({"decision": d}))])?;
+        self.save(
+            &mut run,
+            None,
+            &[("approval_required".into(), json!({"decision": d}))],
+        )?;
         Ok(false)
     }
 
@@ -702,9 +815,14 @@ impl Orchestrator {
             id: format!("dec-{}-budget-{}", run.id, run.current_attempt),
             kind: DecisionKind::BudgetExtension,
             question: format!("The run reached its {limit:?} limit. Extend it or stop?"),
-            options: vec![DecisionOption::new("extend", "Extend the limit and continue"), DecisionOption::new("stop", "Stop the run")],
+            options: vec![
+                DecisionOption::new("extend", "Extend the limit and continue"),
+                DecisionOption::new("stop", "Stop the run"),
+            ],
             context: json!({"limit": limit, "usage": u, "budget": run.budget}),
-            consequences: "Continuing may spend more money/time; stopping keeps everything done so far.".into(),
+            consequences:
+                "Continuing may spend more money/time; stopping keeps everything done so far."
+                    .into(),
             default_option: Some("stop".into()),
             expires_ms: None,
             bound_digest: None,
@@ -730,14 +848,23 @@ impl Orchestrator {
         e: &IntelError,
     ) -> IntelResult<Option<StageResult>> {
         let kind = classify_error(e);
-        let retries = run.checkpoint["retries"][stage.as_str()].as_u64().unwrap_or(0);
+        let retries = run.checkpoint["retries"][stage.as_str()]
+            .as_u64()
+            .unwrap_or(0);
         if kind.retryable() && is_transient(e) && retries < 2 {
             if !run.checkpoint.is_object() {
                 run.checkpoint = json!({});
             }
             run.checkpoint["retries"][stage.as_str()] = json!(retries + 1);
             let mut r = run.clone();
-            self.save(&mut r, None, &[("stage_retry".into(), json!({"stage": stage, "code": e.code, "retry": retries + 1}))])?;
+            self.save(
+                &mut r,
+                None,
+                &[(
+                    "stage_retry".into(),
+                    json!({"stage": stage, "code": e.code, "retry": retries + 1}),
+                )],
+            )?;
             *run = r;
             tokio::time::sleep(Duration::from_millis(150 * (1 << retries))).await;
             return Ok(None);
@@ -763,7 +890,10 @@ impl Orchestrator {
 
     fn final_report(&self, run: &AiRun) -> Value {
         let u = self.usage_from_ledger(&run.id, &run.usage);
-        let prov = self.store.list_provenance(Some(&run.id)).unwrap_or_default();
+        let prov = self
+            .store
+            .list_provenance(Some(&run.id))
+            .unwrap_or_default();
         json!({
             "deliverables": run.sequences, "cost_micros": u.cost_micros, "unknown_cost_calls": u.unknown_cost_calls,
             "tokens": u.tokens, "provider_calls": u.provider_calls, "generations": u.generations,
@@ -810,12 +940,18 @@ impl Orchestrator {
                 if let Some(s) = r.resume_stage.take() {
                     r.stage = s;
                 }
-                Ok((r.clone(), vec![("run_resumed".into(), json!({"stage": r.stage}))]))
+                Ok((
+                    r.clone(),
+                    vec![("run_resumed".into(), json!({"stage": r.stage}))],
+                ))
             }
             RunStatus::Running => Ok((r.clone(), vec![])),
             _ => Err(IntelError::new(
                 "INVALID_STATE",
-                format!("a {} run cannot be resumed (waiting runs need a decision)", r.status.as_str()),
+                format!(
+                    "a {} run cannot be resumed (waiting runs need a decision)",
+                    r.status.as_str()
+                ),
             )),
         })?;
         self.spawn_driver(run_id);
@@ -825,7 +961,10 @@ impl Orchestrator {
     pub fn start(self: &Arc<Self>, run_id: &str) -> IntelResult<()> {
         let run = self.load(run_id)?;
         if !matches!(run.status, RunStatus::Pending | RunStatus::Running) {
-            return Err(IntelError::new("INVALID_STATE", "only a pending run can be started"));
+            return Err(IntelError::new(
+                "INVALID_STATE",
+                "only a pending run can be started",
+            ));
         }
         self.spawn_driver(run_id);
         Ok(())
@@ -849,24 +988,39 @@ impl Orchestrator {
     ) -> IntelResult<AiRun> {
         let run = self.mutate(run_id, |r| {
             if r.status != RunStatus::WaitingUser {
-                return Err(IntelError::new("INVALID_STATE", "the run is not waiting for a decision"));
+                return Err(IntelError::new(
+                    "INVALID_STATE",
+                    "the run is not waiting for a decision",
+                ));
             }
             let Some(p) = r.pending.clone() else {
                 return Err(IntelError::new("INVALID_STATE", "no pending decision"));
             };
             if p.id != decision_id {
-                return Err(IntelError::new("STALE_DECISION", "this decision is not the pending one anymore"));
+                return Err(IntelError::new(
+                    "STALE_DECISION",
+                    "this decision is not the pending one anymore",
+                ));
             }
             if let Some(bound) = &p.bound_digest
                 && Some(bound.as_str()) != self.current_bound_digest(r, p.kind).as_deref()
             {
-                return Err(IntelError::new("STALE_DECISION", "the plan changed after this decision was requested"));
+                return Err(IntelError::new(
+                    "STALE_DECISION",
+                    "the plan changed after this decision was requested",
+                ));
             }
             let free_text = p.kind == DecisionKind::OpenQuestion && option == "answer";
             if !free_text && !p.options.iter().any(|o| o.id == option) {
-                return Err(IntelError::new("INVALID_ARGUMENT", format!("`{option}` is not an option of this decision")));
+                return Err(IntelError::new(
+                    "INVALID_ARGUMENT",
+                    format!("`{option}` is not an option of this decision"),
+                ));
             }
-            let mut events = vec![("decision_made".into(), json!({"decision": p.id, "kind": p.kind, "option": option}))];
+            let mut events = vec![(
+                "decision_made".into(),
+                json!({"decision": p.id, "kind": p.kind, "option": option}),
+            )];
             r.approvals.push(ApprovalRecord {
                 decision_id: p.id.clone(),
                 kind: p.kind,
@@ -886,34 +1040,132 @@ impl Orchestrator {
         Ok(run)
     }
 
+    /// Decisão do usuário sobre um achado do Critic: `ignore` | `lock` | `reopen`. O Critic não
+    /// insiste nos próximos ciclos em achados ignorados/travados.
+    pub fn review_decision(
+        &self,
+        run_id: &str,
+        finding_key: &str,
+        decision: &str,
+    ) -> IntelResult<AiRun> {
+        if !matches!(decision, "ignore" | "lock" | "reopen") {
+            return Err(IntelError::new(
+                "INVALID_ARGUMENT",
+                "decision must be ignore, lock or reopen",
+            ));
+        }
+        self.mutate(run_id, |r| {
+            if !r.checkpoint.is_object() {
+                r.checkpoint = json!({});
+            }
+            for list in ["ignored", "locked"] {
+                let arr = r.checkpoint["review_decisions"][list]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
+                let mut set: Vec<Value> = arr
+                    .into_iter()
+                    .filter(|v| v.as_str() != Some(finding_key))
+                    .collect();
+                if (list == "ignored" && decision == "ignore")
+                    || (list == "locked" && decision == "lock")
+                {
+                    set.push(json!(finding_key));
+                }
+                r.checkpoint["review_decisions"][list] = Value::Array(set);
+            }
+            Ok((
+                r.clone(),
+                vec![(
+                    "review_decision".into(),
+                    json!({"finding": finding_key, "decision": decision}),
+                )],
+            ))
+        })
+    }
+
+    /// Assets trazidos/gerados pela Run e se ainda são usados em alguma sequence — sugestão de
+    /// limpeza depois de desfazer/cancelar (nunca apaga automaticamente).
+    pub fn cleanup_candidates(&self, run_id: &str) -> IntelResult<Vec<Value>> {
+        let prov = self
+            .store
+            .list_provenance(Some(run_id))
+            .map_err(store_err)?;
+        let snap = self.deps.engine.read("project.snapshot", json!({}))?;
+        let mut used: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for s in snap["sequences"].as_array().into_iter().flatten() {
+            if let Some(id) = s["id"].as_str()
+                && let Ok(seq) = self
+                    .deps
+                    .engine
+                    .read("sequence.get", json!({"sequence": id}))
+            {
+                for c in seq["clips"]
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|m| m.values())
+                {
+                    if let Some(a) = c["content"]["asset"].as_str() {
+                        used.insert(a.to_owned());
+                    }
+                }
+            }
+        }
+        Ok(prov
+            .into_iter()
+            .filter(|p| matches!(p.kind.as_str(), "downloaded" | "generated" | "library"))
+            .map(|p| json!({"asset_id": p.asset_id, "kind": p.kind, "used": used.contains(&p.asset_id), "unused_suggestion": !used.contains(&p.asset_id)}))
+            .collect())
+    }
+
     // ---- recuperação ----------------------------------------------------------------------------
 
     /// Ao abrir o projeto: stages `started` viram `interrupted`; Runs `running` viram `paused`
     /// (resumíveis) e cada uma é **classificada**; Runs ilegíveis são listadas como irrecuperáveis.
     pub fn recover(&self) -> IntelResult<Vec<Recovered>> {
-        self.store.interrupt_started_stages(now_ms()).map_err(store_err)?;
+        self.store
+            .interrupt_started_stages(now_ms())
+            .map_err(store_err)?;
         let mut out = Vec::new();
         for row in self.store.list_runs(None, 1_000).map_err(store_err)? {
             let run = match Self::parse(&row) {
                 Ok(r) => r,
                 Err(e) => {
-                    out.push(Recovered { run_id: row.run_id.clone(), stage: row.stage.clone(), class: ResumeClass::Irrecoverable, detail: e.message });
+                    out.push(Recovered {
+                        run_id: row.run_id.clone(),
+                        stage: row.stage.clone(),
+                        class: ResumeClass::Irrecoverable,
+                        detail: e.message,
+                    });
                     continue;
                 }
             };
-            if matches!(run.status, RunStatus::Running | RunStatus::Pending) && run.status == RunStatus::Running {
+            if matches!(run.status, RunStatus::Running | RunStatus::Pending)
+                && run.status == RunStatus::Running
+            {
                 self.mutate(&run.id, |r| {
                     if r.status == RunStatus::Running {
                         r.status = RunStatus::Paused;
                         r.resume_stage = Some(r.stage);
                     }
-                    Ok(((), vec![("run_interrupted".into(), json!({"stage": r.stage, "reason": "process_restart"}))]))
+                    Ok((
+                        (),
+                        vec![(
+                            "run_interrupted".into(),
+                            json!({"stage": r.stage, "reason": "process_restart"}),
+                        )],
+                    ))
                 })?;
             }
             let run = self.load(&run.id)?;
             let class = classify_resume(&run);
             if class != ResumeClass::Terminal {
-                out.push(Recovered { run_id: run.id.clone(), stage: run.stage.as_str().to_owned(), class, detail: format!("{:?}", run.status) });
+                out.push(Recovered {
+                    run_id: run.id.clone(),
+                    stage: run.stage.as_str().to_owned(),
+                    class,
+                    detail: format!("{:?}", run.status),
+                });
             }
         }
         Ok(out)
@@ -922,7 +1174,9 @@ impl Orchestrator {
 
 impl core::fmt::Debug for LedgerCache<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("LedgerCache").field("run", &self.run_id).finish_non_exhaustive()
+        f.debug_struct("LedgerCache")
+            .field("run", &self.run_id)
+            .finish_non_exhaustive()
     }
 }
 
@@ -940,9 +1194,15 @@ impl EffectCache for LedgerCache<'_> {
     }
 
     fn save(&self, key: &str, value: &Value) {
-        let claim = self.o.store.claim_effect(key, self.run_id, "llm", &Value::Null, now_ms());
+        let claim = self
+            .o
+            .store
+            .claim_effect(key, self.run_id, "llm", &Value::Null, now_ms());
         if matches!(claim, Ok(Claim::New(_) | Claim::Existing(_))) {
-            let _ = self.o.store.update_effect(key, "done", None, Some(value), now_ms());
+            let _ = self
+                .o
+                .store
+                .update_effect(key, "done", None, Some(value), now_ms());
         }
         if let Ok(meta) = serde_json::from_value::<super::roles::RoleMeta>(value["meta"].clone())
             && !meta.cache_hit
@@ -958,17 +1218,24 @@ pub fn classify_error(e: &IntelError) -> RunErrorKind {
     match c {
         "CANCELLED" => RunErrorKind::Cancelled,
         "STORE_ERROR" | "RUN_CORRUPTED" | "RUN_CONFLICT" => RunErrorKind::Persistence,
-        "NOT_ALLOWED" | "PERMISSION_DENIED" | "PREVIEW_REQUIRED" | "PLAN_TOKEN_INVALID" => RunErrorKind::Permission,
+        "NOT_ALLOWED" | "PERMISSION_DENIED" | "PREVIEW_REQUIRED" | "PLAN_TOKEN_INVALID" => {
+            RunErrorKind::Permission
+        }
         "BUDGET_EXCEEDED" => RunErrorKind::BudgetExceeded,
         "PLAN_STATE_CHANGED" | "CONFLICT" | "OVERLAP" => RunErrorKind::Conflict,
         _ if c.starts_with("PLAN_") => RunErrorKind::PlanInvalid,
         _ if c.starts_with("GATEWAY_") => RunErrorKind::Gateway,
         _ if c.starts_with("GEN_") => RunErrorKind::Generation,
         _ if c.starts_with("ASSET_") => RunErrorKind::AssetUnavailable,
-        "RATE_LIMITED" | "PROVIDER_TIMEOUT" | "PROVIDER_UNAVAILABLE" | "AUTH_FAILED" | "NO_CAPABLE_MODEL"
-        | "STRUCTURED_OUTPUT_INVALID" | "INVALID_PROVIDER_RESPONSE" | "PRIVACY_POLICY_BLOCKED" | "NOT_CONFIGURED" => {
-            RunErrorKind::Provider
-        }
+        "RATE_LIMITED"
+        | "PROVIDER_TIMEOUT"
+        | "PROVIDER_UNAVAILABLE"
+        | "AUTH_FAILED"
+        | "NO_CAPABLE_MODEL"
+        | "STRUCTURED_OUTPUT_INVALID"
+        | "INVALID_PROVIDER_RESPONSE"
+        | "PRIVACY_POLICY_BLOCKED"
+        | "NOT_CONFIGURED" => RunErrorKind::Provider,
         "SECURITY" => RunErrorKind::Security,
         _ => RunErrorKind::Internal,
     }
@@ -979,6 +1246,10 @@ pub fn classify_error(e: &IntelError) -> RunErrorKind {
 pub fn is_transient(e: &IntelError) -> bool {
     matches!(
         e.code.as_str(),
-        "RATE_LIMITED" | "PROVIDER_TIMEOUT" | "PROVIDER_UNAVAILABLE" | "GATEWAY_TRANSIENT" | "GEN_TRANSIENT"
+        "RATE_LIMITED"
+            | "PROVIDER_TIMEOUT"
+            | "PROVIDER_UNAVAILABLE"
+            | "GATEWAY_TRANSIENT"
+            | "GEN_TRANSIENT"
     )
 }

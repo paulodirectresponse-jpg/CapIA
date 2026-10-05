@@ -68,8 +68,15 @@ impl FetchPolicy {
 
     fn type_allowed(&self, ct: Option<&str>) -> bool {
         let Some(ct) = ct else { return false };
-        let ct = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
-        self.allowed_types.iter().any(|p| ct.starts_with(&p.to_ascii_lowercase()))
+        let ct = ct
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase();
+        self.allowed_types
+            .iter()
+            .any(|p| ct.starts_with(&p.to_ascii_lowercase()))
     }
 }
 
@@ -94,7 +101,8 @@ impl reqwest::dns::Resolve for GuardedResolver {
         Box::pin(async move {
             let host = name.as_str().to_owned();
             let addrs = tokio::net::lookup_host((host.as_str(), 0)).await?;
-            let allowed: Vec<SocketAddr> = addrs.filter(|a| policy.check_ip(a.ip()).is_ok()).collect();
+            let allowed: Vec<SocketAddr> =
+                addrs.filter(|a| policy.check_ip(a.ip()).is_ok()).collect();
             if allowed.is_empty() {
                 return Err(Box::<dyn std::error::Error + Send + Sync>::from(
                     "host resolves only to blocked addresses",
@@ -126,7 +134,10 @@ fn err(code: ErrorCode, msg: impl AsRef<str>) -> ProviderError {
 impl SafeFetcher {
     pub fn new(policy: FetchPolicy) -> Result<Self, ProviderError> {
         if policy.allowed_hosts.is_empty() {
-            return Err(err(ErrorCode::NotAllowed, "the fetcher has no allowed host"));
+            return Err(err(
+                ErrorCode::NotAllowed,
+                "the fetcher has no allowed host",
+            ));
         }
         let allowed = Arc::new(policy.clone());
         let allowed2 = allowed.clone();
@@ -134,7 +145,10 @@ impl SafeFetcher {
             if attempt.previous().len() >= allowed2.max_redirects.min(3) {
                 return attempt.error("too many redirects");
             }
-            let ok = attempt.url().host_str().is_some_and(|h| allowed2.host_allowed(h))
+            let ok = attempt
+                .url()
+                .host_str()
+                .is_some_and(|h| allowed2.host_allowed(h))
                 && allowed2.url_policy().check(attempt.url().as_str()).is_ok();
             if ok { attempt.follow() } else { attempt.stop() }
         });
@@ -142,7 +156,9 @@ impl SafeFetcher {
             .connect_timeout(policy.connect_timeout)
             .timeout(policy.total_timeout)
             .redirect(redirect)
-            .dns_resolver(Arc::new(GuardedResolver { policy: allowed.url_policy() }))
+            .dns_resolver(Arc::new(GuardedResolver {
+                policy: allowed.url_policy(),
+            }))
             .user_agent("CapIA/0 (+local-first video editor)")
             .https_only(!policy.allow_loopback)
             .build()
@@ -159,7 +175,10 @@ impl SafeFetcher {
         let url = self.policy.url_policy().check(raw)?;
         let host = url.host_str().unwrap_or_default();
         if !self.policy.host_allowed(host) {
-            return Err(err(ErrorCode::NotAllowed, format!("host `{host}` is not allowed by this source")));
+            return Err(err(
+                ErrorCode::NotAllowed,
+                format!("host `{host}` is not allowed by this source"),
+            ));
         }
         Ok(url)
     }
@@ -194,11 +213,20 @@ impl SafeFetcher {
             r = send => r.map_err(|e| err(ErrorCode::ProviderUnavailable, format!("download failed: {}", e.without_url())))?,
         };
         let final_url = resp.url().clone();
-        if !final_url.host_str().is_some_and(|h| self.policy.host_allowed(h)) {
-            return Err(err(ErrorCode::NotAllowed, "the download redirected to a host that is not allowed"));
+        if !final_url
+            .host_str()
+            .is_some_and(|h| self.policy.host_allowed(h))
+        {
+            return Err(err(
+                ErrorCode::NotAllowed,
+                "the download redirected to a host that is not allowed",
+            ));
         }
         if resp.status().is_redirection() {
-            return Err(err(ErrorCode::NotAllowed, "redirect to a host that is not allowed was refused"));
+            return Err(err(
+                ErrorCode::NotAllowed,
+                "redirect to a host that is not allowed was refused",
+            ));
         }
         if !resp.status().is_success() {
             return Err(err(
@@ -214,16 +242,23 @@ impl SafeFetcher {
         if !self.policy.type_allowed(ct.as_deref()) {
             return Err(err(
                 ErrorCode::InvalidRequest,
-                format!("content type `{}` is not allowed", ct.as_deref().unwrap_or("(none)")),
+                format!(
+                    "content type `{}` is not allowed",
+                    ct.as_deref().unwrap_or("(none)")
+                ),
             ));
         }
         if let Some(len) = resp.content_length()
             && len > self.policy.max_bytes
         {
-            return Err(err(ErrorCode::InvalidRequest, format!("the file is larger than {} bytes", self.policy.max_bytes)));
+            return Err(err(
+                ErrorCode::InvalidRequest,
+                format!("the file is larger than {} bytes", self.policy.max_bytes),
+            ));
         }
         if let Some(dir) = part.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| err(ErrorCode::ProviderUnavailable, format!("staging: {e}")))?;
+            std::fs::create_dir_all(dir)
+                .map_err(|e| err(ErrorCode::ProviderUnavailable, format!("staging: {e}")))?;
         }
         let mut file = std::fs::File::create(part)
             .map_err(|e| err(ErrorCode::ProviderUnavailable, format!("staging: {e}")))?;
@@ -239,13 +274,19 @@ impl SafeFetcher {
                 Err(_) => return Err(err(ErrorCode::ProviderUnavailable, "the download stalled")),
                 Ok(None) => break,
                 Ok(Some(Err(e))) => {
-                    return Err(err(ErrorCode::ProviderUnavailable, format!("download interrupted: {}", e.without_url())));
+                    return Err(err(
+                        ErrorCode::ProviderUnavailable,
+                        format!("download interrupted: {}", e.without_url()),
+                    ));
                 }
                 Ok(Some(Ok(c))) => c,
             };
             total += chunk.len() as u64;
             if total > self.policy.max_bytes {
-                return Err(err(ErrorCode::InvalidRequest, format!("the file exceeds {} bytes", self.policy.max_bytes)));
+                return Err(err(
+                    ErrorCode::InvalidRequest,
+                    format!("the file exceeds {} bytes", self.policy.max_bytes),
+                ));
             }
             hasher.update(&chunk);
             file.write_all(&chunk)
@@ -255,9 +296,13 @@ impl SafeFetcher {
         file.sync_all().ok();
         drop(file);
         if total == 0 {
-            return Err(err(ErrorCode::InvalidRequest, "the source returned an empty file"));
+            return Err(err(
+                ErrorCode::InvalidRequest,
+                "the source returned an empty file",
+            ));
         }
-        std::fs::rename(part, dest).map_err(|e| err(ErrorCode::ProviderUnavailable, format!("staging: {e}")))?;
+        std::fs::rename(part, dest)
+            .map_err(|e| err(ErrorCode::ProviderUnavailable, format!("staging: {e}")))?;
         let digest = hasher.finalize();
         let mut hex = String::from("sha256:");
         for b in digest {

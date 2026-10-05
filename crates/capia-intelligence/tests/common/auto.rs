@@ -21,17 +21,27 @@ use std::sync::{Arc, Mutex};
 
 pub fn chat_json(v: &Value) -> ReplayResponse {
     ReplayResponse::Chat {
-        events: vec![ChatEvent::TextDelta { text: v.to_string() }],
+        events: vec![ChatEvent::TextDelta {
+            text: v.to_string(),
+        }],
         chunk_delay_ms: 0,
     }
 }
 
 pub fn system_of(req: &ChatRequest) -> String {
-    req.messages.first().map(|m| m.text_of()).unwrap_or_default()
+    req.messages
+        .first()
+        .map(|m| m.text_of())
+        .unwrap_or_default()
 }
 
 pub fn user_of(req: &ChatRequest) -> String {
-    req.messages.iter().skip(1).map(|m| m.text_of()).collect::<Vec<_>>().join("\n")
+    req.messages
+        .iter()
+        .skip(1)
+        .map(|m| m.text_of())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Roteiro do "modelo". Cada campo é uma função do estado do teste.
@@ -141,7 +151,10 @@ impl core::fmt::Debug for SpyEngine {
 }
 
 fn ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
 }
 
 impl Engine for SpyEngine {
@@ -202,7 +215,10 @@ pub fn simple_script(asset: Arc<Mutex<String>>) -> Arc<Script> {
     Arc::new(Script {
         demand: Box::new(|| demand_json(false)),
         producer: Box::new(|| {
-            producer_json(json!([{"key": "main", "sequence_strategy": "standalone"}]), json!([]))
+            producer_json(
+                json!([{"key": "main", "sequence_strategy": "standalone"}]),
+                json!([]),
+            )
         }),
         planner: Box::new(move |_d, _n| edit_json(&a1.lock().unwrap(), json!([]))),
         critic: Box::new(move |_n| {
@@ -213,10 +229,19 @@ pub fn simple_script(asset: Arc<Mutex<String>>) -> Arc<Script> {
     })
 }
 
-pub fn auto_world(name: &str, script_for: impl FnOnce(Arc<Mutex<String>>) -> Arc<Script>) -> Option<AutoWorld> {
+pub fn auto_world(
+    name: &str,
+    script_for: impl FnOnce(Arc<Mutex<String>>) -> Arc<Script>,
+) -> Option<AutoWorld> {
     let asset_cell = Arc::new(Mutex::new(String::new()));
     let script = script_for(asset_cell.clone());
-    let w = world_full(name, Some(make_speech_clip), vec![transcript_response()], true, Some(brain_for(script.clone())))?;
+    let w = world_full(
+        name,
+        Some(make_speech_clip),
+        vec![transcript_response()],
+        true,
+        Some(brain_for(script.clone())),
+    )?;
     *asset_cell.lock().unwrap() = w.asset_id.clone();
     let spy = Arc::new(SpyEngine {
         inner: SessionEngine::new(w.session.clone()),
@@ -239,7 +264,15 @@ pub fn auto_world(name: &str, script_for: impl FnOnce(Arc<Mutex<String>>) -> Arc
     };
     let proj = w.dir.join("p.capia");
     let orch = Orchestrator::open(deps, proj).unwrap();
-    Some(AutoWorld { w, script, orch, spy, gateways, generators, events })
+    Some(AutoWorld {
+        w,
+        script,
+        orch,
+        spy,
+        gateways,
+        generators,
+        events,
+    })
 }
 
 impl AutoWorld {
@@ -257,13 +290,18 @@ impl AutoWorld {
     }
 
     pub fn create(&self, inputs: RunInputs, policy: RunPolicy) -> AiRun {
-        self.orch.create_run(inputs, Some(policy), None, "pf", None).unwrap()
+        self.orch
+            .create_run(inputs, Some(policy), None, "pf", None)
+            .unwrap()
     }
 
     /// Dirige a Run até parar (espera/terminal) e devolve o estado final.
     pub async fn run_to_rest(&self, id: &str) -> AiRun {
         self.orch.start(id).ok();
-        self.wait(id, |r| r.status != RunStatus::Running && r.status != RunStatus::Pending).await
+        self.wait(id, |r| {
+            r.status != RunStatus::Running && r.status != RunStatus::Pending
+        })
+        .await
     }
 
     pub async fn wait(&self, id: &str, pred: impl Fn(&AiRun) -> bool) -> AiRun {
@@ -273,7 +311,12 @@ impl AutoWorld {
             if pred(&r) && !self.orch.is_driving(id) {
                 return r;
             }
-            assert!(t0.elapsed() < std::time::Duration::from_secs(90), "timeout waiting: {:?} {:?}", r.status, r.stage);
+            assert!(
+                t0.elapsed() < std::time::Duration::from_secs(90),
+                "timeout waiting: {:?} {:?}",
+                r.status,
+                r.stage
+            );
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }
     }
@@ -291,6 +334,11 @@ impl AutoWorld {
 
     pub fn history_actors(&self) -> Vec<String> {
         let h = self.w.ctx.engine.read("history.list", json!({})).unwrap();
-        h["entries"].as_array().unwrap().iter().map(|e| e["actor"]["id"].as_str().unwrap().to_owned()).collect()
+        h["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["actor"]["id"].as_str().unwrap().to_owned())
+            .collect()
     }
 }

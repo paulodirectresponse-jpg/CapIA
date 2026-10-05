@@ -6,9 +6,12 @@
 //! texto hostil acionar nada) e contexto limitado; entradas externas (DemandSpec, transcrições,
 //! nomes de arquivo, metadados de fontes) entram como `untrusted_data`. Nenhum papel escreve.
 
-use super::critic::{Category, Evidence, Finding, FindingSource, FindingStatus, FixAction, RangeTicks, Severity};
+use super::critic::{
+    Category, Evidence, Finding, FindingSource, FindingStatus, FixAction, RangeTicks, Severity,
+};
 use super::plan::{
-    EditPlan, ProductionPlan, edit_plan_from, edit_plan_schema, production_plan_from, production_plan_schema,
+    EditPlan, ProductionPlan, edit_plan_from, edit_plan_schema, production_plan_from,
+    production_plan_schema,
 };
 use crate::ctx::IntelCtx;
 use crate::error::{IntelError, IntelResult};
@@ -84,7 +87,10 @@ fn route(data: &[DataClass]) -> ChatOptions {
     r.also_needs.push(Capability::StructuredOutput);
     r.data.extend(data.iter().copied());
     r.min_context = Some(u32::try_from(CONTEXT_BUDGET_TOKENS + 4_000).unwrap_or(u32::MAX));
-    ChatOptions { route: r, cacheable: true }
+    ChatOptions {
+        route: r,
+        cacheable: true,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -100,9 +106,20 @@ async fn call(
 ) -> IntelResult<(Value, RoleMeta)> {
     if let Some((c, key)) = cache
         && let Some(stored) = c.load(key)
-        && let (Some(raw), Ok(meta)) = (stored.get("raw"), serde_json::from_value::<RoleMeta>(stored["meta"].clone()))
+        && let (Some(raw), Ok(meta)) = (
+            stored.get("raw"),
+            serde_json::from_value::<RoleMeta>(stored["meta"].clone()),
+        )
     {
-        return Ok((raw.clone(), RoleMeta { cache_hit: true, cost_micros: Some(0), tokens: 0, ..meta }));
+        return Ok((
+            raw.clone(),
+            RoleMeta {
+                cache_hit: true,
+                cost_micros: Some(0),
+                tokens: 0,
+                ..meta
+            },
+        ));
     }
     let (user, digest) = sections_to_prompt(sections);
     let mut req = ChatRequest::new(
@@ -115,7 +132,15 @@ async fn call(
     req.params.temperature = Some(0.0);
     let (raw, out) = ctx
         .ai
-        .chat_structured(task, req, schema_name, schema, route(&[DataClass::DocumentText]), 1, None)
+        .chat_structured(
+            task,
+            req,
+            schema_name,
+            schema,
+            route(&[DataClass::DocumentText]),
+            1,
+            None,
+        )
         .await?;
     let meta = RoleMeta {
         endpoint_id: out.decision.endpoint_id.clone(),
@@ -133,7 +158,12 @@ async fn call(
 }
 
 fn sec(priority: Priority, label: &str, text: String, trusted: bool) -> Section {
-    Section { priority, label: label.to_owned(), text, trusted }
+    Section {
+        priority,
+        label: label.to_owned(),
+        text,
+        trusted,
+    }
 }
 
 fn pretty(v: &Value) -> String {
@@ -156,22 +186,57 @@ pub struct PlanningContext {
 
 fn common_sections(c: &PlanningContext) -> Vec<Section> {
     let mut v = vec![
-        sec(Priority::UserRequest, "requested deliverables and budget", pretty(&c.requested), true),
-        sec(Priority::Project, "capabilities available", pretty(&c.capabilities), true),
+        sec(
+            Priority::UserRequest,
+            "requested deliverables and budget",
+            pretty(&c.requested),
+            true,
+        ),
+        sec(
+            Priority::Project,
+            "capabilities available",
+            pretty(&c.capabilities),
+            true,
+        ),
         sec(Priority::Project, "demand spec", pretty(&c.demand), false),
-        sec(Priority::SelectedAssets, "asset inventory", pretty(&c.inventory), false),
+        sec(
+            Priority::SelectedAssets,
+            "asset inventory",
+            pretty(&c.inventory),
+            false,
+        ),
     ];
     if let Some(r) = &c.reference {
-        v.push(sec(Priority::Summaries, "reference grammar", pretty(r), false));
+        v.push(sec(
+            Priority::Summaries,
+            "reference grammar",
+            pretty(r),
+            false,
+        ));
     }
     for (name, t) in &c.transcripts {
-        v.push(sec(Priority::Summaries, &format!("transcript {name}"), t.clone(), false));
+        v.push(sec(
+            Priority::Summaries,
+            &format!("transcript {name}"),
+            t.clone(),
+            false,
+        ));
     }
     if !c.memory.is_empty() {
-        v.push(sec(Priority::Project, "memory (system > user > client > project precedence reversed: project wins)", c.memory.join("\n"), false));
+        v.push(sec(
+            Priority::Project,
+            "memory (system > user > client > project precedence reversed: project wins)",
+            c.memory.join("\n"),
+            false,
+        ));
     }
     if let Some(f) = &c.feedback {
-        v.push(sec(Priority::UserRequest, "replan feedback", pretty(f), true));
+        v.push(sec(
+            Priority::UserRequest,
+            "replan feedback",
+            pretty(f),
+            true,
+        ));
     }
     v
 }
@@ -199,7 +264,11 @@ pub async fn run_producer(
     .await?;
     let plan = production_plan_from(&raw, plan_id, version, demand_spec_version)
         .map_err(|e| IntelError::new(e.code, e.message))?;
-    Ok(RoleOut { value: plan, meta, raw })
+    Ok(RoleOut {
+        value: plan,
+        meta,
+        raw,
+    })
 }
 
 pub async fn run_planner(
@@ -224,11 +293,31 @@ pub async fn run_planner(
     );
     secs.insert(
         1,
-        sec(Priority::UserRequest, "target deliverable", json!({"deliverable_key": deliverable_key}).to_string(), true),
+        sec(
+            Priority::UserRequest,
+            "target deliverable",
+            json!({"deliverable_key": deliverable_key}).to_string(),
+            true,
+        ),
     );
-    let (raw, meta) = call(ctx, task, PLANNER_SYSTEM, &secs, "edit_plan", &edit_plan_schema(), PLANNER_PROMPT_VERSION, cache).await?;
-    let plan = edit_plan_from(&raw, plan_id, version, deliverable_key).map_err(|e| IntelError::new(e.code, e.message))?;
-    Ok(RoleOut { value: plan, meta, raw })
+    let (raw, meta) = call(
+        ctx,
+        task,
+        PLANNER_SYSTEM,
+        &secs,
+        "edit_plan",
+        &edit_plan_schema(),
+        PLANNER_PROMPT_VERSION,
+        cache,
+    )
+    .await?;
+    let plan = edit_plan_from(&raw, plan_id, version, deliverable_key)
+        .map_err(|e| IntelError::new(e.code, e.message))?;
+    Ok(RoleOut {
+        value: plan,
+        meta,
+        raw,
+    })
 }
 
 pub fn critic_schema() -> Value {
@@ -292,7 +381,10 @@ fn category_of(s: &str) -> Category {
 fn fix_from(v: &Value) -> Option<FixAction> {
     let s = |k: &str| v[k].as_str().map(str::to_owned);
     match v["action"].as_str()? {
-        "trim_to_duration" => Some(FixAction::TrimToDuration { clip: s("clip")?, new_end_ticks: v["new_end_ticks"].as_i64()? }),
+        "trim_to_duration" => Some(FixAction::TrimToDuration {
+            clip: s("clip")?,
+            new_end_ticks: v["new_end_ticks"].as_i64()?,
+        }),
         "add_cta_text" => Some(FixAction::AddCtaText {
             sequence: s("sequence")?,
             text: s("text")?,
@@ -300,8 +392,15 @@ fn fix_from(v: &Value) -> Option<FixAction> {
             duration_ticks: v["duration_ticks"].as_i64()?,
         }),
         "delete_clip" => Some(FixAction::DeleteClip { clip: s("clip")? }),
-        "set_property" => Some(FixAction::SetProperty { clip: s("clip")?, prop: s("prop")?, value: v["value"].as_f64()? }),
-        "set_clip_enabled" => Some(FixAction::SetClipEnabled { clip: s("clip")?, enabled: v["enabled"].as_bool()? }),
+        "set_property" => Some(FixAction::SetProperty {
+            clip: s("clip")?,
+            prop: s("prop")?,
+            value: v["value"].as_f64()?,
+        }),
+        "set_clip_enabled" => Some(FixAction::SetClipEnabled {
+            clip: s("clip")?,
+            enabled: v["enabled"].as_bool()?,
+        }),
         _ => None,
     }
 }
@@ -310,13 +409,26 @@ fn fix_from(v: &Value) -> Option<FixAction> {
 /// evidência concreta vira `minor` (nada de "não gostei" bloqueando o loop).
 pub fn findings_from(raw: &Value, deliverable: &str) -> Vec<Finding> {
     let mut out = Vec::new();
-    for (i, f) in raw["findings"].as_array().into_iter().flatten().take(40).enumerate() {
-        let key = f["key"].as_str().map_or_else(|| format!("sem{i}"), |k| k.chars().take(80).collect());
+    for (i, f) in raw["findings"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .take(40)
+        .enumerate()
+    {
+        let key = f["key"]
+            .as_str()
+            .map_or_else(|| format!("sem{i}"), |k| k.chars().take(80).collect());
         let evidence: Vec<Evidence> = f["evidence"]
             .as_array()
             .into_iter()
             .flatten()
-            .filter_map(|e| Some(Evidence { kind: e["kind"].as_str()?.to_owned(), detail: json!(e["detail"].as_str()?) }))
+            .filter_map(|e| {
+                Some(Evidence {
+                    kind: e["kind"].as_str()?.to_owned(),
+                    detail: json!(e["detail"].as_str()?),
+                })
+            })
             .collect();
         let mut sev = match f["severity"].as_str() {
             Some("blocker") => Severity::Blocker,
@@ -327,7 +439,10 @@ pub fn findings_from(raw: &Value, deliverable: &str) -> Vec<Finding> {
         if sev.blocks() && evidence.is_empty() {
             sev = Severity::Minor;
         }
-        let at = match (f["range_start_ticks"].as_i64(), f["range_end_ticks"].as_i64()) {
+        let at = match (
+            f["range_start_ticks"].as_i64(),
+            f["range_end_ticks"].as_i64(),
+        ) {
             (Some(a), Some(b)) if b >= a => Some(RangeTicks { start: a, end: b }),
             _ => None,
         };
@@ -340,8 +455,18 @@ pub fn findings_from(raw: &Value, deliverable: &str) -> Vec<Finding> {
             source: FindingSource::Semantic,
             at,
             evidence,
-            expected: f["expected"].as_str().unwrap_or("").chars().take(400).collect(),
-            observed: f["observed"].as_str().unwrap_or("").chars().take(400).collect(),
+            expected: f["expected"]
+                .as_str()
+                .unwrap_or("")
+                .chars()
+                .take(400)
+                .collect(),
+            observed: f["observed"]
+                .as_str()
+                .unwrap_or("")
+                .chars()
+                .take(400)
+                .collect(),
             suggested_fix: fix,
             confidence: f["confidence"].as_f64().unwrap_or(0.5).clamp(0.0, 1.0),
             status: FindingStatus::Open,
@@ -370,17 +495,46 @@ pub async fn run_semantic_critic(
     cache: Option<(&dyn EffectCache, &str)>,
 ) -> IntelResult<RoleOut<Vec<Finding>>> {
     let mut secs = vec![
-        sec(Priority::UserRequest, "deterministic findings already known (do not repeat)", pretty(&cc.deterministic), true),
-        sec(Priority::UserRequest, "user decisions (ignored/locked finding keys: do not insist)", pretty(&cc.decisions), true),
+        sec(
+            Priority::UserRequest,
+            "deterministic findings already known (do not repeat)",
+            pretty(&cc.deterministic),
+            true,
+        ),
+        sec(
+            Priority::UserRequest,
+            "user decisions (ignored/locked finding keys: do not insist)",
+            pretty(&cc.decisions),
+            true,
+        ),
         sec(Priority::Project, "edit plan", pretty(&cc.plan), true),
         sec(Priority::Project, "demand spec", pretty(&cc.demand), false),
-        sec(Priority::SelectedAssets, "timeline digest", pretty(&cc.timeline_digest), false),
+        sec(
+            Priority::SelectedAssets,
+            "timeline digest",
+            pretty(&cc.timeline_digest),
+            false,
+        ),
     ];
     if let Some(t) = &cc.transcript {
         secs.push(sec(Priority::Summaries, "transcript", t.clone(), false));
     }
-    let (raw, meta) = call(ctx, task, CRITIC_SYSTEM, &secs, "critic_review", &critic_schema(), CRITIC_PROMPT_VERSION, cache).await?;
-    Ok(RoleOut { value: findings_from(&raw, deliverable), meta, raw })
+    let (raw, meta) = call(
+        ctx,
+        task,
+        CRITIC_SYSTEM,
+        &secs,
+        "critic_review",
+        &critic_schema(),
+        CRITIC_PROMPT_VERSION,
+        cache,
+    )
+    .await?;
+    Ok(RoleOut {
+        value: findings_from(&raw, deliverable),
+        meta,
+        raw,
+    })
 }
 
 #[cfg(test)]
@@ -399,14 +553,27 @@ mod tests {
         let f = findings_from(&raw, "main");
         assert_eq!(f[0].severity, Severity::Minor, "no evidence ⇒ cannot block");
         assert_eq!(f[1].severity, Severity::Major);
-        assert!(matches!(f[1].suggested_fix, Some(FixAction::DeleteClip { .. })));
-        assert!(f[2].suggested_fix.is_none(), "unknown fix actions are dropped (closed vocabulary)");
-        assert!(f.iter().all(|x| x.source == FindingSource::Semantic && x.key.starts_with("sem:main:")));
+        assert!(matches!(
+            f[1].suggested_fix,
+            Some(FixAction::DeleteClip { .. })
+        ));
+        assert!(
+            f[2].suggested_fix.is_none(),
+            "unknown fix actions are dropped (closed vocabulary)"
+        );
+        assert!(
+            f.iter()
+                .all(|x| x.source == FindingSource::Semantic && x.key.starts_with("sem:main:"))
+        );
     }
 
     #[test]
     fn schemas_are_valid_json_schema_documents() {
-        for s in [production_plan_schema(), edit_plan_schema(), critic_schema()] {
+        for s in [
+            production_plan_schema(),
+            edit_plan_schema(),
+            critic_schema(),
+        ] {
             assert_eq!(s["type"], "object");
             assert!(s["required"].is_array());
         }
@@ -414,7 +581,11 @@ mod tests {
 
     #[test]
     fn role_prompts_declare_the_role_and_forbid_acting() {
-        for (p, role) in [(PRODUCER_SYSTEM, "producer"), (PLANNER_SYSTEM, "planner"), (CRITIC_SYSTEM, "critic")] {
+        for (p, role) in [
+            (PRODUCER_SYSTEM, "producer"),
+            (PLANNER_SYSTEM, "planner"),
+            (CRITIC_SYSTEM, "critic"),
+        ] {
             assert!(p.starts_with(&format!("ROLE: {role}")));
             assert!(p.contains("cannot edit"));
         }

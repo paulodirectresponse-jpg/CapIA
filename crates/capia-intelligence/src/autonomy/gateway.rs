@@ -134,9 +134,18 @@ pub trait AssetGatewayAdapter: Send + Sync {
         false
     }
     async fn probe(&self) -> AdapterProbe;
-    async fn search(&self, req: &SearchRequest, cancel: &CancelToken) -> Result<Vec<Candidate>, GatewayError>;
+    async fn search(
+        &self,
+        req: &SearchRequest,
+        cancel: &CancelToken,
+    ) -> Result<Vec<Candidate>, GatewayError>;
     /// Baixa/copia o candidato para `dest` (staging). Nunca importa nem toca o projeto.
-    async fn fetch(&self, c: &Candidate, dest: &Path, cancel: &CancelToken) -> Result<Fetched, GatewayError>;
+    async fn fetch(
+        &self,
+        c: &Candidate,
+        dest: &Path,
+        cancel: &CancelToken,
+    ) -> Result<Fetched, GatewayError>;
 }
 
 impl core::fmt::Debug for dyn AssetGatewayAdapter {
@@ -147,14 +156,14 @@ impl core::fmt::Debug for dyn AssetGatewayAdapter {
 
 #[derive(Default)]
 pub struct GatewayRegistry {
-    adapters: Vec<Arc<dyn AssetGatewayAdapter>>,
+    adapters: Mutex<Vec<Arc<dyn AssetGatewayAdapter>>>,
     disabled: Mutex<BTreeSet<String>>,
 }
 
 impl core::fmt::Debug for GatewayRegistry {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("GatewayRegistry")
-            .field("adapters", &self.adapters.iter().map(|a| a.id()).collect::<Vec<_>>())
+            .field("adapters", &self.ids())
             .finish_non_exhaustive()
     }
 }
@@ -165,8 +174,21 @@ impl GatewayRegistry {
     }
 
     pub fn register(&mut self, a: Arc<dyn AssetGatewayAdapter>) {
-        self.adapters.retain(|x| x.id() != a.id());
-        self.adapters.push(a);
+        self.register_shared(a);
+    }
+
+    /// Registra/substitui um adapter com o registro já compartilhado (configuração em runtime).
+    pub fn register_shared(&self, a: Arc<dyn AssetGatewayAdapter>) {
+        if let Ok(mut v) = self.adapters.lock() {
+            v.retain(|x| x.id() != a.id());
+            v.push(a);
+        }
+    }
+
+    pub fn remove(&self, id: &str) {
+        if let Ok(mut v) = self.adapters.lock() {
+            v.retain(|x| x.id() != id);
+        }
     }
 
     pub fn set_enabled(&self, id: &str, enabled: bool) {
@@ -186,22 +208,32 @@ impl GatewayRegistry {
     /// Adapters ativos (na ordem de registro).
     pub fn enabled(&self) -> Vec<Arc<dyn AssetGatewayAdapter>> {
         self.adapters
-            .iter()
-            .filter(|a| self.is_enabled(&a.id()))
-            .cloned()
-            .collect()
+            .lock()
+            .map(|v| {
+                v.iter()
+                    .filter(|a| self.is_enabled(&a.id()))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn AssetGatewayAdapter>> {
-        self.adapters.iter().find(|a| a.id() == id).cloned()
+        self.adapters
+            .lock()
+            .ok()
+            .and_then(|v| v.iter().find(|a| a.id() == id).cloned())
     }
 
     pub fn ids(&self) -> Vec<String> {
-        self.adapters.iter().map(|a| a.id()).collect()
+        self.adapters
+            .lock()
+            .map(|v| v.iter().map(|a| a.id()).collect())
+            .unwrap_or_default()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.adapters.is_empty()
+        self.adapters.lock().is_ok_and(|v| v.is_empty())
     }
 }
 
@@ -217,7 +249,9 @@ pub enum LicenseVerdict {
 
 pub fn license_verdict(l: LicenseStatus, p: &RunPolicy) -> LicenseVerdict {
     match l {
-        LicenseStatus::KnownAllowed | LicenseStatus::UserProvided | LicenseStatus::Generated => LicenseVerdict::Allow,
+        LicenseStatus::KnownAllowed | LicenseStatus::UserProvided | LicenseStatus::Generated => {
+            LicenseVerdict::Allow
+        }
         LicenseStatus::Unknown => {
             if p.unknown_license_requires_approval {
                 LicenseVerdict::NeedsApproval
@@ -250,7 +284,11 @@ pub fn rank_candidate(c: &mut Candidate, n: &AssetNeed) {
     let want = tokens(&format!("{} {}", n.purpose, n.description));
     let have = tokens(&format!("{} {}", c.title, c.description));
     let overlap = want.intersection(&have).count() as f64;
-    let semantic = if want.is_empty() { 0.0 } else { overlap / want.len() as f64 };
+    let semantic = if want.is_empty() {
+        0.0
+    } else {
+        overlap / want.len() as f64
+    };
     let kind = if c.kind == n.kind { 1.0 } else { 0.0 };
     let duration = match (n.target_duration_ms, c.duration_ms) {
         (Some(t), Some(d)) if d >= t => 1.0,
@@ -278,7 +316,11 @@ pub fn rank_candidate(c: &mut Candidate, n: &AssetNeed) {
 }
 
 /// Reuso de assets **do projeto**: ranqueia o inventário contra a *need* (antes de adquirir).
-pub fn rank_inventory(n: &AssetNeed, inv: &Inventory, exclude: &BTreeSet<String>) -> Vec<(String, f64)> {
+pub fn rank_inventory(
+    n: &AssetNeed,
+    inv: &Inventory,
+    exclude: &BTreeSet<String>,
+) -> Vec<(String, f64)> {
     let want = tokens(&format!("{} {}", n.purpose, n.description));
     let mut out: Vec<(String, f64)> = inv
         .assets
@@ -299,13 +341,19 @@ pub fn rank_inventory(n: &AssetNeed, inv: &Inventory, exclude: &BTreeSet<String>
             (hits > 0.0 && dur_ok).then(|| (a.id.clone(), hits))
         })
         .collect();
-    out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(core::cmp::Ordering::Equal).then(a.0.cmp(&b.0)));
+    out.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(core::cmp::Ordering::Equal)
+            .then(a.0.cmp(&b.0))
+    });
     out
 }
 
 // ---- adapters ----------------------------------------------------------------------------------
 
-const MEDIA_EXT: &[&str] = &["mp4", "mov", "mkv", "webm", "m4v", "png", "jpg", "jpeg", "wav", "mp3", "m4a", "aac", "flac"];
+const MEDIA_EXT: &[&str] = &[
+    "mp4", "mov", "mkv", "webm", "m4v", "png", "jpg", "jpeg", "wav", "mp3", "m4a", "aac", "flac",
+];
 
 fn kind_of_ext(ext: &str) -> AssetKind {
     match ext {
@@ -318,12 +366,15 @@ fn kind_of_ext(ext: &str) -> AssetKind {
 fn sha256_file(path: &Path) -> Result<(String, u64), GatewayError> {
     use sha2::{Digest, Sha256};
     use std::io::Read as _;
-    let mut f = std::fs::File::open(path).map_err(|e| GatewayError::new("IO", format!("open: {e}"), false))?;
+    let mut f = std::fs::File::open(path)
+        .map_err(|e| GatewayError::new("IO", format!("open: {e}"), false))?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 1 << 20];
     let mut total = 0u64;
     loop {
-        let n = f.read(&mut buf).map_err(|e| GatewayError::new("IO", format!("read: {e}"), false))?;
+        let n = f
+            .read(&mut buf)
+            .map_err(|e| GatewayError::new("IO", format!("read: {e}"), false))?;
         if n == 0 {
             break;
         }
@@ -347,7 +398,10 @@ pub struct LocalLibraryAdapter {
 
 impl LocalLibraryAdapter {
     pub fn new(id: &str, root: PathBuf) -> Self {
-        Self { id: id.to_owned(), root }
+        Self {
+            id: id.to_owned(),
+            root,
+        }
     }
 }
 
@@ -368,16 +422,26 @@ impl AssetGatewayAdapter for LocalLibraryAdapter {
     async fn probe(&self) -> AdapterProbe {
         AdapterProbe {
             available: self.root.is_dir(),
-            detail: if self.root.is_dir() { "ok".into() } else { "library folder not found".into() },
+            detail: if self.root.is_dir() {
+                "ok".into()
+            } else {
+                "library folder not found".into()
+            },
         }
     }
 
-    async fn search(&self, req: &SearchRequest, _c: &CancelToken) -> Result<Vec<Candidate>, GatewayError> {
+    async fn search(
+        &self,
+        req: &SearchRequest,
+        _c: &CancelToken,
+    ) -> Result<Vec<Candidate>, GatewayError> {
         let want = tokens(&req.query);
         let mut out = Vec::new();
         let mut stack = vec![(self.root.clone(), 0u8)];
         while let Some((dir, depth)) = stack.pop() {
-            let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+            let Ok(rd) = std::fs::read_dir(&dir) else {
+                continue;
+            };
             for e in rd.flatten().take(5_000) {
                 let p = e.path();
                 let Ok(ft) = e.file_type() else { continue };
@@ -390,7 +454,11 @@ impl AssetGatewayAdapter for LocalLibraryAdapter {
                     }
                     continue;
                 }
-                let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("").to_lowercase();
+                let ext = p
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
                 if !MEDIA_EXT.contains(&ext.as_str()) {
                     continue;
                 }
@@ -398,7 +466,11 @@ impl AssetGatewayAdapter for LocalLibraryAdapter {
                 if tokens(stem).intersection(&want).count() == 0 {
                     continue;
                 }
-                let rel = p.strip_prefix(&self.root).unwrap_or(&p).display().to_string();
+                let rel = p
+                    .strip_prefix(&self.root)
+                    .unwrap_or(&p)
+                    .display()
+                    .to_string();
                 out.push(Candidate {
                     id: rel.clone(),
                     adapter: self.id.clone(),
@@ -422,26 +494,56 @@ impl AssetGatewayAdapter for LocalLibraryAdapter {
         Ok(out)
     }
 
-    async fn fetch(&self, c: &Candidate, dest: &Path, _cancel: &CancelToken) -> Result<Fetched, GatewayError> {
+    async fn fetch(
+        &self,
+        c: &Candidate,
+        dest: &Path,
+        _cancel: &CancelToken,
+    ) -> Result<Fetched, GatewayError> {
         let rel = Path::new(&c.id);
         // anti path-traversal: o id é relativo e não pode escapar da pasta
-        if rel.is_absolute() || rel.components().any(|x| matches!(x, std::path::Component::ParentDir)) {
-            return Err(GatewayError::new("NOT_ALLOWED", "the library id escapes the library folder", false));
+        if rel.is_absolute()
+            || rel
+                .components()
+                .any(|x| matches!(x, std::path::Component::ParentDir))
+        {
+            return Err(GatewayError::new(
+                "NOT_ALLOWED",
+                "the library id escapes the library folder",
+                false,
+            ));
         }
         let src = self.root.join(rel);
-        let canon = src.canonicalize().map_err(|e| GatewayError::new("NOT_FOUND", format!("library file: {e}"), false))?;
-        let root = self.root.canonicalize().map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
+        let canon = src
+            .canonicalize()
+            .map_err(|e| GatewayError::new("NOT_FOUND", format!("library file: {e}"), false))?;
+        let root = self
+            .root
+            .canonicalize()
+            .map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
         if !canon.starts_with(&root) {
-            return Err(GatewayError::new("NOT_ALLOWED", "the library file is outside the library", false));
+            return Err(GatewayError::new(
+                "NOT_ALLOWED",
+                "the library file is outside the library",
+                false,
+            ));
         }
         if let Some(dir) = dest.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
+            std::fs::create_dir_all(dir)
+                .map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
         }
         let part = dest.with_extension("part");
-        std::fs::copy(&canon, &part).map_err(|e| GatewayError::new("IO", format!("copy: {e}"), false))?;
+        std::fs::copy(&canon, &part)
+            .map_err(|e| GatewayError::new("IO", format!("copy: {e}"), false))?;
         std::fs::rename(&part, dest).map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
         let (sha, bytes) = sha256_file(dest)?;
-        Ok(Fetched { path: dest.to_path_buf(), bytes, sha256: sha, content_type: None, final_url: None })
+        Ok(Fetched {
+            path: dest.to_path_buf(),
+            bytes,
+            sha256: sha,
+            content_type: None,
+            final_url: None,
+        })
     }
 }
 
@@ -453,14 +555,20 @@ pub struct ApprovedUrlAdapter {
 
 impl core::fmt::Debug for ApprovedUrlAdapter {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ApprovedUrlAdapter").field("id", &self.id).finish_non_exhaustive()
+        f.debug_struct("ApprovedUrlAdapter")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
     }
 }
 
 impl ApprovedUrlAdapter {
     pub fn new(id: &str, policy: FetchPolicy) -> Result<Self, GatewayError> {
-        let fetcher = SafeFetcher::new(policy).map_err(|e| GatewayError::new("CONFIG", e.message, false))?;
-        Ok(Self { id: id.to_owned(), fetcher })
+        let fetcher =
+            SafeFetcher::new(policy).map_err(|e| GatewayError::new("CONFIG", e.message, false))?;
+        Ok(Self {
+            id: id.to_owned(),
+            fetcher,
+        })
     }
 }
 
@@ -479,11 +587,20 @@ impl AssetGatewayAdapter for ApprovedUrlAdapter {
     }
 
     async fn probe(&self) -> AdapterProbe {
-        AdapterProbe { available: true, detail: "no network call on probe".into() }
+        AdapterProbe {
+            available: true,
+            detail: "no network call on probe".into(),
+        }
     }
 
-    async fn search(&self, req: &SearchRequest, _c: &CancelToken) -> Result<Vec<Candidate>, GatewayError> {
-        let Some(url) = &req.hint_url else { return Ok(Vec::new()) };
+    async fn search(
+        &self,
+        req: &SearchRequest,
+        _c: &CancelToken,
+    ) -> Result<Vec<Candidate>, GatewayError> {
+        let Some(url) = &req.hint_url else {
+            return Ok(Vec::new());
+        };
         // a URL é validada ANTES de virar candidato (esquema/host/SSRF)
         self.fetcher
             .check_url(url)
@@ -506,12 +623,23 @@ impl AssetGatewayAdapter for ApprovedUrlAdapter {
         }])
     }
 
-    async fn fetch(&self, c: &Candidate, dest: &Path, cancel: &CancelToken) -> Result<Fetched, GatewayError> {
+    async fn fetch(
+        &self,
+        c: &Candidate,
+        dest: &Path,
+        cancel: &CancelToken,
+    ) -> Result<Fetched, GatewayError> {
         let r = self
             .fetcher
             .download(&c.id, dest, cancel)
             .await
-            .map_err(|e| GatewayError::new(e.code.as_str(), e.message, matches!(e.code, capia_ai::ErrorCode::ProviderUnavailable)))?;
+            .map_err(|e| {
+                GatewayError::new(
+                    e.code.as_str(),
+                    e.message,
+                    matches!(e.code, capia_ai::ErrorCode::ProviderUnavailable),
+                )
+            })?;
         Ok(Fetched {
             path: r.path,
             bytes: r.bytes,
@@ -543,7 +671,9 @@ pub struct ReplayCatalogAdapter {
 
 impl core::fmt::Debug for ReplayCatalogAdapter {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ReplayCatalogAdapter").field("id", &self.id).finish_non_exhaustive()
+        f.debug_struct("ReplayCatalogAdapter")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
     }
 }
 
@@ -597,10 +727,17 @@ impl AssetGatewayAdapter for ReplayCatalogAdapter {
     }
 
     async fn probe(&self) -> AdapterProbe {
-        AdapterProbe { available: true, detail: "replay catalog".into() }
+        AdapterProbe {
+            available: true,
+            detail: "replay catalog".into(),
+        }
     }
 
-    async fn search(&self, req: &SearchRequest, cancel: &CancelToken) -> Result<Vec<Candidate>, GatewayError> {
+    async fn search(
+        &self,
+        req: &SearchRequest,
+        cancel: &CancelToken,
+    ) -> Result<Vec<Candidate>, GatewayError> {
         self.search_count.fetch_add(1, Ordering::SeqCst);
         if cancel.is_cancelled() {
             return Err(GatewayError::new("CANCELLED", "cancelled", false));
@@ -614,13 +751,21 @@ impl AssetGatewayAdapter for ReplayCatalogAdapter {
             .iter()
             .map(|e| e.candidate.clone())
             .filter(|c| c.kind == req.kind)
-            .filter(|c| want.is_empty() || !tokens(&format!("{} {}", c.title, c.description)).is_disjoint(&want))
+            .filter(|c| {
+                want.is_empty()
+                    || !tokens(&format!("{} {}", c.title, c.description)).is_disjoint(&want)
+            })
             .collect();
         v.truncate(req.limit.max(1));
         Ok(v)
     }
 
-    async fn fetch(&self, c: &Candidate, dest: &Path, cancel: &CancelToken) -> Result<Fetched, GatewayError> {
+    async fn fetch(
+        &self,
+        c: &Candidate,
+        dest: &Path,
+        cancel: &CancelToken,
+    ) -> Result<Fetched, GatewayError> {
         self.fetch_count.fetch_add(1, Ordering::SeqCst);
         if cancel.is_cancelled() {
             return Err(GatewayError::new("CANCELLED", "cancelled", false));
@@ -634,13 +779,21 @@ impl AssetGatewayAdapter for ReplayCatalogAdapter {
             .find(|e| e.candidate.id == c.id)
             .ok_or_else(|| GatewayError::new("NOT_FOUND", "unknown catalog entry", false))?;
         if let Some(dir) = dest.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
+            std::fs::create_dir_all(dir)
+                .map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
         }
         let part = dest.with_extension("part");
-        std::fs::write(&part, &entry.payload).map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
+        std::fs::write(&part, &entry.payload)
+            .map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
         std::fs::rename(&part, dest).map_err(|e| GatewayError::new("IO", e.to_string(), false))?;
         let (sha, bytes) = sha256_file(dest)?;
-        Ok(Fetched { path: dest.to_path_buf(), bytes, sha256: sha, content_type: Some("video/mp4".into()), final_url: None })
+        Ok(Fetched {
+            path: dest.to_path_buf(),
+            bytes,
+            sha256: sha,
+            content_type: Some("video/mp4".into()),
+            final_url: None,
+        })
     }
 }
 
@@ -691,28 +844,66 @@ mod tests {
 
     fn cand(id: &str, title: &str, license: LicenseStatus, price: Option<u64>) -> Candidate {
         Candidate {
-            id: id.into(), adapter: "cat".into(), title: title.into(), description: "pessoa cozinha produto".into(),
-            kind: AssetKind::Video, duration_ms: Some(6000), width: None, height: None, license,
-            license_text: None, price_micros: price, source_uri: None, score: 0.0, score_components: vec![],
+            id: id.into(),
+            adapter: "cat".into(),
+            title: title.into(),
+            description: "pessoa cozinha produto".into(),
+            kind: AssetKind::Video,
+            duration_ms: Some(6000),
+            width: None,
+            height: None,
+            license,
+            license_text: None,
+            price_micros: price,
+            source_uri: None,
+            score: 0.0,
+            score_components: vec![],
         }
     }
 
     #[test]
     fn license_policy_defaults_are_the_safe_ones() {
         let p = RunPolicy::default();
-        assert_eq!(license_verdict(LicenseStatus::KnownAllowed, &p), LicenseVerdict::Allow);
-        assert_eq!(license_verdict(LicenseStatus::Generated, &p), LicenseVerdict::Allow);
-        assert_eq!(license_verdict(LicenseStatus::Unknown, &p), LicenseVerdict::NeedsApproval);
-        assert_eq!(license_verdict(LicenseStatus::KnownRestricted, &p), LicenseVerdict::Reject);
-        let lax = RunPolicy { unknown_license_requires_approval: false, reject_restricted_license: false, ..RunPolicy::default() };
-        assert_eq!(license_verdict(LicenseStatus::Unknown, &lax), LicenseVerdict::Allow);
-        assert_eq!(license_verdict(LicenseStatus::KnownRestricted, &lax), LicenseVerdict::NeedsApproval);
+        assert_eq!(
+            license_verdict(LicenseStatus::KnownAllowed, &p),
+            LicenseVerdict::Allow
+        );
+        assert_eq!(
+            license_verdict(LicenseStatus::Generated, &p),
+            LicenseVerdict::Allow
+        );
+        assert_eq!(
+            license_verdict(LicenseStatus::Unknown, &p),
+            LicenseVerdict::NeedsApproval
+        );
+        assert_eq!(
+            license_verdict(LicenseStatus::KnownRestricted, &p),
+            LicenseVerdict::Reject
+        );
+        let lax = RunPolicy {
+            unknown_license_requires_approval: false,
+            reject_restricted_license: false,
+            ..RunPolicy::default()
+        };
+        assert_eq!(
+            license_verdict(LicenseStatus::Unknown, &lax),
+            LicenseVerdict::Allow
+        );
+        assert_eq!(
+            license_verdict(LicenseStatus::KnownRestricted, &lax),
+            LicenseVerdict::NeedsApproval
+        );
     }
 
     #[test]
     fn ranking_prefers_semantic_fit_known_license_and_free() {
         let n = need();
-        let mut a = cand("a", "pessoa cozinha produto", LicenseStatus::KnownAllowed, Some(0));
+        let mut a = cand(
+            "a",
+            "pessoa cozinha produto",
+            LicenseStatus::KnownAllowed,
+            Some(0),
+        );
         let mut b = cand("b", "paisagem drone", LicenseStatus::KnownAllowed, Some(0));
         b.description = "montanha ao amanhecer".into();
         let mut c = cand("c", "pessoa cozinha produto", LicenseStatus::Unknown, None);
@@ -720,21 +911,36 @@ mod tests {
             rank_candidate(x, &n);
         }
         assert!(a.score > b.score && a.score > c.score);
-        assert_eq!(a.score_components.len(), 5, "components are kept to explain the choice");
+        assert_eq!(
+            a.score_components.len(),
+            5,
+            "components are kept to explain the choice"
+        );
     }
 
     #[test]
     fn inventory_reuse_ignores_offline_wrong_kind_and_excluded() {
         let mut inv = Inventory::default();
         let mk = |id: &str, name: &str, online: bool| AssetInfo {
-            id: id.into(), name: name.into(), duration_ticks: Some(10_000 * super::super::plan::TICKS_PER_MS),
-            has_video: true, has_audio: true, online, is_image: false,
+            id: id.into(),
+            name: name.into(),
+            duration_ticks: Some(10_000 * super::super::plan::TICKS_PER_MS),
+            has_video: true,
+            has_audio: true,
+            online,
+            is_image: false,
         };
-        inv.assets.insert("ok".into(), mk("ok", "cozinha produto.mp4", true));
-        inv.assets.insert("off".into(), mk("off", "cozinha produto 2.mp4", false));
-        inv.assets.insert("none".into(), mk("none", "praia.mp4", true));
+        inv.assets
+            .insert("ok".into(), mk("ok", "cozinha produto.mp4", true));
+        inv.assets
+            .insert("off".into(), mk("off", "cozinha produto 2.mp4", false));
+        inv.assets
+            .insert("none".into(), mk("none", "praia.mp4", true));
         let r = rank_inventory(&need(), &inv, &BTreeSet::new());
-        assert_eq!(r.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), vec!["ok"]);
+        assert_eq!(
+            r.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(),
+            vec!["ok"]
+        );
         let ex: BTreeSet<String> = ["ok".to_owned()].into();
         assert!(rank_inventory(&need(), &inv, &ex).is_empty());
     }
@@ -748,35 +954,63 @@ mod tests {
         std::fs::write(d.join("secret.txt"), b"nope").unwrap();
         let a = LocalLibraryAdapter::new("lib", d.join("lib"));
         let cancel = CancelToken::new();
-        let req = SearchRequest { need_id: "n1".into(), query: "cozinha produto".into(), kind: AssetKind::Video, target_duration_ms: None, hint_url: None, limit: 5 };
+        let req = SearchRequest {
+            need_id: "n1".into(),
+            query: "cozinha produto".into(),
+            kind: AssetKind::Video,
+            target_duration_ms: None,
+            hint_url: None,
+            limit: 5,
+        };
         let found = a.search(&req, &cancel).await.unwrap();
         assert_eq!(found.len(), 1);
-        let got = a.fetch(&found[0], &d.join("stage/x.mp4"), &cancel).await.unwrap();
+        let got = a
+            .fetch(&found[0], &d.join("stage/x.mp4"), &cancel)
+            .await
+            .unwrap();
         assert_eq!(std::fs::read(&got.path).unwrap(), b"abc123");
         assert!(got.sha256.starts_with("sha256:"));
         let mut evil = found[0].clone();
         evil.id = "../secret.txt".into();
-        assert_eq!(a.fetch(&evil, &d.join("stage/y.mp4"), &cancel).await.unwrap_err().code, "NOT_ALLOWED");
+        assert_eq!(
+            a.fetch(&evil, &d.join("stage/y.mp4"), &cancel)
+                .await
+                .unwrap_err()
+                .code,
+            "NOT_ALLOWED"
+        );
         evil.id = d.join("secret.txt").display().to_string();
-        assert!(a.fetch(&evil, &d.join("stage/z.mp4"), &cancel).await.is_err());
+        assert!(
+            a.fetch(&evil, &d.join("stage/z.mp4"), &cancel)
+                .await
+                .is_err()
+        );
         #[cfg(unix)]
         {
-            std::os::unix::fs::symlink(d.join("secret.txt"), d.join("lib/cozinha link.mp4")).unwrap();
+            std::os::unix::fs::symlink(d.join("secret.txt"), d.join("lib/cozinha link.mp4"))
+                .unwrap();
             let found = a.search(&req, &cancel).await.unwrap();
-            assert!(found.iter().all(|c| !c.id.contains("link")), "symlinks are never listed");
+            assert!(
+                found.iter().all(|c| !c.id.contains("link")),
+                "symlinks are never listed"
+            );
         }
     }
 
     #[tokio::test]
     async fn the_registry_disables_adapters_without_breaking_the_rest() {
         let a: Arc<dyn AssetGatewayAdapter> = Arc::new(ReplayCatalogAdapter::new("cat", vec![]));
-        let b: Arc<dyn AssetGatewayAdapter> = Arc::new(LocalLibraryAdapter::new("lib", std::env::temp_dir()));
+        let b: Arc<dyn AssetGatewayAdapter> =
+            Arc::new(LocalLibraryAdapter::new("lib", std::env::temp_dir()));
         let mut reg = GatewayRegistry::new();
         reg.register(a);
         reg.register(b);
         assert_eq!(reg.enabled().len(), 2);
         reg.set_enabled("cat", false);
-        assert_eq!(reg.enabled().iter().map(|x| x.id()).collect::<Vec<_>>(), vec!["lib".to_owned()]);
+        assert_eq!(
+            reg.enabled().iter().map(|x| x.id()).collect::<Vec<_>>(),
+            vec!["lib".to_owned()]
+        );
         reg.set_enabled("cat", true);
         assert_eq!(reg.enabled().len(), 2);
     }

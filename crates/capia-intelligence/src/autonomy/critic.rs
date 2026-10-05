@@ -183,7 +183,11 @@ pub fn score(findings: &[Finding]) -> f64 {
 }
 
 /// Aplica as decisões do usuário (ignorar/travar) — o Critic não insiste no próximo ciclo.
-pub fn apply_decisions(findings: &mut [Finding], ignored: &BTreeSet<String>, locked: &BTreeSet<String>) {
+pub fn apply_decisions(
+    findings: &mut [Finding],
+    ignored: &BTreeSet<String>,
+    locked: &BTreeSet<String>,
+) {
     for f in findings {
         if locked.contains(&f.key) {
             f.status = FindingStatus::Locked;
@@ -262,7 +266,9 @@ fn contains_words(hay: &str, needle: &str) -> bool {
 fn num(v: &Value) -> Option<f64> {
     match v {
         Value::Number(n) => n.as_f64(),
-        Value::Object(o) => ["static", "value", "v"].iter().find_map(|k| o.get(*k).and_then(num)),
+        Value::Object(o) => ["static", "value", "v"]
+            .iter()
+            .find_map(|k| o.get(*k).and_then(num)),
         _ => None,
     }
 }
@@ -363,7 +369,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                 fix.clone(),
             );
             f.needs_replan = fix.is_none();
-            f.at = Some(RangeTicks { start: max, end: dur });
+            f.at = Some(RangeTicks {
+                start: max,
+                end: dur,
+            });
             tag(&mut f);
             out.push(f);
         }
@@ -377,7 +386,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                     Category::AssetQuality,
                     "every clip uses real media".into(),
                     format!("clip `{id}` is still `{name}`"),
-                    vec![Evidence { kind: "clip".into(), detail: json!({"clip": id}) }],
+                    vec![Evidence {
+                        kind: "clip".into(),
+                        detail: json!({"clip": id}),
+                    }],
                     None,
                 );
                 f.needs_replan = true;
@@ -398,7 +410,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                     Category::Technical,
                     "every media asset is online".into(),
                     format!("clip `{id}` uses offline asset `{a}`"),
-                    vec![Evidence { kind: "clip".into(), detail: json!({"clip": id, "asset": a}) }],
+                    vec![Evidence {
+                        kind: "clip".into(),
+                        detail: json!({"clip": id, "asset": a}),
+                    }],
                     None,
                 );
                 f.needs_replan = true;
@@ -410,7 +425,12 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
         let texts: Vec<(String, String)> = clips
             .iter()
             .filter(|(_, c)| c["content"]["type"] == "text")
-            .map(|(id, c)| (id.clone(), c["content"]["text"].as_str().unwrap_or("").to_owned()))
+            .map(|(id, c)| {
+                (
+                    id.clone(),
+                    c["content"]["text"].as_str().unwrap_or("").to_owned(),
+                )
+            })
             .collect();
         let plan_text: String = inp
             .edit_plans
@@ -422,7 +442,11 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
             .join(" ");
         let all_text = format!(
             "{} {}",
-            texts.iter().map(|t| t.1.as_str()).collect::<Vec<_>>().join(" "),
+            texts
+                .iter()
+                .map(|t| t.1.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
             plan_text
         );
         if let Some(cta) = &inp.brief.cta
@@ -435,7 +459,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                 Category::Cta,
                 format!("the CTA \"{cta}\" is present"),
                 "no text or script segment contains the CTA".into(),
-                vec![Evidence { kind: "constraint".into(), detail: json!({"cta": cta}) }],
+                vec![Evidence {
+                    kind: "constraint".into(),
+                    detail: json!({"cta": cta}),
+                }],
                 Some(FixAction::AddCtaText {
                     sequence: seq["header"]["id"].as_str().unwrap_or(dk).to_owned(),
                     text: cta.clone(),
@@ -456,7 +483,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                         Category::Brief,
                         format!("\"{bad}\" must not appear"),
                         format!("text clip `{id}` contains it"),
-                        vec![Evidence { kind: "clip".into(), detail: json!({"clip": id}) }],
+                        vec![Evidence {
+                            kind: "clip".into(),
+                            detail: json!({"clip": id}),
+                        }],
                         Some(FixAction::DeleteClip { clip: id.clone() }),
                     );
                     tag(&mut f);
@@ -472,7 +502,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                     Category::Brief,
                     format!("\"{need}\" must be covered"),
                     "not found in on-screen text or script".into(),
-                    vec![Evidence { kind: "constraint".into(), detail: json!({"must_include": need}) }],
+                    vec![Evidence {
+                        kind: "constraint".into(),
+                        detail: json!({"must_include": need}),
+                    }],
                     None,
                 );
                 f.needs_replan = true;
@@ -498,7 +531,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                     Category::Captions,
                     "captions stay inside the safe area".into(),
                     format!("caption `{id}` is at y={y}"),
-                    vec![Evidence { kind: "clip".into(), detail: json!({"clip": id, "position_y": y}) }],
+                    vec![Evidence {
+                        kind: "clip".into(),
+                        detail: json!({"clip": id, "position_y": y}),
+                    }],
                     Some(FixAction::SetProperty {
                         clip: id.clone(),
                         prop: "position_y".into(),
@@ -518,7 +554,8 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
             .filter_map(|t| t["id"].as_str())
             .collect();
         for tr in main_tracks {
-            let mut on: Vec<(&String, &Value)> = clips.iter().filter(|(_, c)| c["track"] == tr).collect();
+            let mut on: Vec<(&String, &Value)> =
+                clips.iter().filter(|(_, c)| c["track"] == tr).collect();
             on.sort_by_key(|(_, c)| c["start"].as_i64().unwrap_or(0));
             for w in on.windows(2) {
                 let end = clip_end(w[0].1);
@@ -529,11 +566,21 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                         Severity::Minor,
                         Category::Continuity,
                         "no empty gap in the main track".into(),
-                        format!("gap of {} ms after `{}`", (next - end) / TICKS_PER_MS, w[0].0),
-                        vec![Evidence { kind: "timeline_range".into(), detail: json!({"start": end, "end": next}) }],
+                        format!(
+                            "gap of {} ms after `{}`",
+                            (next - end) / TICKS_PER_MS,
+                            w[0].0
+                        ),
+                        vec![Evidence {
+                            kind: "timeline_range".into(),
+                            detail: json!({"start": end, "end": next}),
+                        }],
                         None,
                     );
-                    f.at = Some(RangeTicks { start: end, end: next });
+                    f.at = Some(RangeTicks {
+                        start: end,
+                        end: next,
+                    });
                     tag(&mut f);
                     out.push(f);
                 }
@@ -550,7 +597,10 @@ pub fn deterministic_checks(inp: &CheckInput<'_>) -> Vec<Finding> {
                         Category::Brief,
                         format!("beat `{}` ({}) is on the timeline", b.id, b.role),
                         "no clip of this beat was found".into(),
-                        vec![Evidence { kind: "beat".into(), detail: json!({"beat": b.id}) }],
+                        vec![Evidence {
+                            kind: "beat".into(),
+                            detail: json!({"beat": b.id}),
+                        }],
                         None,
                     );
                     f.needs_replan = true;
@@ -609,12 +659,22 @@ pub fn compile_correction(run_id: &str, cycle: u32, findings: &[&Finding]) -> Co
         };
         let op = |k: &str| format!("{run_id}:c{cycle}:{i}:{k}");
         match fix {
-            FixAction::TrimToDuration { clip, new_end_ticks } => {
-                commands.push(json!({"operation_id": op("trim"), "type": "trim_clip", "clip": clip,
-                    "edge": "out", "to": new_end_ticks}));
+            FixAction::TrimToDuration {
+                clip,
+                new_end_ticks,
+            } => {
+                commands.push(
+                    json!({"operation_id": op("trim"), "type": "trim_clip", "clip": clip,
+                    "edge": "out", "to": new_end_ticks}),
+                );
                 affected.push(clip.clone());
             }
-            FixAction::AddCtaText { sequence, text, start_ticks, duration_ticks } => {
+            FixAction::AddCtaText {
+                sequence,
+                text,
+                start_ticks,
+                duration_ticks,
+            } => {
                 let track = format!("{sequence}_cta_c{cycle}");
                 let clip_id = format!("{sequence}_cta_{cycle}_{i}");
                 commands.push(json!({"operation_id": op("ctatrack"), "type": "add_track", "sequence": sequence,
@@ -627,7 +687,8 @@ pub fn compile_correction(run_id: &str, cycle: u32, findings: &[&Finding]) -> Co
                 affected.push(clip_id);
             }
             FixAction::DeleteClip { clip } => {
-                commands.push(json!({"operation_id": op("del"), "type": "delete_clip", "clip": clip}));
+                commands
+                    .push(json!({"operation_id": op("del"), "type": "delete_clip", "clip": clip}));
                 affected.push(clip.clone());
             }
             FixAction::SetProperty { clip, prop, value } => {
@@ -662,7 +723,9 @@ pub fn oscillating(history: &[Review]) -> bool {
     let prev_blocking: BTreeSet<&String> = prev.open_blocking().map(|f| &f.key).collect();
     let cur_blocking: BTreeSet<&String> = cur.open_blocking().map(|f| &f.key).collect();
     let no_progress = cur.score <= prev.score + 1e-9 && !cur_blocking.is_empty();
-    let same_back = !cur_blocking.is_empty() && cur_blocking.is_subset(&prev_blocking) && cur_blocking.len() >= prev_blocking.len();
+    let same_back = !cur_blocking.is_empty()
+        && cur_blocking.is_subset(&prev_blocking)
+        && cur_blocking.len() >= prev_blocking.len();
     no_progress || same_back
 }
 
@@ -691,13 +754,34 @@ mod tests {
 
     fn inv(online: bool) -> Inventory {
         let mut i = Inventory::default();
-        i.assets.insert("raw".into(), AssetInfo { id: "raw".into(), name: "raw".into(), duration_ticks: None,
-            has_video: true, has_audio: true, online, is_image: false });
+        i.assets.insert(
+            "raw".into(),
+            AssetInfo {
+                id: "raw".into(),
+                name: "raw".into(),
+                duration_ticks: None,
+                has_video: true,
+                has_audio: true,
+                online,
+                is_image: false,
+            },
+        );
         i
     }
 
-    fn input<'a>(s: &'a [(String, Value)], b: &'a BriefFacts, i: &'a Inventory, e: &'a [EditPlan]) -> CheckInput<'a> {
-        CheckInput { sequences: s, edit_plans: e, brief: b, inventory: i, cycle: 0 }
+    fn input<'a>(
+        s: &'a [(String, Value)],
+        b: &'a BriefFacts,
+        i: &'a Inventory,
+        e: &'a [EditPlan],
+    ) -> CheckInput<'a> {
+        CheckInput {
+            sequences: s,
+            edit_plans: e,
+            brief: b,
+            inventory: i,
+            cycle: 0,
+        }
     }
 
     #[test]
@@ -718,8 +802,14 @@ mod tests {
         assert!(keys.iter().any(|k| k.starts_with("avoid:main:")));
         assert!(keys.iter().any(|k| k.starts_with("safearea:main:")));
         let dur = f.iter().find(|x| x.key == "duration:main").unwrap();
-        assert!(matches!(dur.suggested_fix, Some(FixAction::TrimToDuration { .. })));
-        assert!(f.iter().all(|x| x.confidence == 1.0 && x.source == FindingSource::Deterministic));
+        assert!(matches!(
+            dur.suggested_fix,
+            Some(FixAction::TrimToDuration { .. })
+        ));
+        assert!(
+            f.iter()
+                .all(|x| x.confidence == 1.0 && x.source == FindingSource::Deterministic)
+        );
         let rv = make_review("r", "p", 3, 0, f, Value::Null);
         assert!(!rv.pass);
         assert!(rv.score < 0.5);
@@ -731,14 +821,28 @@ mod tests {
         let brief = BriefFacts::default();
         let off = inv(false);
         let f = deterministic_checks(&input(&s, &brief, &off, &[]));
-        assert!(f.iter().any(|x| x.key.starts_with("offline:") && x.severity == Severity::Blocker));
+        assert!(
+            f.iter()
+                .any(|x| x.key.starts_with("offline:") && x.severity == Severity::Blocker)
+        );
         // timeline limpa
         let clean = json!({"header": {"id": "S", "width": 1080, "height": 1920}, "tracks": [{"id": "S_V1", "kind": "visual", "role": "main"}],
             "clips": {"S_c_a": {"track": "S_V1", "start": 0, "duration": 1000 * TICKS_PER_MS, "name": "a", "content": {"type": "media", "asset": "raw"}}}});
         let s = vec![("main".to_owned(), clean)];
         let on = inv(true);
-        let rv = make_review("r", "p", 1, 0, deterministic_checks(&input(&s, &brief, &on, &[])), Value::Null);
-        assert!(rv.pass && (rv.score - 1.0).abs() < 1e-9, "{:?}", rv.findings);
+        let rv = make_review(
+            "r",
+            "p",
+            1,
+            0,
+            deterministic_checks(&input(&s, &brief, &on, &[])),
+            Value::Null,
+        );
+        assert!(
+            rv.pass && (rv.score - 1.0).abs() < 1e-9,
+            "{:?}",
+            rv.findings
+        );
     }
 
     #[test]
@@ -760,11 +864,42 @@ mod tests {
     #[test]
     fn corrections_are_closed_vocabulary_minimal_and_deterministic() {
         let fixes = [
-            Finding { suggested_fix: Some(FixAction::TrimToDuration { clip: "c1".into(), new_end_ticks: 100 }),
-                ..finding("a".into(), Severity::Major, Category::Timing, "e".into(), "o".into(), vec![], None) },
-            Finding { suggested_fix: Some(FixAction::DeleteClip { clip: "t1".into() }),
-                ..finding("b".into(), Severity::Blocker, Category::Brief, "e".into(), "o".into(), vec![], None) },
-            finding("c".into(), Severity::Major, Category::Brief, "e".into(), "o".into(), vec![], None),
+            Finding {
+                suggested_fix: Some(FixAction::TrimToDuration {
+                    clip: "c1".into(),
+                    new_end_ticks: 100,
+                }),
+                ..finding(
+                    "a".into(),
+                    Severity::Major,
+                    Category::Timing,
+                    "e".into(),
+                    "o".into(),
+                    vec![],
+                    None,
+                )
+            },
+            Finding {
+                suggested_fix: Some(FixAction::DeleteClip { clip: "t1".into() }),
+                ..finding(
+                    "b".into(),
+                    Severity::Blocker,
+                    Category::Brief,
+                    "e".into(),
+                    "o".into(),
+                    vec![],
+                    None,
+                )
+            },
+            finding(
+                "c".into(),
+                Severity::Major,
+                Category::Brief,
+                "e".into(),
+                "o".into(),
+                vec![],
+                None,
+            ),
         ];
         let refs: Vec<&Finding> = fixes.iter().collect();
         let a = compile_correction("run1", 1, &refs);
@@ -772,16 +907,39 @@ mod tests {
         assert_eq!(a, b);
         assert_eq!(a.commands.len(), 2);
         assert_eq!(a.skipped, vec!["c".to_owned()]);
-        assert!(a.commands.iter().all(|c| c["operation_id"].as_str().unwrap().starts_with("run1:c1:")));
+        assert!(
+            a.commands
+                .iter()
+                .all(|c| c["operation_id"].as_str().unwrap().starts_with("run1:c1:"))
+        );
         // outro ciclo ⇒ outro namespace
-        assert_ne!(a.commands[0]["operation_id"], compile_correction("run1", 2, &refs).commands[0]["operation_id"]);
+        assert_ne!(
+            a.commands[0]["operation_id"],
+            compile_correction("run1", 2, &refs).commands[0]["operation_id"]
+        );
     }
 
     #[test]
     fn locked_and_ignored_findings_stop_blocking() {
         let mut f = vec![
-            finding("k1".into(), Severity::Major, Category::Timing, "e".into(), "o".into(), vec![], None),
-            finding("k2".into(), Severity::Blocker, Category::Brief, "e".into(), "o".into(), vec![], None),
+            finding(
+                "k1".into(),
+                Severity::Major,
+                Category::Timing,
+                "e".into(),
+                "o".into(),
+                vec![],
+                None,
+            ),
+            finding(
+                "k2".into(),
+                Severity::Blocker,
+                Category::Brief,
+                "e".into(),
+                "o".into(),
+                vec![],
+                None,
+            ),
         ];
         let ign: BTreeSet<String> = ["k1".to_owned()].into();
         let lock: BTreeSet<String> = ["k2".to_owned()].into();
@@ -793,8 +951,20 @@ mod tests {
 
     #[test]
     fn oscillation_is_detected_when_the_same_finding_returns_without_progress() {
-        let mk = |score_findings: Vec<Finding>, c: u32| make_review("r", "p", 1, c, score_findings, Value::Null);
-        let f = || finding("k".into(), Severity::Major, Category::Timing, "e".into(), "o".into(), vec![], None);
+        let mk = |score_findings: Vec<Finding>, c: u32| {
+            make_review("r", "p", 1, c, score_findings, Value::Null)
+        };
+        let f = || {
+            finding(
+                "k".into(),
+                Severity::Major,
+                Category::Timing,
+                "e".into(),
+                "o".into(),
+                vec![],
+                None,
+            )
+        };
         let r0 = mk(vec![f()], 0);
         let r1 = mk(vec![f()], 1);
         assert!(oscillating(&[r0.clone(), r1]));

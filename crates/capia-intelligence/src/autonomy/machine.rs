@@ -148,9 +148,13 @@ pub enum Outcome {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "to", rename_all = "snake_case")]
 pub enum Next {
-    Go { stage: RunStage },
+    Go {
+        stage: RunStage,
+    },
     /// Aguarda decisão; ao decidir, retoma em `resume`.
-    Wait { resume: RunStage },
+    Wait {
+        resume: RunStage,
+    },
     Complete,
     Fail,
     Cancelled,
@@ -317,7 +321,11 @@ mod tests {
         let path = [
             (RunStage::Understand, Outcome::Success, RunStage::Plan),
             (RunStage::Plan, Outcome::Success, RunStage::ValidatePlan),
-            (RunStage::ValidatePlan, Outcome::ValidAssetsOk, RunStage::Edit),
+            (
+                RunStage::ValidatePlan,
+                Outcome::ValidAssetsOk,
+                RunStage::Edit,
+            ),
             (RunStage::Edit, Outcome::ApplyOk, RunStage::Review),
         ];
         for (from, o, to) in path {
@@ -353,7 +361,10 @@ mod tests {
 
     #[test]
     fn only_edit_and_correct_may_write() {
-        let w: Vec<_> = RunStage::ALL.into_iter().filter(|s| s.may_write()).collect();
+        let w: Vec<_> = RunStage::ALL
+            .into_iter()
+            .filter(|s| s.may_write())
+            .collect();
         assert_eq!(w, vec![RunStage::Edit, RunStage::Correct]);
     }
 
@@ -363,6 +374,9 @@ mod tests {
             assert_eq!(RunStage::parse(s.as_str()), Some(s));
         }
         assert!(RunStage::parse("anything").is_none());
-        assert_eq!(RunStatus::parse("waiting_user"), Some(RunStatus::WaitingUser));
+        assert_eq!(
+            RunStatus::parse("waiting_user"),
+            Some(RunStatus::WaitingUser)
+        );
     }
 }

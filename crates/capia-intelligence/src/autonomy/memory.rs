@@ -221,11 +221,22 @@ fn id_for(scope: MemoryScope, client: Option<&str>, content: &str) -> String {
     h.update([0x1f]);
     h.update(content.trim().to_lowercase().as_bytes());
     let d = h.finalize();
-    format!("mem_{}", d[..10].iter().map(|b| format!("{b:02x}")).collect::<String>())
+    format!(
+        "mem_{}",
+        d[..10]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+    )
 }
 
 fn clean(s: &str, max: usize) -> String {
-    s.chars().filter(|c| !c.is_control() || *c == '\n').take(max).collect::<String>().trim().to_owned()
+    s.chars()
+        .filter(|c| !c.is_control() || *c == '\n')
+        .take(max)
+        .collect::<String>()
+        .trim()
+        .to_owned()
 }
 
 /// Memória System: regras do produto, versionadas e imutáveis em runtime.
@@ -248,10 +259,22 @@ pub fn system_items() -> Vec<MemoryItem> {
         origin_run: None,
     };
     vec![
-        mk("Keep captions inside the platform safe area.", "captions_safe_area"),
-        mk("Never include content listed in must_avoid; always include the CTA.", "brief_constraints"),
-        mk("Prefer a hard cut over a transition unless the brief or reference asks for one.", "transitions"),
-        mk("Prefer existing project assets over acquiring or generating new media.", "asset_reuse"),
+        mk(
+            "Keep captions inside the platform safe area.",
+            "captions_safe_area",
+        ),
+        mk(
+            "Never include content listed in must_avoid; always include the CTA.",
+            "brief_constraints",
+        ),
+        mk(
+            "Prefer a hard cut over a transition unless the brief or reference asks for one.",
+            "transitions",
+        ),
+        mk(
+            "Prefer existing project assets over acquiring or generating new media.",
+            "asset_reuse",
+        ),
     ]
 }
 
@@ -277,11 +300,14 @@ impl MemoryManager {
     }
 
     fn log(&self, id: &str, event: &str, actor: &str, run: Option<&str>, detail: Value) {
-        let _ = self.project.log_memory(id, event, actor, run, &detail, now_ms());
+        let _ = self
+            .project
+            .log_memory(id, event, actor, run, &detail, now_ms());
     }
 
     fn save(&self, item: &MemoryItem) -> IntelResult<()> {
-        let v = serde_json::to_value(item).map_err(|e| IntelError::new("INTERNAL", e.to_string()))?;
+        let v =
+            serde_json::to_value(item).map_err(|e| IntelError::new("INTERNAL", e.to_string()))?;
         match item.scope {
             MemoryScope::Project => self
                 .project
@@ -291,10 +317,16 @@ impl MemoryManager {
                 let app = self.app.as_ref().ok_or_else(|| {
                     IntelError::new("NO_APP_DB", "user/client memory needs the app database")
                 })?;
-                let ns = if item.scope == MemoryScope::User { NS_USER } else { NS_CLIENT };
+                let ns = if item.scope == MemoryScope::User {
+                    NS_USER
+                } else {
+                    NS_CLIENT
+                };
                 app.put(ns, &item.id, &v, now_ms()).map_err(store_err)
             }
-            MemoryScope::System => Err(IntelError::new("NOT_ALLOWED", "system memory is read-only")),
+            MemoryScope::System => {
+                Err(IntelError::new("NOT_ALLOWED", "system memory is read-only"))
+            }
         }
     }
 
@@ -320,7 +352,11 @@ impl MemoryManager {
     }
 
     /// Todos os itens visíveis neste projeto (System + Project + User + Client).
-    pub fn list(&self, scope: Option<MemoryScope>, status: Option<MemoryStatus>) -> IntelResult<Vec<MemoryItem>> {
+    pub fn list(
+        &self,
+        scope: Option<MemoryScope>,
+        status: Option<MemoryStatus>,
+    ) -> IntelResult<Vec<MemoryItem>> {
         let mut out = system_items();
         for r in self.project.list_memory(None).map_err(store_err)? {
             if let Ok(i) = serde_json::from_value::<MemoryItem>(r.json) {
@@ -353,7 +389,10 @@ impl MemoryManager {
         project_auto_activate: bool,
     ) -> IntelResult<MemoryItem> {
         if d.scope == MemoryScope::System {
-            return Err(IntelError::new("NOT_ALLOWED", "only the product defines system memory"));
+            return Err(IntelError::new(
+                "NOT_ALLOWED",
+                "only the product defines system memory",
+            ));
         }
         let content = clean(&d.content, 500);
         if content.is_empty() {
@@ -365,7 +404,11 @@ impl MemoryManager {
                 "client memory needs an explicit client id (never inferred)",
             ));
         }
-        let client = if d.scope == MemoryScope::Client { d.client_id.clone() } else { None };
+        let client = if d.scope == MemoryScope::Client {
+            d.client_id.clone()
+        } else {
+            None
+        };
         let id = id_for(d.scope, client.as_deref(), &content);
         if let Some(existing) = self.get(&id)? {
             self.log(&id, "proposed_again", "agent", run_id, json!({}));
@@ -382,7 +425,11 @@ impl MemoryManager {
             structured: d.structured,
             source: d.source,
             // a rede de segurança central: User/Client nascem Proposed, sempre
-            status: if activate { MemoryStatus::Active } else { MemoryStatus::Proposed },
+            status: if activate {
+                MemoryStatus::Active
+            } else {
+                MemoryStatus::Proposed
+            },
             confidence: d.confidence.clamp(0.0, 1.0),
             evidence: d.evidence.into_iter().take(20).collect(),
             created_ms: now,
@@ -428,7 +475,10 @@ impl MemoryManager {
         let old = item.clone();
         let target = to_scope.unwrap_or(item.scope);
         if target == MemoryScope::System {
-            return Err(IntelError::new("NOT_ALLOWED", "cannot promote into system memory"));
+            return Err(IntelError::new(
+                "NOT_ALLOWED",
+                "cannot promote into system memory",
+            ));
         }
         if let Some(c) = edited_content {
             let c = clean(c, 500);
@@ -438,9 +488,14 @@ impl MemoryManager {
             item.content = c;
         }
         if target == MemoryScope::Client {
-            let cid = client_id.map(str::to_owned).or_else(|| item.client_id.clone());
+            let cid = client_id
+                .map(str::to_owned)
+                .or_else(|| item.client_id.clone());
             if cid.as_deref().is_none_or(str::is_empty) {
-                return Err(IntelError::new("INVALID_ARGUMENT", "client memory needs a client id"));
+                return Err(IntelError::new(
+                    "INVALID_ARGUMENT",
+                    "client memory needs a client id",
+                ));
             }
             item.client_id = cid;
         } else {
@@ -475,7 +530,11 @@ impl MemoryManager {
             }
             MemoryScope::User | MemoryScope::Client => {
                 if let Some(app) = &self.app {
-                    let ns = if item.scope == MemoryScope::User { NS_USER } else { NS_CLIENT };
+                    let ns = if item.scope == MemoryScope::User {
+                        NS_USER
+                    } else {
+                        NS_CLIENT
+                    };
                     app.delete(ns, &item.id).map_err(store_err)?;
                 }
             }
@@ -484,7 +543,13 @@ impl MemoryManager {
         Ok(())
     }
 
-    fn set_status(&self, id: &str, status: MemoryStatus, actor: &str, event: &str) -> IntelResult<MemoryItem> {
+    fn set_status(
+        &self,
+        id: &str,
+        status: MemoryStatus,
+        actor: &str,
+        event: &str,
+    ) -> IntelResult<MemoryItem> {
         let mut item = self
             .get(id)?
             .ok_or_else(|| IntelError::new("NOT_FOUND", "unknown memory item"))?;
@@ -532,12 +597,20 @@ impl MemoryManager {
     /// Exclusão (ação humana): o conteúdo some; o log mantém só o *digest* (auditoria sem
     /// reconstruir conteúdo apagado).
     pub fn delete(&self, id: &str, _a: &UserApproval) -> IntelResult<bool> {
-        let Some(item) = self.get(id)? else { return Ok(false) };
+        let Some(item) = self.get(id)? else {
+            return Ok(false);
+        };
         if item.scope == MemoryScope::System {
             return Err(IntelError::new("NOT_ALLOWED", "system memory is read-only"));
         }
         self.remove(&item)?;
-        self.log(id, "deleted", "user", None, json!({"content_digest": item.digest()}));
+        self.log(
+            id,
+            "deleted",
+            "user",
+            None,
+            json!({"content_digest": item.digest()}),
+        );
         Ok(true)
     }
 
@@ -546,10 +619,17 @@ impl MemoryManager {
     /// vencedor e perdedores (com origem) ao Brain.
     pub fn retrieve(&self, q: &MemoryQuery) -> IntelResult<Retrieval> {
         let limit = if q.limit == 0 { 12 } else { q.limit.min(50) };
-        let terms: Vec<String> = q.terms.iter().map(|t| t.to_lowercase()).filter(|t| t.len() > 2).collect();
+        let terms: Vec<String> = q
+            .terms
+            .iter()
+            .map(|t| t.to_lowercase())
+            .filter(|t| t.len() > 2)
+            .collect();
         let mut scored: Vec<(f64, MemoryItem)> = Vec::new();
         for i in self.list(None, Some(MemoryStatus::Active))? {
-            if i.scope == MemoryScope::Client && (q.client_id.is_none() || i.client_id != q.client_id) {
+            if i.scope == MemoryScope::Client
+                && (q.client_id.is_none() || i.client_id != q.client_id)
+            {
                 continue;
             }
             let text = i.content.to_lowercase();
@@ -558,12 +638,18 @@ impl MemoryManager {
                 MemoryScope::System => 0.5,
                 _ => 1.0,
             };
-            let score = base + hits * 2.0 + f64::from(i.scope.precedence()) * 0.1 + i.confidence * 0.1;
+            let score =
+                base + hits * 2.0 + f64::from(i.scope.precedence()) * 0.1 + i.confidence * 0.1;
             scored.push((score, i));
         }
-        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(core::cmp::Ordering::Equal).then(a.1.id.cmp(&b.1.id)));
+        scored.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .then(a.1.id.cmp(&b.1.id))
+        });
         let mut conflicts: Vec<MemoryConflict> = Vec::new();
-        let mut by_key: std::collections::BTreeMap<String, Vec<&MemoryItem>> = std::collections::BTreeMap::new();
+        let mut by_key: std::collections::BTreeMap<String, Vec<&MemoryItem>> =
+            std::collections::BTreeMap::new();
         for (_, i) in &scored {
             if let Some(k) = &i.key {
                 by_key.entry(k.clone()).or_default().push(i);
@@ -582,7 +668,11 @@ impl MemoryManager {
                     .collect();
                 if !losers.is_empty() {
                     drop_ids.extend(losers.iter().cloned());
-                    conflicts.push(MemoryConflict { key: k, winner: winner.id.clone(), losers });
+                    conflicts.push(MemoryConflict {
+                        key: k,
+                        winner: winner.id.clone(),
+                        losers,
+                    });
                 }
             }
         }
@@ -606,7 +696,10 @@ impl MemoryManager {
     ) -> IntelResult<Option<MemoryItem>> {
         let key = format!("signal:{}", clean(signal_key, 80));
         let seen = self.project.memory_log(Some(&key)).map_err(store_err)?;
-        if seen.iter().any(|r| r.json["detail"] == json!(evidence.detail)) {
+        if seen
+            .iter()
+            .any(|r| r.json["detail"] == json!(evidence.detail))
+        {
             return Ok(None);
         }
         let _ = self.project.log_memory(
@@ -617,7 +710,11 @@ impl MemoryManager {
             &json!({"kind": evidence.kind, "detail": evidence.detail}),
             now_ms(),
         );
-        let n = self.project.memory_log(Some(&key)).map_err(store_err)?.len();
+        let n = self
+            .project
+            .memory_log(Some(&key))
+            .map_err(store_err)?
+            .len();
         if n >= SIGNAL_THRESHOLD {
             let mut d = draft;
             d.source = MemorySource::Correction;

@@ -4,7 +4,12 @@
 //! DemandSpec, chat) e eventos por *poll*. Nada aqui devolve segredo; nenhum caminho de edição
 //! depende deste serviço (o editor funciona com ele ausente ou com a IA desligada).
 
+mod autonomy_api;
+
 use crate::assistant::{self, ApprovalMode, AssistantEvent, AssistantOptions};
+use crate::autonomy::gateway::GatewayRegistry;
+use crate::autonomy::generation::GenerationRegistry;
+use crate::autonomy::orchestrator::Orchestrator;
 use crate::captions::{self, CaptionOptions};
 use crate::ctx::IntelCtx;
 use crate::demand::{self, InterpretOptions};
@@ -109,7 +114,10 @@ pub struct IntelligenceService {
     rt: tokio::runtime::Runtime,
     engine: Arc<dyn Engine>,
     ai: Arc<AiRuntime>,
-    appdb: Option<AppDb>,
+    appdb: Option<Arc<AppDb>>,
+    gateways: Arc<GatewayRegistry>,
+    generators: Arc<GenerationRegistry>,
+    autonomy: Mutex<Option<(PathBuf, Arc<Orchestrator>)>>,
     secrets: Arc<dyn SecretStore>,
     tasks: Arc<Mutex<HashMap<String, TaskEntry>>>,
     events: Arc<Mutex<VecDeque<Value>>>,
@@ -140,7 +148,7 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 impl IntelligenceService {
     pub fn new(engine: Arc<dyn Engine>, cfg: ServiceConfig) -> IntelResult<Self> {
         let appdb = match &cfg.appdb_path {
-            Some(p) => Some(AppDb::open(p, Duration::from_secs(5))?),
+            Some(p) => Some(Arc::new(AppDb::open(p, Duration::from_secs(5))?)),
             None => None,
         };
         let registry = appdb
@@ -173,11 +181,17 @@ impl IntelligenceService {
             .enable_all()
             .build()
             .map_err(|e| IntelError::new("INTERNAL", e.to_string()))?;
+        let gateways = Arc::new(GatewayRegistry::new());
+        let generators = Arc::new(GenerationRegistry::new());
+        autonomy_api::load_gateway_config(appdb.as_deref(), &gateways, &generators);
         Ok(Self {
             rt,
             engine,
             ai,
             appdb,
+            gateways,
+            generators,
+            autonomy: Mutex::new(None),
             secrets: cfg.secrets,
             tasks: Arc::new(Mutex::new(HashMap::new())),
             events: Arc::new(Mutex::new(VecDeque::new())),
@@ -386,6 +400,13 @@ impl IntelligenceService {
     pub fn call(&self, method: &str, p: Value) -> IntelResult<Value> {
         match method {
             "ai.status" => Ok(self.status()),
+            m if m.starts_with("ai.run.")
+                || m.starts_with("ai.memory.")
+                || m.starts_with("ai.gateway.")
+                || m.starts_with("ai.generation.") =>
+            {
+                self.autonomy_call(m, p)
+            }
             "ai.enabled.set" => {
                 let enabled = p["enabled"]
                     .as_bool()

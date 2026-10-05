@@ -63,6 +63,9 @@ pub struct RunInputs {
     /// Respostas do usuário às perguntas abertas (índice → texto).
     #[serde(default)]
     pub answers: Vec<String>,
+    /// Sequence já existente (master de uma Run anterior) que as variantes reaproveitam.
+    #[serde(default)]
+    pub master_sequence: Option<String>,
 }
 
 // ---- política / orçamento / uso ---------------------------------------------------------------
@@ -209,7 +212,10 @@ impl RunBudget {
         if self.max_tokens.is_some_and(|m| u.tokens > m) {
             return Some(BudgetLimit::Tokens);
         }
-        if self.max_provider_calls.is_some_and(|m| u.provider_calls > m) {
+        if self
+            .max_provider_calls
+            .is_some_and(|m| u.provider_calls > m)
+        {
             return Some(BudgetLimit::ProviderCalls);
         }
         if self.max_generations.is_some_and(|m| u.generations > m) {
@@ -389,7 +395,13 @@ pub struct ReviewRef {
 }
 
 impl AiRun {
-    pub fn new(id: String, project: String, inputs: RunInputs, brain_profile_id: String, now: u64) -> Self {
+    pub fn new(
+        id: String,
+        project: String,
+        inputs: RunInputs,
+        brain_profile_id: String,
+        now: u64,
+    ) -> Self {
         Self {
             schema_version: RUN_SCHEMA_VERSION,
             id,

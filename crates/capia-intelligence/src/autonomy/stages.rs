@@ -13,14 +13,15 @@ use super::generation::{self, GenKind, GenRequest, GenStatus};
 use super::machine::{Outcome, RunStage};
 use super::memory::{EvidenceRef, MemoryDraft, MemoryKind, MemoryQuery, MemoryScope, MemorySource};
 use super::model::{
-    AcquireSource, AiRun, AppliedRef, BudgetLimit, CriticalUnavailable, DecisionKind, DecisionOption, MemoryRef,
-    PendingDecision, PlanApproval, ProducedSequence, ReviewRef, SpecApproval,
+    AcquireSource, AiRun, AppliedRef, BudgetLimit, CriticalUnavailable, DecisionKind,
+    DecisionOption, MemoryRef, PendingDecision, PlanApproval, ProducedSequence, ReviewRef,
+    SpecApproval,
 };
 use super::orchestrator::{Flags, Orchestrator, StageResult, store_err};
 use super::plan::{
-    AssetKind, AssetNeed, CompileEnv, CostEstimate, EditPlan, Inventory, NeedStatus, ProductionPlan, TxUnit,
-    UnitValidation, ValidationReport, compile_production, destructive_count, digest_value,
-    validate_edit_plan_semantics,
+    AssetKind, AssetNeed, CompileEnv, CostEstimate, EditPlan, Inventory, NeedStatus,
+    ProductionPlan, TxUnit, UnitValidation, ValidationReport, compile_production,
+    destructive_count, digest_value, validate_edit_plan_semantics,
 };
 use super::roles::{self, CriticContext, PlanningContext, RoleMeta};
 use crate::ctx::IntelCtx;
@@ -68,7 +69,12 @@ pub fn demand_json(s: &DemandSpec) -> Value {
 }
 
 fn brief_facts(s: &DemandSpec, run: &AiRun) -> BriefFacts {
-    let max_s = run.inputs.deliverables.iter().filter_map(|d| d.max_duration_s).min();
+    let max_s = run
+        .inputs
+        .deliverables
+        .iter()
+        .filter_map(|d| d.max_duration_s)
+        .min();
     BriefFacts {
         cta: s.cta.value.clone().filter(|c| !c.trim().is_empty()),
         max_duration_ticks: max_s.map(|s| i64::from(s) * 705_600_000),
@@ -129,16 +135,23 @@ impl Orchestrator {
             RunStage::Edit => self.st_edit(run, ic, flags).await,
             RunStage::Review => self.st_review(run, ic, task).await,
             RunStage::Correct => self.st_correct(run, ic, flags).await,
-            RunStage::Done => Err(IntelError::new("ILLEGAL_TRANSITION", "a done run has no stage to run")),
+            RunStage::Done => Err(IntelError::new(
+                "ILLEGAL_TRANSITION",
+                "a done run has no stage to run",
+            )),
         }
     }
 
     pub(super) fn inventory(&self) -> IntelResult<Inventory> {
-        Ok(Inventory::from_assets_list(&self.deps.engine.read("assets.list", json!({}))?))
+        Ok(Inventory::from_assets_list(
+            &self.deps.engine.read("assets.list", json!({}))?,
+        ))
     }
 
     fn load_spec(&self, ic: &IntelCtx, run: &AiRun) -> IntelResult<Option<DemandSpec>> {
-        let Some(id) = &run.demand_spec_id else { return Ok(None) };
+        let Some(id) = &run.demand_spec_id else {
+            return Ok(None);
+        };
         ic.records()?.latest::<DemandSpec>(KIND_DEMAND, id)
     }
 
@@ -151,7 +164,9 @@ impl Orchestrator {
 
     /// Lança no livro-razão o custo de uma chamada que não passa pelos papéis (STT etc.).
     fn ledger_other(&self, run_id: &str, key: &str, kind: &str, cost: Option<u64>) {
-        let _ = self.store.ledger_reserve(run_id, key, 0, None, &json!({"kind": kind}), now_ms());
+        let _ = self
+            .store
+            .ledger_reserve(run_id, key, 0, None, &json!({"kind": kind}), now_ms());
         let _ = self.store.ledger_settle(
             run_id,
             key,
@@ -162,9 +177,9 @@ impl Orchestrator {
     }
 
     fn approved(run: &AiRun, kind: DecisionKind, bound: &str) -> bool {
-        run.approvals
-            .iter()
-            .any(|a| a.kind == kind && a.option == "approve" && a.bound_digest.as_deref() == Some(bound))
+        run.approvals.iter().any(|a| {
+            a.kind == kind && a.option == "approve" && a.bound_digest.as_deref() == Some(bound)
+        })
     }
 
     /// Digest ao qual PlanApproval/SpendApproval ficam presos: plano de produção + EditPlans
@@ -190,7 +205,12 @@ impl Orchestrator {
 
     // ---- UNDERSTAND ----------------------------------------------------------------------------
 
-    async fn st_understand(&self, run: &mut AiRun, ic: &IntelCtx, task: &TaskCtx) -> IntelResult<StageResult> {
+    async fn st_understand(
+        &self,
+        run: &mut AiRun,
+        ic: &IntelCtx,
+        task: &TaskCtx,
+    ) -> IntelResult<StageResult> {
         let records = ic.records()?;
         let cache = self.effect_cache(&run.id);
         // memória relevante (explicável: o que foi usado fica na Run)
@@ -209,20 +229,38 @@ impl Orchestrator {
         run.memory_used = ret
             .items
             .iter()
-            .map(|i| MemoryRef { id: i.id.clone(), scope: i.scope.as_str().to_owned(), content_digest: i.digest() })
+            .map(|i| MemoryRef {
+                id: i.id.clone(),
+                scope: i.scope.as_str().to_owned(),
+                content_digest: i.digest(),
+            })
             .collect();
 
         let reinterpret = run.checkpoint["reinterpret"].as_bool().unwrap_or(false);
         let mut spec: Option<DemandSpec> = None;
         if !reinterpret
-            && let Some(id) = run.inputs.demand_spec_id.clone().or_else(|| run.demand_spec_id.clone())
+            && let Some(id) = run
+                .inputs
+                .demand_spec_id
+                .clone()
+                .or_else(|| run.demand_spec_id.clone())
         {
             spec = records.latest::<DemandSpec>(KIND_DEMAND, &id)?;
         }
         if spec.is_none() {
             let mut all = Vec::new();
-            if let Some(t) = run.inputs.brief_text.clone().filter(|t| !t.trim().is_empty()) {
-                all.push(docs::extract_text("brief", DocKind::Txt, &t, format!("brief:{}", short(&t))));
+            if let Some(t) = run
+                .inputs
+                .brief_text
+                .clone()
+                .filter(|t| !t.trim().is_empty())
+            {
+                all.push(docs::extract_text(
+                    "brief",
+                    DocKind::Txt,
+                    &t,
+                    format!("brief:{}", short(&t)),
+                ));
             }
             for path in run.inputs.documents.clone() {
                 let p = PathBuf::from(&path);
@@ -261,7 +299,10 @@ impl Orchestrator {
                     ic,
                     task,
                     &all,
-                    &InterpretOptions { user_note: (!note.trim().is_empty()).then_some(note), force: reinterpret },
+                    &InterpretOptions {
+                        user_note: (!note.trim().is_empty()).then_some(note),
+                        force: reinterpret,
+                    },
                 )
                 .await?;
                 fp!("autonomy_understand_after_provider");
@@ -294,17 +335,32 @@ impl Orchestrator {
             if records.latest_json(KIND_REFERENCE, &asset)?.is_some() {
                 continue;
             }
-            match reference::analyze_reference(ic, task, &asset, &ReferenceOptions::default(), &|_, _, _| {}).await {
+            match reference::analyze_reference(
+                ic,
+                task,
+                &asset,
+                &ReferenceOptions::default(),
+                &|_, _, _| {},
+            )
+            .await
+            {
                 Ok(_) => {}
                 Err(e) if e.is_cancelled() => return Err(e),
                 Err(e) => warnings.push(format!("reference {asset}: {}", e.code)),
             }
         }
         for asset in run.inputs.assets.clone().into_iter().take(6) {
-            match transcript::transcribe_asset(ic, task, &TranscribeParams::new(&asset), &|_, _| {}).await {
+            match transcript::transcribe_asset(ic, task, &TranscribeParams::new(&asset), &|_, _| {})
+                .await
+            {
                 Ok(rec) => {
                     if !rec.from_cache {
-                        self.ledger_other(&run.id, &format!("stt:{}:{asset}", run.id), "stt", rec.cost_micros);
+                        self.ledger_other(
+                            &run.id,
+                            &format!("stt:{}:{asset}", run.id),
+                            "stt",
+                            rec.cost_micros,
+                        );
                     }
                 }
                 Err(e) if e.is_cancelled() => return Err(e),
@@ -314,8 +370,17 @@ impl Orchestrator {
 
         // regras explícitas do briefing viram PROPOSTAS de memória (nunca ativas em User/Client)
         if run.checkpoint["mem_proposed"].as_str() != Some(&spec.id) {
-            let scope = if run.inputs.client_id.is_some() { MemoryScope::Client } else { MemoryScope::Project };
-            for it in spec.must_avoid.iter().chain(spec.constraints.iter()).take(8) {
+            let scope = if run.inputs.client_id.is_some() {
+                MemoryScope::Client
+            } else {
+                MemoryScope::Project
+            };
+            for it in spec
+                .must_avoid
+                .iter()
+                .chain(spec.constraints.iter())
+                .take(8)
+            {
                 if it.basis != crate::demand::Basis::Explicit {
                     continue;
                 }
@@ -332,7 +397,10 @@ impl Orchestrator {
                             .sources
                             .iter()
                             .take(2)
-                            .map(|s| EvidenceRef { kind: "briefing".into(), detail: s.quote.clone() })
+                            .map(|s| EvidenceRef {
+                                kind: "briefing".into(),
+                                detail: s.quote.clone(),
+                            })
                             .collect(),
                         key: None,
                     },
@@ -344,23 +412,39 @@ impl Orchestrator {
         }
 
         // perguntas abertas / aprovação do DemandSpec
-        let qs: Vec<String> = spec.open_questions.iter().map(|q| q.question.clone()).collect();
+        let qs: Vec<String> = spec
+            .open_questions
+            .iter()
+            .map(|q| q.question.clone())
+            .collect();
         let spec_ok = run.checkpoint["spec_approved"].as_u64() == Some(u64::from(spec.version));
         let ask = match run.policy.demand_spec {
             SpecApproval::Always => !spec_ok,
-            SpecApproval::RequiredIfQuestions => !qs.is_empty() && run.question_rounds < run.policy.max_question_rounds,
+            SpecApproval::RequiredIfQuestions => {
+                !qs.is_empty() && run.question_rounds < run.policy.max_question_rounds
+            }
             SpecApproval::Auto => false,
         };
         if ask {
-            let mut options = vec![DecisionOption::new("approve", "Proceed with the current understanding")];
+            let mut options = vec![DecisionOption::new(
+                "approve",
+                "Proceed with the current understanding",
+            )];
             if !qs.is_empty() {
                 options.push(DecisionOption::new("answer", "Answer the open questions"));
             }
             let d = pending(
                 run,
-                format!("dec-{}-spec-{}-{}", run.id, spec.version, run.question_rounds),
+                format!(
+                    "dec-{}-spec-{}-{}",
+                    run.id, spec.version, run.question_rounds
+                ),
                 DecisionKind::OpenQuestion,
-                if qs.is_empty() { "Approve the interpreted demand?" } else { "The briefing leaves open questions." },
+                if qs.is_empty() {
+                    "Approve the interpreted demand?"
+                } else {
+                    "The briefing leaves open questions."
+                },
                 options,
                 json!({"spec": demand_json(&spec), "questions": qs, "warnings": warnings}),
                 "Answering refines the DemandSpec; proceeding plans with the stated assumptions.",
@@ -377,7 +461,12 @@ impl Orchestrator {
 
     // ---- PLAN ----------------------------------------------------------------------------------
 
-    fn planning_context(&self, run: &AiRun, ic: &IntelCtx, spec: &DemandSpec) -> IntelResult<PlanningContext> {
+    fn planning_context(
+        &self,
+        run: &AiRun,
+        ic: &IntelCtx,
+        spec: &DemandSpec,
+    ) -> IntelResult<PlanningContext> {
         let records = ic.records()?;
         let inv = self.inventory()?;
         let inventory = json!(
@@ -422,7 +511,11 @@ impl Orchestrator {
             .collect();
         let gw = run.policy.allow_gateway && !self.deps.gateways.enabled().is_empty();
         let gen_ok = run.policy.allow_generation && self.deps.generators.available();
-        let feedback = run.checkpoint.get("replan").cloned().filter(Value::is_object);
+        let feedback = run
+            .checkpoint
+            .get("replan")
+            .cloned()
+            .filter(Value::is_object);
         Ok(PlanningContext {
             demand: demand_json(spec),
             reference,
@@ -431,23 +524,33 @@ impl Orchestrator {
             memory,
             capabilities: json!({"gateway": gw, "generation": gen_ok, "gateway_adapters": self.deps.gateways.ids()}),
             requested: json!({"deliverables": run.inputs.deliverables, "variants": run.inputs.variants,
+                              "master_sequence": run.inputs.master_sequence.as_ref().map(|s| format!("seq:{s}")),
                               "budget": run.budget, "replans_used": run.usage.replans}),
             feedback,
         })
     }
 
-    async fn st_plan(&self, run: &mut AiRun, ic: &IntelCtx, task: &TaskCtx) -> IntelResult<StageResult> {
+    async fn st_plan(
+        &self,
+        run: &mut AiRun,
+        ic: &IntelCtx,
+        task: &TaskCtx,
+    ) -> IntelResult<StageResult> {
         // replanejamento: contagem e limite (nunca em laço infinito)
         let is_replan = run.production_plan.is_some();
         if is_replan {
-            let counted = run.checkpoint["replan_counted"].as_u64().unwrap_or(u64::MAX);
+            let counted = run.checkpoint["replan_counted"]
+                .as_u64()
+                .unwrap_or(u64::MAX);
             if counted != u64::from(run.current_attempt) {
                 run.usage.replans += 1;
                 Self::set_checkpoint(run, "replan_counted", json!(run.current_attempt));
             }
             if run.usage.replans > run.budget.max_replans {
                 run.usage.replans = run.budget.max_replans;
-                return Ok(StageResult::wait(self.budget_decision(run, BudgetLimit::Replans)));
+                return Ok(StageResult::wait(
+                    self.budget_decision(run, BudgetLimit::Replans),
+                ));
             }
         }
         let spec = self
@@ -471,10 +574,14 @@ impl Orchestrator {
         let mut plan = out.value;
         // entregas pedidas precisam constar
         for req in &run.inputs.deliverables {
-            if !plan.deliverables.iter().any(|d| d.key == req.key) && run.inputs.variants.is_none() {
+            if !plan.deliverables.iter().any(|d| d.key == req.key) && run.inputs.variants.is_none()
+            {
                 return Err(IntelError::new(
                     "PLAN_COVERAGE",
-                    format!("the plan does not include the requested deliverable `{}`", req.key),
+                    format!(
+                        "the plan does not include the requested deliverable `{}`",
+                        req.key
+                    ),
                 ));
             }
         }
@@ -503,7 +610,9 @@ impl Orchestrator {
             edits.push(e.value);
         }
         // mesmo plano de antes (sem progresso) ⇒ não insiste: pede decisão
-        let digest = digest_value(&json!({"p": plan.digest(), "e": edits.iter().map(EditPlan::digest).collect::<Vec<_>>()}));
+        let digest = digest_value(
+            &json!({"p": plan.digest(), "e": edits.iter().map(EditPlan::digest).collect::<Vec<_>>()}),
+        );
         if is_replan && run.plan_digests.contains(&digest) {
             let d = pending(
                 run,
@@ -526,7 +635,13 @@ impl Orchestrator {
         let records = ic.records()?;
         records.put(KIND_RUN_PLAN, &run.id, plan.version, None, &plan)?;
         for e in &edits {
-            records.put(KIND_RUN_EDIT_PLAN, &format!("{}:{}", run.id, e.deliverable_key), e.version, Some(&plan.id), e)?;
+            records.put(
+                KIND_RUN_EDIT_PLAN,
+                &format!("{}:{}", run.id, e.deliverable_key),
+                e.version,
+                Some(&plan.id),
+                e,
+            )?;
         }
         // propostas de memória do Producer: só PROPOSTAS
         for m in &plan.memory_proposals {
@@ -534,13 +649,24 @@ impl Orchestrator {
             let _ = self.memory.propose(
                 MemoryDraft {
                     scope,
-                    client_id: if scope == MemoryScope::Client { run.inputs.client_id.clone() } else { None },
+                    client_id: if scope == MemoryScope::Client {
+                        run.inputs.client_id.clone()
+                    } else {
+                        None
+                    },
                     kind: MemoryKind::parse(&m.kind),
                     content: m.content.clone(),
                     structured: None,
                     source: MemorySource::Agent,
                     confidence: m.confidence.unwrap_or(0.5),
-                    evidence: m.evidence.iter().map(|e| EvidenceRef { kind: "agent".into(), detail: e.clone() }).collect(),
+                    evidence: m
+                        .evidence
+                        .iter()
+                        .map(|e| EvidenceRef {
+                            kind: "agent".into(),
+                            detail: e.clone(),
+                        })
+                        .collect(),
                     key: None,
                 },
                 Some(&run.id),
@@ -568,15 +694,28 @@ impl Orchestrator {
     }
 
     fn compile_units(&self, run: &AiRun, inv: &Inventory, ns: &str) -> IntelResult<Vec<TxUnit>> {
-        let plan = run.production_plan.as_ref().ok_or_else(|| IntelError::new("PLAN_MISSING", "no production plan"))?;
+        let plan = run
+            .production_plan
+            .as_ref()
+            .ok_or_else(|| IntelError::new("PLAN_MISSING", "no production plan"))?;
         let res = Self::resolutions(plan);
-        let env = CompileEnv { run_id: &run.id, ns, inventory: inv, resolutions: &res };
-        compile_production(&env, plan, &run.edit_plans).map_err(|e| IntelError::new(e.code, e.message))
+        let env = CompileEnv {
+            run_id: &run.id,
+            ns,
+            inventory: inv,
+            resolutions: &res,
+        };
+        compile_production(&env, plan, &run.edit_plans)
+            .map_err(|e| IntelError::new(e.code, e.message))
     }
 
     fn replan_feedback(run: &mut AiRun, reason: &str, errors: &[String]) {
-        Self::set_checkpoint(run, "replan", json!({"reason": reason, "errors": errors.iter().take(12).collect::<Vec<_>>(),
-            "previous_plan_digests": run.plan_digests.len()}));
+        Self::set_checkpoint(
+            run,
+            "replan",
+            json!({"reason": reason, "errors": errors.iter().take(12).collect::<Vec<_>>(),
+            "previous_plan_digests": run.plan_digests.len()}),
+        );
     }
 
     async fn st_validate(&self, run: &mut AiRun, ic: &IntelCtx) -> IntelResult<StageResult> {
@@ -609,7 +748,11 @@ impl Orchestrator {
         let mut warnings: Vec<String> = Vec::new();
         for u in &units {
             let label = format!("AI Run {}: {}", run.id, u.key());
-            match self.deps.engine.preview(&actor, &label, Value::Array(u.commands.clone())) {
+            match self
+                .deps
+                .engine
+                .preview(&actor, &label, Value::Array(u.commands.clone()))
+            {
                 Ok(pv) => {
                     unit_reports.push(UnitValidation {
                         unit: u.key(),
@@ -640,11 +783,24 @@ impl Orchestrator {
         let mut gen_cost = 0u64;
         let mut unknown = false;
         let mut notes = Vec::new();
-        for n in plan.asset_needs.iter().filter(|n| n.status == NeedStatus::Open) {
+        for n in plan
+            .asset_needs
+            .iter()
+            .filter(|n| n.status == NeedStatus::Open)
+        {
             match n.estimated_cost_micros {
-                Some(c) if n.source_priority.contains(&AcquireSource::Generate) && !n.source_priority.contains(&AcquireSource::Gateway) => gen_cost += c,
+                Some(c)
+                    if n.source_priority.contains(&AcquireSource::Generate)
+                        && !n.source_priority.contains(&AcquireSource::Gateway) =>
+                {
+                    gen_cost += c
+                }
                 Some(c) => acq += c,
-                None if n.source_priority.iter().any(|s| matches!(s, AcquireSource::Gateway | AcquireSource::Generate)) => {
+                None if n
+                    .source_priority
+                    .iter()
+                    .any(|s| matches!(s, AcquireSource::Gateway | AcquireSource::Generate)) =>
+                {
                     unknown = true;
                     notes.push(format!("price of `{}` is unknown", n.id));
                 }
@@ -662,9 +818,19 @@ impl Orchestrator {
         };
         let destructive: u32 = unit_reports.iter().map(|u| u.destructive_ops).sum();
         let plan_digest = self.plan_bound(run);
-        let diff_digest = digest_value(&json!(unit_reports.iter().map(|u| u.diff_digest.clone()).collect::<Vec<_>>()));
-        let target_rev = unit_reports.iter().map(|u| u.base_revision).max().unwrap_or(0);
-        let plan_gate = run.policy.plan == PlanApproval::Always || destructive > run.policy.destructive_threshold;
+        let diff_digest = digest_value(&json!(
+            unit_reports
+                .iter()
+                .map(|u| u.diff_digest.clone())
+                .collect::<Vec<_>>()
+        ));
+        let target_rev = unit_reports
+            .iter()
+            .map(|u| u.base_revision)
+            .max()
+            .unwrap_or(0);
+        let plan_gate = run.policy.plan == PlanApproval::Always
+            || destructive > run.policy.destructive_threshold;
         let spend_est = acq + gen_cost;
         let spend_gate = spend_est > run.policy.spend_threshold_micros;
         let report = ValidationReport {
@@ -674,7 +840,10 @@ impl Orchestrator {
             diff_digest,
             target_revision: target_rev,
             command_count: unit_reports.iter().map(|u| u.command_count).sum(),
-            sequences_affected: unit_reports.iter().flat_map(|u| u.sequences.clone()).collect(),
+            sequences_affected: unit_reports
+                .iter()
+                .flat_map(|u| u.sequences.clone())
+                .collect(),
             assets_missing: open_needs.clone(),
             warnings: std::mem::take(&mut warnings),
             errors: errors.clone(),
@@ -684,7 +853,13 @@ impl Orchestrator {
             units: unit_reports,
         };
         let records = ic.records()?;
-        records.put(KIND_RUN_VALIDATION, &run.id, plan.version, Some(&plan.id), &report)?;
+        records.put(
+            KIND_RUN_VALIDATION,
+            &run.id,
+            plan.version,
+            Some(&plan.id),
+            &report,
+        )?;
         run.validation = Some(report.clone());
 
         if !report.valid {
@@ -697,7 +872,9 @@ impl Orchestrator {
         if let Some(max) = run.budget.max_cost_micros {
             let committed = self.store.ledger_committed(&run.id).map_err(store_err)?;
             if committed + spend_est > max {
-                return Ok(StageResult::wait(self.budget_decision(run, BudgetLimit::Cost)));
+                return Ok(StageResult::wait(
+                    self.budget_decision(run, BudgetLimit::Cost),
+                ));
             }
         }
         if plan_gate && !Self::approved(run, DecisionKind::PlanApproval, &plan_digest) {
@@ -725,7 +902,10 @@ impl Orchestrator {
                 format!("dec-{}-spend-{}", run.id, &short(&plan_digest)),
                 DecisionKind::SpendApproval,
                 "The estimated spend is above the approval threshold. Approve it?",
-                vec![DecisionOption::new("approve", "Approve the spend"), DecisionOption::new("reject", "Reject and stop")],
+                vec![
+                    DecisionOption::new("approve", "Approve the spend"),
+                    DecisionOption::new("reject", "Reject and stop"),
+                ],
                 json!({"estimated_cost": cost, "threshold_micros": run.policy.spend_threshold_micros}),
                 "Acquired/generated media may cost money up to the estimate (unknown prices are not zero).",
                 Some(plan_digest.clone()),
@@ -734,7 +914,11 @@ impl Orchestrator {
             );
             return Ok(StageResult::wait(d));
         }
-        let outcome = if open_needs.is_empty() { Outcome::ValidAssetsOk } else { Outcome::ValidMissingAssets };
+        let outcome = if open_needs.is_empty() {
+            Outcome::ValidAssetsOk
+        } else {
+            Outcome::ValidMissingAssets
+        };
         let mut r = StageResult::ok(outcome);
         r.output = json!({"valid": true, "missing": open_needs, "diff_digest": report.diff_digest});
         Ok(r)
@@ -754,7 +938,11 @@ impl Orchestrator {
             .clone()
             .ok_or_else(|| IntelError::new("PLAN_MISSING", "no production plan"))?;
         let inv = self.inventory()?;
-        let mut used: BTreeSet<String> = plan.asset_needs.iter().filter_map(|n| n.resolved_asset_id.clone()).collect();
+        let mut used: BTreeSet<String> = plan
+            .asset_needs
+            .iter()
+            .filter_map(|n| n.resolved_asset_id.clone())
+            .collect();
         let mut failed_optional: Vec<String> = Vec::new();
         let mut critical: Option<(String, String)> = None;
         let order: Vec<usize> = {
@@ -767,7 +955,10 @@ impl Orchestrator {
                 continue;
             }
             let mut need = plan.asset_needs[i].clone();
-            match self.acquire_need(run, &mut need, &inv, &used, ic, task, flags).await? {
+            match self
+                .acquire_need(run, &mut need, &inv, &used, ic, task, flags)
+                .await?
+            {
                 NeedResult::Resolved(asset) => {
                     need.status = NeedStatus::Resolved;
                     need.resolved_asset_id = Some(asset.clone());
@@ -775,7 +966,14 @@ impl Orchestrator {
                     plan.asset_needs[i] = need;
                     run.production_plan = Some(plan.clone());
                     // progresso parcial durável (resume sabe o que já foi resolvido)
-                    self.save(run, None, &[("need_resolved".into(), json!({"need": plan.asset_needs[i].id}))])?;
+                    self.save(
+                        run,
+                        None,
+                        &[(
+                            "need_resolved".into(),
+                            json!({"need": plan.asset_needs[i].id}),
+                        )],
+                    )?;
                 }
                 NeedResult::Wait(d) => {
                     run.production_plan = Some(plan);
@@ -806,7 +1004,11 @@ impl Orchestrator {
                 return Ok(StageResult::ok(Outcome::Failure));
             }
             // volta a Open para a retomada tentar de novo depois da decisão do usuário
-            if let Some(n) = run.production_plan.as_mut().and_then(|p| p.asset_needs.iter_mut().find(|n| n.id == id)) {
+            if let Some(n) = run
+                .production_plan
+                .as_mut()
+                .and_then(|p| p.asset_needs.iter_mut().find(|n| n.id == id))
+            {
                 n.status = NeedStatus::Open;
             }
             let d = pending(
@@ -815,7 +1017,10 @@ impl Orchestrator {
                 DecisionKind::ConflictResolution,
                 &format!("A required asset (`{id}`) could not be obtained: {reason}"),
                 vec![
-                    DecisionOption::new("retry", "Try again (enable a source or add the media first)"),
+                    DecisionOption::new(
+                        "retry",
+                        "Try again (enable a source or add the media first)",
+                    ),
                     DecisionOption::new("replan", "Replan without it"),
                     DecisionOption::new("stop", "Stop the run"),
                 ],
@@ -829,7 +1034,14 @@ impl Orchestrator {
             return Ok(StageResult::wait(d));
         }
         if !failed_optional.is_empty() {
-            Self::replan_feedback(run, "optional_assets_unavailable", &failed_optional.iter().map(|n| format!("asset need `{n}` could not be acquired")).collect::<Vec<_>>());
+            Self::replan_feedback(
+                run,
+                "optional_assets_unavailable",
+                &failed_optional
+                    .iter()
+                    .map(|n| format!("asset need `{n}` could not be acquired"))
+                    .collect::<Vec<_>>(),
+            );
             let mut r = StageResult::ok(Outcome::PartialFallback);
             r.output = json!({"failed_optional": failed_optional});
             return Ok(r);
@@ -854,12 +1066,17 @@ impl Orchestrator {
         let order = run.policy.acquire_order.clone();
         let mut notes: Vec<String> = Vec::new();
         for src in order {
-            if !need.source_priority.contains(&src) && !(src == AcquireSource::Library && need.source_priority.contains(&AcquireSource::Gateway)) {
+            if !need.source_priority.contains(&src)
+                && !(src == AcquireSource::Library
+                    && need.source_priority.contains(&AcquireSource::Gateway))
+            {
                 continue;
             }
             match src {
                 AcquireSource::Project => {
-                    if let Some((asset, _)) = gateway::rank_inventory(need, inv, used).into_iter().next() {
+                    if let Some((asset, _)) =
+                        gateway::rank_inventory(need, inv, used).into_iter().next()
+                    {
                         self.record_project_provenance(run, need, &asset);
                         return Ok(NeedResult::Resolved(asset));
                     }
@@ -878,7 +1095,10 @@ impl Orchestrator {
                         .filter(|a| (a.kind() == GatewayKind::LocalLibrary) == want_lib)
                         .collect();
                     if adapters.is_empty() {
-                        notes.push(format!("no {} adapter is enabled", if want_lib { "library" } else { "gateway" }));
+                        notes.push(format!(
+                            "no {} adapter is enabled",
+                            if want_lib { "library" } else { "gateway" }
+                        ));
                         continue;
                     }
                     for a in adapters {
@@ -900,7 +1120,11 @@ impl Orchestrator {
                 }
             }
         }
-        Ok(NeedResult::Unavailable(if notes.is_empty() { "no source could serve it".into() } else { notes.join("; ") }))
+        Ok(NeedResult::Unavailable(if notes.is_empty() {
+            "no source could serve it".into()
+        } else {
+            notes.join("; ")
+        }))
     }
 
     fn record_project_provenance(&self, run: &AiRun, need: &AssetNeed, asset: &str) {
@@ -908,9 +1132,21 @@ impl Orchestrator {
             return;
         }
         let j = gateway::provenance_json(
-            "project", &run.id, &need.id, "project", None, gateway::LicenseStatus::UserProvided, None, "", Some(0), None, json!({}),
+            "project",
+            &run.id,
+            &need.id,
+            "project",
+            None,
+            gateway::LicenseStatus::UserProvided,
+            None,
+            "",
+            Some(0),
+            None,
+            json!({}),
         );
-        let _ = self.store.put_provenance(asset, Some(&run.id), "project", "", &j, now_ms());
+        let _ = self
+            .store
+            .put_provenance(asset, Some(&run.id), "project", "", &j, now_ms());
     }
 
     async fn try_adapter(
@@ -936,14 +1172,26 @@ impl Orchestrator {
                     last = e.message;
                     tokio::time::sleep(Duration::from_millis(100 * (1 << attempt))).await;
                 }
-                Err(e) => return Ok(NeedResult::Unavailable(format!("{}: {}", e.code, e.message))),
+                Err(e) => {
+                    return Ok(NeedResult::Unavailable(format!(
+                        "{}: {}",
+                        e.code, e.message
+                    )));
+                }
             }
         }
-        let Some(mut cands) = cands else { return Ok(NeedResult::Unavailable(last)) };
+        let Some(mut cands) = cands else {
+            return Ok(NeedResult::Unavailable(last));
+        };
         for c in &mut cands {
             gateway::rank_candidate(c, need);
         }
-        cands.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(core::cmp::Ordering::Equal).then(a.id.cmp(&b.id)));
+        cands.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .then(a.id.cmp(&b.id))
+        });
         let rejected: BTreeSet<String> = run.checkpoint["rejected"]
             .as_array()
             .into_iter()
@@ -962,13 +1210,23 @@ impl Orchestrator {
             let bound = digest_value(&json!(key));
             let paid = adapter.is_paid() || c.price_micros.is_none_or(|p| p > 0);
             let est = c.price_micros;
-            if verdict == LicenseVerdict::NeedsApproval && !Self::approved(run, DecisionKind::AssetApproval, &bound) {
+            if verdict == LicenseVerdict::NeedsApproval
+                && !Self::approved(run, DecisionKind::AssetApproval, &bound)
+            {
                 let d = pending(
                     run,
                     format!("dec-{}-asset-{}", run.id, short(&key)),
                     DecisionKind::AssetApproval,
-                    &format!("Use `{}` from `{}`? Its license is {:?}.", c.title, adapter.id(), c.license),
-                    vec![DecisionOption::new("approve", "Use it"), DecisionOption::new("reject", "Skip this asset")],
+                    &format!(
+                        "Use `{}` from `{}`? Its license is {:?}.",
+                        c.title,
+                        adapter.id(),
+                        c.license
+                    ),
+                    vec![
+                        DecisionOption::new("approve", "Use it"),
+                        DecisionOption::new("reject", "Skip this asset"),
+                    ],
                     json!({"candidate": c, "need": need.id}),
                     "The asset becomes part of your project with this license status recorded.",
                     Some(bound.clone()),
@@ -977,13 +1235,24 @@ impl Orchestrator {
                 );
                 return Ok(NeedResult::Wait(Box::new(d)));
             }
-            if paid && (est.is_none() || est.unwrap_or(0) > run.policy.spend_threshold_micros) && !Self::approved(run, DecisionKind::SpendApproval, &bound) {
+            if paid
+                && (est.is_none() || est.unwrap_or(0) > run.policy.spend_threshold_micros)
+                && !Self::approved(run, DecisionKind::SpendApproval, &bound)
+            {
                 let d = pending(
                     run,
                     format!("dec-{}-spendasset-{}", run.id, short(&key)),
                     DecisionKind::SpendApproval,
-                    &format!("`{}` from `{}` is paid ({}). Approve?", c.title, adapter.id(), est.map_or("price unknown".to_owned(), |p| format!("{p} micros"))),
-                    vec![DecisionOption::new("approve", "Approve the spend"), DecisionOption::new("reject", "Skip this asset")],
+                    &format!(
+                        "`{}` from `{}` is paid ({}). Approve?",
+                        c.title,
+                        adapter.id(),
+                        est.map_or("price unknown".to_owned(), |p| format!("{p} micros"))
+                    ),
+                    vec![
+                        DecisionOption::new("approve", "Approve the spend"),
+                        DecisionOption::new("reject", "Skip this asset"),
+                    ],
                     json!({"candidate": c, "need": need.id}),
                     "Unknown prices are not treated as zero.",
                     Some(bound.clone()),
@@ -992,7 +1261,9 @@ impl Orchestrator {
                 );
                 return Ok(NeedResult::Wait(Box::new(d)));
             }
-            return self.fetch_and_import(run, need, adapter, &c, &key, flags).await;
+            return self
+                .fetch_and_import(run, need, adapter, &c, &key, flags)
+                .await;
         }
         Ok(NeedResult::Unavailable("no acceptable candidate".into()))
     }
@@ -1010,14 +1281,29 @@ impl Orchestrator {
         let est = c.price_micros.unwrap_or(0);
         let reserved = self
             .store
-            .ledger_reserve(&run.id, &ekey, est, run.budget.max_cost_micros, &json!({"kind": "gateway"}), now_ms())
+            .ledger_reserve(
+                &run.id,
+                &ekey,
+                est,
+                run.budget.max_cost_micros,
+                &json!({"kind": "gateway"}),
+                now_ms(),
+            )
             .map_err(store_err)?;
         if !reserved {
-            return Ok(NeedResult::Wait(Box::new(self.budget_decision(run, BudgetLimit::Cost))));
+            return Ok(NeedResult::Wait(Box::new(
+                self.budget_decision(run, BudgetLimit::Cost),
+            )));
         }
         let claim = self
             .store
-            .claim_effect(&ekey, &run.id, "gateway", &json!({"adapter": adapter.id(), "candidate": c.id}), now_ms())
+            .claim_effect(
+                &ekey,
+                &run.id,
+                "gateway",
+                &json!({"adapter": adapter.id(), "candidate": c.id}),
+                now_ms(),
+            )
             .map_err(store_err)?;
         let (state, prior) = match claim {
             Claim::New(_) => ("intent".to_owned(), Value::Null),
@@ -1039,9 +1325,14 @@ impl Orchestrator {
         // já baixado e confere: não baixa de novo (resume depois do download)
         let have = state == "submitted"
             && staged.exists()
-            && prior["sha"].as_str().is_some_and(|sha| gateway_sha(&staged).as_deref() == Some(sha));
+            && prior["sha"]
+                .as_str()
+                .is_some_and(|sha| gateway_sha(&staged).as_deref() == Some(sha));
         let (sha, bytes) = if have {
-            (prior["sha"].as_str().unwrap_or("").to_owned(), prior["bytes"].as_u64().unwrap_or(0))
+            (
+                prior["sha"].as_str().unwrap_or("").to_owned(),
+                prior["bytes"].as_u64().unwrap_or(0),
+            )
         } else {
             let mut last = None;
             let mut got = None;
@@ -1060,15 +1351,26 @@ impl Orchestrator {
                         tokio::time::sleep(Duration::from_millis(100 * (1 << attempt))).await;
                     }
                     Err(e) => {
-                        let _ = self.store.update_effect(&ekey, "failed", None, Some(&json!({"error": e.code})), now_ms());
+                        let _ = self.store.update_effect(
+                            &ekey,
+                            "failed",
+                            None,
+                            Some(&json!({"error": e.code})),
+                            now_ms(),
+                        );
                         let _ = self.store.ledger_release(&run.id, &ekey, now_ms());
-                        return Ok(NeedResult::Unavailable(format!("{}: {}", e.code, e.message)));
+                        return Ok(NeedResult::Unavailable(format!(
+                            "{}: {}",
+                            e.code, e.message
+                        )));
                     }
                 }
             }
             let Some(f) = got else {
                 let _ = self.store.ledger_release(&run.id, &ekey, now_ms());
-                return Ok(NeedResult::Unavailable(last.unwrap_or_else(|| "download failed".into())));
+                return Ok(NeedResult::Unavailable(
+                    last.unwrap_or_else(|| "download failed".into()),
+                ));
             };
             self.store
                 .update_effect(
@@ -1089,39 +1391,93 @@ impl Orchestrator {
                 return Err(e);
             }
             Err(e) => {
-                let _ = self.store.update_effect(&ekey, "failed", None, Some(&json!({"error": e.code})), now_ms());
+                let _ = self.store.update_effect(
+                    &ekey,
+                    "failed",
+                    None,
+                    Some(&json!({"error": e.code})),
+                    now_ms(),
+                );
                 let _ = self.store.ledger_release(&run.id, &ekey, now_ms());
-                return Ok(NeedResult::Unavailable(format!("import failed: {}", e.message)));
+                return Ok(NeedResult::Unavailable(format!(
+                    "import failed: {}",
+                    e.message
+                )));
             }
         };
-        let kind = if adapter.kind() == GatewayKind::LocalLibrary { "library" } else { "downloaded" };
-        if self.store.get_provenance(&asset).map_err(store_err)?.is_none() {
+        let kind = if adapter.kind() == GatewayKind::LocalLibrary {
+            "library"
+        } else {
+            "downloaded"
+        };
+        if self
+            .store
+            .get_provenance(&asset)
+            .map_err(store_err)?
+            .is_none()
+        {
             let approval = run
                 .approvals
                 .iter()
                 .rev()
-                .find(|a| matches!(a.kind, DecisionKind::AssetApproval | DecisionKind::SpendApproval) && a.bound_digest.as_deref() == Some(&digest_value(&json!(cand_key))))
+                .find(|a| {
+                    matches!(
+                        a.kind,
+                        DecisionKind::AssetApproval | DecisionKind::SpendApproval
+                    ) && a.bound_digest.as_deref() == Some(&digest_value(&json!(cand_key)))
+                })
                 .map(|a| a.decision_id.clone());
             let j = gateway::provenance_json(
-                kind, &run.id, &need.id, &adapter.id(), c.source_uri.as_deref(), c.license, c.license_text.as_deref(), &sha,
-                c.price_micros, approval.as_deref(),
+                kind,
+                &run.id,
+                &need.id,
+                &adapter.id(),
+                c.source_uri.as_deref(),
+                c.license,
+                c.license_text.as_deref(),
+                &sha,
+                c.price_micros,
+                approval.as_deref(),
                 json!({"title": c.title, "score": c.score, "score_components": c.score_components, "bytes": bytes}),
             );
-            self.store.put_provenance(&asset, Some(&run.id), kind, &sha, &j, now_ms()).map_err(store_err)?;
+            self.store
+                .put_provenance(&asset, Some(&run.id), kind, &sha, &j, now_ms())
+                .map_err(store_err)?;
         }
-        self.store.update_effect(&ekey, "done", Some(&asset), None, now_ms()).map_err(store_err)?;
-        let _ = self.store.ledger_settle(&run.id, &ekey, est, &json!({"kind": "gateway", "unknown": c.price_micros.is_none(), "tokens": 0}), now_ms());
+        self.store
+            .update_effect(&ekey, "done", Some(&asset), None, now_ms())
+            .map_err(store_err)?;
+        let _ = self.store.ledger_settle(
+            &run.id,
+            &ekey,
+            est,
+            &json!({"kind": "gateway", "unknown": c.price_micros.is_none(), "tokens": 0}),
+            now_ms(),
+        );
         let _ = std::fs::remove_file(&staged);
-        self.emit(&run.id, "asset_acquired", json!({"need": need.id, "asset": asset, "adapter": adapter.id(), "kind": kind}));
+        self.emit(
+            &run.id,
+            "asset_acquired",
+            json!({"need": need.id, "asset": asset, "adapter": adapter.id(), "kind": kind}),
+        );
         Ok(NeedResult::Resolved(asset))
     }
 
     /// Importa o arquivo em staging pelo sistema de assets (atômico) e devolve o `asset_id`.
-    async fn import_staged(&self, path: &std::path::Path, parent_key: &str, flags: &Flags) -> IntelResult<String> {
+    async fn import_staged(
+        &self,
+        path: &std::path::Path,
+        parent_key: &str,
+        flags: &Flags,
+    ) -> IntelResult<String> {
         let ikey = format!("imp:{parent_key}");
-        let _ = self.store.claim_effect(&ikey, "import", "import", &Value::Null, now_ms());
+        let _ = self
+            .store
+            .claim_effect(&ikey, "import", "import", &Value::Null, now_ms());
         let ticket = self.deps.engine.import_begin(path)?;
-        let _ = self.store.update_effect(&ikey, "submitted", Some(&ticket), None, now_ms());
+        let _ = self
+            .store
+            .update_effect(&ikey, "submitted", Some(&ticket), None, now_ms());
         let t0 = std::time::Instant::now();
         loop {
             if flags.cancel.is_cancelled() {
@@ -1131,12 +1487,22 @@ impl Orchestrator {
             let row = self.deps.engine.import_poll(&ticket)?;
             match row["state"].as_str() {
                 Some("finalized") => {
-                    let id = row["asset_id"].as_str().map(str::to_owned).ok_or_else(|| IntelError::new("ASSET_IMPORT", "the import finished without an asset id"))?;
-                    let _ = self.store.update_effect(&ikey, "done", Some(&id), None, now_ms());
+                    let id = row["asset_id"].as_str().map(str::to_owned).ok_or_else(|| {
+                        IntelError::new("ASSET_IMPORT", "the import finished without an asset id")
+                    })?;
+                    let _ = self
+                        .store
+                        .update_effect(&ikey, "done", Some(&id), None, now_ms());
                     return Ok(id);
                 }
                 Some("failed" | "cancelled" | "interrupted") => {
-                    return Err(IntelError::new("ASSET_IMPORT", format!("the import ended as {}", row["state"].as_str().unwrap_or("?"))));
+                    return Err(IntelError::new(
+                        "ASSET_IMPORT",
+                        format!(
+                            "the import ended as {}",
+                            row["state"].as_str().unwrap_or("?")
+                        ),
+                    ));
                 }
                 _ => {}
             }
@@ -1148,14 +1514,21 @@ impl Orchestrator {
         }
     }
 
-    async fn try_generate(&self, run: &mut AiRun, need: &AssetNeed, flags: &Flags) -> IntelResult<NeedResult> {
+    async fn try_generate(
+        &self,
+        run: &mut AiRun,
+        need: &AssetNeed,
+        flags: &Flags,
+    ) -> IntelResult<NeedResult> {
         let kind = match need.kind {
             AssetKind::Video => GenKind::Video,
             AssetKind::Image => GenKind::Image,
             AssetKind::Audio => GenKind::Tts,
         };
         let Some(provider) = self.deps.generators.for_kind(kind) else {
-            return Ok(NeedResult::Unavailable("no generation provider is available".into()));
+            return Ok(NeedResult::Unavailable(
+                "no generation provider is available".into(),
+            ));
         };
         let prompt = format!("{}. {}", need.purpose, need.description);
         let model = "default".to_owned();
@@ -1178,16 +1551,31 @@ impl Orchestrator {
         let bound = digest_value(&json!(key));
         // limite de gerações (orçamento)
         let used = self.usage_from_ledger(&run.id, &run.usage).generations;
-        if run.budget.max_generations.is_some_and(|m| used >= m) && self.store.get_effect(&key).map_err(store_err)?.is_none() {
-            return Ok(NeedResult::Wait(Box::new(self.budget_decision(run, BudgetLimit::Generations))));
+        if run.budget.max_generations.is_some_and(|m| used >= m)
+            && self.store.get_effect(&key).map_err(store_err)?.is_none()
+        {
+            return Ok(NeedResult::Wait(Box::new(
+                self.budget_decision(run, BudgetLimit::Generations),
+            )));
         }
-        if (run.policy.generation_requires_approval || est.is_none()) && !Self::approved(run, DecisionKind::GenerationApproval, &bound) {
+        if (run.policy.generation_requires_approval || est.is_none())
+            && !Self::approved(run, DecisionKind::GenerationApproval, &bound)
+        {
             let d = pending(
                 run,
                 format!("dec-{}-gen-{}", run.id, short(&key)),
                 DecisionKind::GenerationApproval,
-                &format!("Generate media for `{}`? {}", need.id, est.map_or("The price is unknown.".to_owned(), |p| format!("Estimated cost: {p} micros."))),
-                vec![DecisionOption::new("approve", "Generate"), DecisionOption::new("reject", "Do not generate")],
+                &format!(
+                    "Generate media for `{}`? {}",
+                    need.id,
+                    est.map_or("The price is unknown.".to_owned(), |p| format!(
+                        "Estimated cost: {p} micros."
+                    ))
+                ),
+                vec![
+                    DecisionOption::new("approve", "Generate"),
+                    DecisionOption::new("reject", "Do not generate"),
+                ],
                 json!({"need": need.id, "prompt": prompt, "provider": provider.id(), "estimated_micros": est}),
                 "Generation is paid and the result is recorded with its provenance (model, prompt, parameters).",
                 Some(bound.clone()),
@@ -1197,10 +1585,32 @@ impl Orchestrator {
             return Ok(NeedResult::Wait(Box::new(d)));
         }
         let reserve = est.unwrap_or(0);
-        if !self.store.ledger_reserve(&run.id, &key, reserve, run.budget.max_cost_micros, &json!({"kind": "generation"}), now_ms()).map_err(store_err)? {
-            return Ok(NeedResult::Wait(Box::new(self.budget_decision(run, BudgetLimit::Cost))));
+        if !self
+            .store
+            .ledger_reserve(
+                &run.id,
+                &key,
+                reserve,
+                run.budget.max_cost_micros,
+                &json!({"kind": "generation"}),
+                now_ms(),
+            )
+            .map_err(store_err)?
+        {
+            return Ok(NeedResult::Wait(Box::new(
+                self.budget_decision(run, BudgetLimit::Cost),
+            )));
         }
-        let claim = self.store.claim_effect(&key, &run.id, "generation", &json!({"provider": provider.id(), "need": need.id}), now_ms()).map_err(store_err)?;
+        let claim = self
+            .store
+            .claim_effect(
+                &key,
+                &run.id,
+                "generation",
+                &json!({"provider": provider.id(), "need": need.id}),
+                now_ms(),
+            )
+            .map_err(store_err)?;
         let (state, job_prior) = match claim {
             Claim::New(_) => ("intent".to_owned(), None),
             Claim::Existing(e) => {
@@ -1211,7 +1621,9 @@ impl Orchestrator {
                 }
                 if e.state == "failed" {
                     let _ = self.store.ledger_release(&run.id, &key, now_ms());
-                    return Ok(NeedResult::Unavailable("a previous generation failed".into()));
+                    return Ok(NeedResult::Unavailable(
+                        "a previous generation failed".into(),
+                    ));
                 }
                 (e.state, e.external_id)
             }
@@ -1224,19 +1636,37 @@ impl Orchestrator {
                 Ok(None) => match provider.submit(&req).await {
                     Ok(j) => j,
                     Err(e) => {
-                        let _ = self.store.update_effect(&key, "failed", None, Some(&json!({"error": e.code, "provider": provider.id()})), now_ms());
+                        let _ = self.store.update_effect(
+                            &key,
+                            "failed",
+                            None,
+                            Some(&json!({"error": e.code, "provider": provider.id()})),
+                            now_ms(),
+                        );
                         let _ = self.store.ledger_release(&run.id, &key, now_ms());
-                        return Ok(NeedResult::Unavailable(format!("{}: {}", e.code, e.message)));
+                        return Ok(NeedResult::Unavailable(format!(
+                            "{}: {}",
+                            e.code, e.message
+                        )));
                     }
                 },
                 Err(e) => {
                     let _ = self.store.ledger_release(&run.id, &key, now_ms());
-                    return Ok(NeedResult::Unavailable(format!("{}: {}", e.code, e.message)));
+                    return Ok(NeedResult::Unavailable(format!(
+                        "{}: {}",
+                        e.code, e.message
+                    )));
                 }
             },
         };
         self.store
-            .update_effect(&key, "submitted", Some(&job), Some(&json!({"provider": provider.id(), "need": need.id, "job": job})), now_ms())
+            .update_effect(
+                &key,
+                "submitted",
+                Some(&job),
+                Some(&json!({"provider": provider.id(), "need": need.id, "job": job})),
+                now_ms(),
+            )
             .map_err(store_err)?;
         fp!("autonomy_generation_after_submit");
         let _ = std::fs::create_dir_all(&self.staging);
@@ -1252,14 +1682,23 @@ impl Orchestrator {
                 Ok(GenStatus::Done { path, .. }) => break path,
                 Ok(GenStatus::Pending | GenStatus::Running) => {}
                 Ok(GenStatus::Failed { message, .. }) => {
-                    let _ = self.store.update_effect(&key, "failed", None, Some(&json!({"error": "GEN_FAILED", "provider": provider.id()})), now_ms());
+                    let _ = self.store.update_effect(
+                        &key,
+                        "failed",
+                        None,
+                        Some(&json!({"error": "GEN_FAILED", "provider": provider.id()})),
+                        now_ms(),
+                    );
                     let _ = self.store.ledger_release(&run.id, &key, now_ms());
                     return Ok(NeedResult::Unavailable(message));
                 }
                 Err(e) if e.code == "CANCELLED" => return Err(IntelError::cancelled()),
                 Err(e) => {
                     let _ = self.store.ledger_release(&run.id, &key, now_ms());
-                    return Ok(NeedResult::Unavailable(format!("{}: {}", e.code, e.message)));
+                    return Ok(NeedResult::Unavailable(format!(
+                        "{}: {}",
+                        e.code, e.message
+                    )));
                 }
             }
             if t0.elapsed() > Duration::from_secs(900) {
@@ -1270,40 +1709,87 @@ impl Orchestrator {
         };
         let len = std::fs::metadata(&produced).map_or(0, |m| m.len());
         if len == 0 {
-            let _ = self.store.update_effect(&key, "failed", None, Some(&json!({"error": "GEN_EMPTY_OUTPUT", "provider": provider.id()})), now_ms());
+            let _ = self.store.update_effect(
+                &key,
+                "failed",
+                None,
+                Some(&json!({"error": "GEN_EMPTY_OUTPUT", "provider": provider.id()})),
+                now_ms(),
+            );
             let _ = self.store.ledger_release(&run.id, &key, now_ms());
             let _ = std::fs::remove_file(&produced);
-            return Ok(NeedResult::Unavailable("the generation produced an invalid (empty) output".into()));
+            return Ok(NeedResult::Unavailable(
+                "the generation produced an invalid (empty) output".into(),
+            ));
         }
         let sha = gateway_sha(&produced).unwrap_or_default();
         let asset = match self.import_staged(&produced, &key, flags).await {
             Ok(a) => a,
             Err(e) if e.is_cancelled() => return Err(e),
             Err(e) => {
-                let _ = self.store.update_effect(&key, "failed", None, Some(&json!({"error": e.code, "provider": provider.id()})), now_ms());
+                let _ = self.store.update_effect(
+                    &key,
+                    "failed",
+                    None,
+                    Some(&json!({"error": e.code, "provider": provider.id()})),
+                    now_ms(),
+                );
                 let _ = self.store.ledger_release(&run.id, &key, now_ms());
-                return Ok(NeedResult::Unavailable(format!("import failed: {}", e.message)));
+                return Ok(NeedResult::Unavailable(format!(
+                    "import failed: {}",
+                    e.message
+                )));
             }
         };
-        if self.store.get_provenance(&asset).map_err(store_err)?.is_none() {
+        if self
+            .store
+            .get_provenance(&asset)
+            .map_err(store_err)?
+            .is_none()
+        {
             let approval = run
                 .approvals
                 .iter()
                 .rev()
-                .find(|a| a.kind == DecisionKind::GenerationApproval && a.bound_digest.as_deref() == Some(&bound))
+                .find(|a| {
+                    a.kind == DecisionKind::GenerationApproval
+                        && a.bound_digest.as_deref() == Some(&bound)
+                })
                 .map(|a| a.decision_id.clone());
             let j = gateway::provenance_json(
-                "generated", &run.id, &need.id, &provider.id(), None, gateway::LicenseStatus::Generated, None, &sha, est,
+                "generated",
+                &run.id,
+                &need.id,
+                &provider.id(),
+                None,
+                gateway::LicenseStatus::Generated,
+                None,
+                &sha,
+                est,
                 approval.as_deref(),
                 json!({"provider": provider.id(), "model": req.model, "prompt_hash": digest_value(&json!(prompt)), "prompt": prompt,
                        "params": req.params, "parent_assets": req.reference_assets, "job": job, "version": version}),
             );
-            self.store.put_provenance(&asset, Some(&run.id), "generated", &sha, &j, now_ms()).map_err(store_err)?;
+            self.store
+                .put_provenance(&asset, Some(&run.id), "generated", &sha, &j, now_ms())
+                .map_err(store_err)?;
         }
-        self.store.update_effect(&key, "done", Some(&asset), None, now_ms()).map_err(store_err)?;
-        let _ = self.store.ledger_settle(&run.id, &key, est.unwrap_or(0), &json!({"kind": "generation", "unknown": est.is_none(), "tokens": 0}), now_ms());
+        self.store
+            .update_effect(&key, "done", Some(&asset), None, now_ms())
+            .map_err(store_err)?;
+        let _ = self.store.ledger_settle(
+            &run.id,
+            &key,
+            est.unwrap_or(0),
+            &json!({"kind": "generation", "unknown": est.is_none(), "tokens": 0}),
+            now_ms(),
+        );
         let _ = std::fs::remove_file(&produced);
-        self.emit(&run.id, "asset_generated", json!({"need": need.id, "asset": asset, "provider": provider.id()}));
+        self.emit(
+            &run.id,
+            "asset_generated",
+            json!({"need": need.id, "asset": asset, "provider": provider.id()}),
+        );
         Ok(NeedResult::Resolved(asset))
     }
 
@@ -1318,20 +1804,31 @@ impl Orchestrator {
         Ok(())
     }
 
-    async fn st_edit(&self, run: &mut AiRun, ic: &IntelCtx, flags: &Flags) -> IntelResult<StageResult> {
+    async fn st_edit(
+        &self,
+        run: &mut AiRun,
+        ic: &IntelCtx,
+        flags: &Flags,
+    ) -> IntelResult<StageResult> {
         let _ = ic;
-        let report = run
-            .validation
+        let report = run.validation.clone().filter(|v| v.valid).ok_or_else(|| {
+            IntelError::new(
+                "PLAN_NOT_VALIDATED",
+                "no write is allowed before a validated plan",
+            )
+        })?;
+        let plan = run
+            .production_plan
             .clone()
-            .filter(|v| v.valid)
-            .ok_or_else(|| IntelError::new("PLAN_NOT_VALIDATED", "no write is allowed before a validated plan"))?;
-        let plan = run.production_plan.clone().ok_or_else(|| IntelError::new("PLAN_MISSING", "no production plan"))?;
+            .ok_or_else(|| IntelError::new("PLAN_MISSING", "no production plan"))?;
         // as aprovações exigidas continuam valendo para o plano ATUAL
         let bound = self.plan_bound(run);
         if report.plan_digest != bound {
             return Ok(StageResult::ok(Outcome::Drift));
         }
-        if (run.policy.plan == PlanApproval::Always || report.units.iter().map(|u| u.destructive_ops).sum::<u32>() > run.policy.destructive_threshold)
+        if (run.policy.plan == PlanApproval::Always
+            || report.units.iter().map(|u| u.destructive_ops).sum::<u32>()
+                > run.policy.destructive_threshold)
             && !Self::approved(run, DecisionKind::PlanApproval, &bound)
         {
             return Ok(StageResult::ok(Outcome::Drift));
@@ -1363,13 +1860,26 @@ impl Orchestrator {
             }
             let label = format!("AI Run {}: {ukey}", run.id);
             // refaz o preview (os tokens vivem na memória do engine) e confere o digest validado
-            let pv = match self.deps.engine.preview(&actor, &label, Value::Array(u.commands.clone())) {
-                Ok(p) => p,
-                Err(e) => {
-                    Self::replan_feedback(run, "preview_failed_at_edit", &[format!("{}: {}", e.message, e.code)]);
-                    return Ok(StageResult::ok(if e.code == "PLAN_STATE_CHANGED" { Outcome::Drift } else { Outcome::Conflict }));
-                }
-            };
+            let pv =
+                match self
+                    .deps
+                    .engine
+                    .preview(&actor, &label, Value::Array(u.commands.clone()))
+                {
+                    Ok(p) => p,
+                    Err(e) => {
+                        Self::replan_feedback(
+                            run,
+                            "preview_failed_at_edit",
+                            &[format!("{}: {}", e.message, e.code)],
+                        );
+                        return Ok(StageResult::ok(if e.code == "PLAN_STATE_CHANGED" {
+                            Outcome::Drift
+                        } else {
+                            Outcome::Conflict
+                        }));
+                    }
+                };
             let already = pv["already_applied"].as_bool().unwrap_or(false);
             if !already {
                 let validated = report.units.iter().find(|v| v.unit == ukey);
@@ -1380,15 +1890,25 @@ impl Orchestrator {
                 }
                 let token = pv["plan_token"]
                     .as_str()
-                    .ok_or_else(|| IntelError::new("PLAN_TOKEN_MISSING", "preview did not return a token"))?
+                    .ok_or_else(|| {
+                        IntelError::new("PLAN_TOKEN_MISSING", "preview did not return a token")
+                    })?
                     .to_owned();
                 fp!("autonomy_edit_before_apply");
                 self.ensure_running(&run.id)?;
                 let reply = match self.deps.engine.apply(&actor, &token) {
                     Ok(r) => r,
                     Err(e) => {
-                        Self::replan_feedback(run, "apply_failed", &[format!("{}: {}", e.message, e.code)]);
-                        return Ok(StageResult::ok(if e.code == "PLAN_STATE_CHANGED" { Outcome::Drift } else { Outcome::Conflict }));
+                        Self::replan_feedback(
+                            run,
+                            "apply_failed",
+                            &[format!("{}: {}", e.message, e.code)],
+                        );
+                        return Ok(StageResult::ok(if e.code == "PLAN_STATE_CHANGED" {
+                            Outcome::Drift
+                        } else {
+                            Outcome::Conflict
+                        }));
                     }
                 };
                 fp!("autonomy_edit_after_apply");
@@ -1403,7 +1923,11 @@ impl Orchestrator {
                     operation_namespace: format!("{}:p{}", run.id, plan.version),
                     cycle: 0,
                 });
-            } else if !run.applied.iter().any(|a| a.deliverable == ukey && a.stage == RunStage::Edit) {
+            } else if !run
+                .applied
+                .iter()
+                .any(|a| a.deliverable == ukey && a.stage == RunStage::Edit)
+            {
                 // aplicado antes do crash, antes do checkpoint: reconcilia pelo histórico
                 let entry = self.last_entry_of(&run.actor_id());
                 run.applied.push(AppliedRef {
@@ -1427,18 +1951,23 @@ impl Orchestrator {
                 u.sequences.iter().map(|(d, s)| ProducedSequence {
                     deliverable: d.clone(),
                     sequence_id: s.clone(),
-                    role: plan.deliverable(d).map_or("deliverable", |x| match x.sequence_strategy {
-                        super::plan::SequenceStrategy::Standalone => "standalone",
-                        super::plan::SequenceStrategy::HookPlusMaster => "hook",
-                        super::plan::SequenceStrategy::SharedMaster => "variant",
-                        super::plan::SequenceStrategy::FormatVariant => "format_variant",
-                    })
-                    .to_owned(),
+                    role: plan
+                        .deliverable(d)
+                        .map_or("deliverable", |x| match x.sequence_strategy {
+                            super::plan::SequenceStrategy::Standalone => "standalone",
+                            super::plan::SequenceStrategy::HookPlusMaster => "hook",
+                            super::plan::SequenceStrategy::SharedMaster => "variant",
+                            super::plan::SequenceStrategy::FormatVariant => "format_variant",
+                        })
+                        .to_owned(),
                 })
             })
             .collect();
         let mut r = StageResult::ok(Outcome::ApplyOk);
-        r.events.push(("edit_applied".into(), json!({"units": done_now, "sequences": run.sequences})));
+        r.events.push((
+            "edit_applied".into(),
+            json!({"units": done_now, "sequences": run.sequences}),
+        ));
         r.output = json!({"applied": done_now});
         Ok(r)
     }
@@ -1450,9 +1979,12 @@ impl Orchestrator {
             .read("history.list", json!({}))
             .ok()
             .and_then(|h| {
-                h["entries"]
-                    .as_array()
-                    .and_then(|a| a.iter().rev().find(|e| e["actor"]["id"] == actor_id).and_then(|e| e["id"].as_u64()))
+                h["entries"].as_array().and_then(|a| {
+                    a.iter()
+                        .rev()
+                        .find(|e| e["actor"]["id"] == actor_id)
+                        .and_then(|e| e["id"].as_u64())
+                })
             })
             .unwrap_or(0)
     }
@@ -1485,14 +2017,29 @@ impl Orchestrator {
         json!({"header": seq["header"], "tracks": seq["tracks"], "clips": clips})
     }
 
-    async fn st_review(&self, run: &mut AiRun, ic: &IntelCtx, task: &TaskCtx) -> IntelResult<StageResult> {
-        let plan = run.production_plan.clone().ok_or_else(|| IntelError::new("PLAN_MISSING", "no production plan"))?;
+    async fn st_review(
+        &self,
+        run: &mut AiRun,
+        ic: &IntelCtx,
+        task: &TaskCtx,
+    ) -> IntelResult<StageResult> {
+        let plan = run
+            .production_plan
+            .clone()
+            .ok_or_else(|| IntelError::new("PLAN_MISSING", "no production plan"))?;
         let spec = self.load_spec(ic, run)?;
-        let facts = spec.as_ref().map(|s| brief_facts(s, run)).unwrap_or_default();
+        let facts = spec
+            .as_ref()
+            .map(|s| brief_facts(s, run))
+            .unwrap_or_default();
         let inv = self.inventory()?;
         let mut seqs: Vec<(String, Value)> = Vec::new();
         for p in &run.sequences {
-            if let Ok(s) = self.deps.engine.read("sequence.get", json!({"sequence": p.sequence_id})) {
+            if let Ok(s) = self
+                .deps
+                .engine
+                .read("sequence.get", json!({"sequence": p.sequence_id}))
+            {
                 seqs.push((p.deliverable.clone(), s));
             }
         }
@@ -1505,7 +2052,11 @@ impl Orchestrator {
             cycle,
         });
         // proveniência obrigatória: asset adquirido/gerado sem registro bloqueia o uso automático
-        for n in plan.asset_needs.iter().filter(|n| n.status == NeedStatus::Resolved) {
+        for n in plan
+            .asset_needs
+            .iter()
+            .filter(|n| n.status == NeedStatus::Resolved)
+        {
             if let Some(a) = &n.resolved_asset_id
                 && self.store.get_provenance(a).map_err(store_err)?.is_none()
             {
@@ -1516,7 +2067,10 @@ impl Orchestrator {
                     category: critic::Category::Technical,
                     source: critic::FindingSource::Deterministic,
                     at: None,
-                    evidence: vec![critic::Evidence { kind: "asset".into(), detail: json!({"asset": a, "need": n.id}) }],
+                    evidence: vec![critic::Evidence {
+                        kind: "asset".into(),
+                        detail: json!({"asset": a, "need": n.id}),
+                    }],
                     expected: "every acquired/generated asset has a provenance record".into(),
                     observed: format!("asset `{a}` has none"),
                     suggested_fix: None,
@@ -1530,12 +2084,20 @@ impl Orchestrator {
         // semântico (LLM) — só se houver brain; falha do provider não derruba o review
         let cache = self.effect_cache(&run.id);
         let mut prov = json!({"rubric_version": critic::RUBRIC_VERSION, "revision": self.deps.engine.revision().unwrap_or(0)});
-        let det_json = json!(findings.iter().map(|f| json!({"key": f.key, "observed": f.observed})).collect::<Vec<_>>());
+        let det_json = json!(
+            findings
+                .iter()
+                .map(|f| json!({"key": f.key, "observed": f.observed}))
+                .collect::<Vec<_>>()
+        );
         let (ign, lck) = Self::review_decisions(run);
         for (dk, seq) in &seqs {
             let cc = CriticContext {
                 demand: spec.as_ref().map(demand_json).unwrap_or(Value::Null),
-                plan: serde_json::to_value(run.edit_plans.iter().find(|e| &e.deliverable_key == dk)).unwrap_or(Value::Null),
+                plan: serde_json::to_value(
+                    run.edit_plans.iter().find(|e| &e.deliverable_key == dk),
+                )
+                .unwrap_or(Value::Null),
                 timeline_digest: Self::timeline_digest(seq),
                 transcript: None,
                 deterministic: det_json.clone(),
@@ -1555,9 +2117,16 @@ impl Orchestrator {
         }
         critic::apply_decisions(&mut findings, &ign, &lck);
         let revision = self.deps.engine.revision().unwrap_or(0);
-        let review: Review = critic::make_review(&run.id, &plan.id, revision, cycle, findings, prov);
+        let review: Review =
+            critic::make_review(&run.id, &plan.id, revision, cycle, findings, prov);
         let records = ic.records()?;
-        records.put(KIND_RUN_REVIEW, &format!("{}:{cycle}", run.id), 1, Some(&plan.id), &review)?;
+        records.put(
+            KIND_RUN_REVIEW,
+            &format!("{}:{cycle}", run.id),
+            1,
+            Some(&plan.id),
+            &review,
+        )?;
         run.reviews.push(ReviewRef {
             id: review.id.clone(),
             revision,
@@ -1566,10 +2135,16 @@ impl Orchestrator {
             findings: u32::try_from(review.findings.len()).unwrap_or(u32::MAX),
             cycle,
         });
-        Self::set_checkpoint(run, "last_review", serde_json::to_value(&review).unwrap_or(Value::Null));
+        Self::set_checkpoint(
+            run,
+            "last_review",
+            serde_json::to_value(&review).unwrap_or(Value::Null),
+        );
         let mut history: Vec<Review> = Vec::new();
         for r in &run.reviews {
-            if let Some(rv) = records.latest::<Review>(KIND_RUN_REVIEW, &format!("{}:{}", run.id, r.cycle))? {
+            if let Some(rv) =
+                records.latest::<Review>(KIND_RUN_REVIEW, &format!("{}:{}", run.id, r.cycle))?
+            {
                 history.push(rv);
             }
         }
@@ -1577,13 +2152,21 @@ impl Orchestrator {
         r.events.push(("review_ready".into(), json!({"review": review.id, "score": review.score, "pass": review.pass, "findings": review.findings.len()})));
         r.output = json!({"review": review.id, "score": review.score, "pass": review.pass});
         if review.pass {
-            if run.policy.final_approval && !run.approvals.iter().any(|a| a.kind == DecisionKind::FinalApproval && a.option == "approve") {
+            if run.policy.final_approval
+                && !run
+                    .approvals
+                    .iter()
+                    .any(|a| a.kind == DecisionKind::FinalApproval && a.option == "approve")
+            {
                 let d = pending(
                     run,
                     format!("dec-{}-final", run.id),
                     DecisionKind::FinalApproval,
                     "The review passed. Approve the final output?",
-                    vec![DecisionOption::new("approve", "Approve"), DecisionOption::new("stop", "Stop (keep the result, do not complete)")],
+                    vec![
+                        DecisionOption::new("approve", "Approve"),
+                        DecisionOption::new("stop", "Stop (keep the result, do not complete)"),
+                    ],
                     json!({"review": review, "sequences": run.sequences}),
                     "Approving completes the run; everything stays editable.",
                     None,
@@ -1597,7 +2180,15 @@ impl Orchestrator {
         let loops_left = run.budget.review_loops_left(&run.usage);
         let osc = critic::oscillating(&history);
         if review.needs_replan() && run.budget.replans_left(&run.usage) {
-            Self::replan_feedback(run, "review_requires_replan", &review.open_blocking().filter(|f| f.needs_replan).map(|f| format!("{}: {}", f.key, f.observed)).collect::<Vec<_>>());
+            Self::replan_feedback(
+                run,
+                "review_requires_replan",
+                &review
+                    .open_blocking()
+                    .filter(|f| f.needs_replan)
+                    .map(|f| format!("{}: {}", f.key, f.observed))
+                    .collect::<Vec<_>>(),
+            );
             r.outcome = Outcome::ReviewReplan;
             return Ok(r);
         }
@@ -1611,9 +2202,16 @@ impl Orchestrator {
             run,
             format!("dec-{}-review-{}", run.id, cycle),
             DecisionKind::FinalApproval,
-            if osc { "The corrections are not improving the result." } else { "The review loops are exhausted with findings still open." },
+            if osc {
+                "The corrections are not improving the result."
+            } else {
+                "The review loops are exhausted with findings still open."
+            },
             vec![
-                DecisionOption::new("accept_with_warnings", "Accept the result with the open findings"),
+                DecisionOption::new(
+                    "accept_with_warnings",
+                    "Accept the result with the open findings",
+                ),
                 DecisionOption::new("extend", "Allow one more correction loop"),
                 DecisionOption::new("stop", "Stop the run"),
             ],
@@ -1628,7 +2226,12 @@ impl Orchestrator {
 
     // ---- CORRECT -------------------------------------------------------------------------------
 
-    async fn st_correct(&self, run: &mut AiRun, ic: &IntelCtx, flags: &Flags) -> IntelResult<StageResult> {
+    async fn st_correct(
+        &self,
+        run: &mut AiRun,
+        ic: &IntelCtx,
+        flags: &Flags,
+    ) -> IntelResult<StageResult> {
         let _ = ic;
         let review: Review = serde_json::from_value(run.checkpoint["last_review"].clone())
             .map_err(|_| IntelError::new("PLAN_CONTEXT_MISSING", "no review to correct"))?;
@@ -1645,21 +2248,36 @@ impl Orchestrator {
             return Err(IntelError::cancelled());
         }
         let label = format!("AI Run {}: correction {cycle}", run.id);
-        let pv = match self.deps.engine.preview(&actor, &label, Value::Array(cp.commands.clone())) {
+        let pv = match self
+            .deps
+            .engine
+            .preview(&actor, &label, Value::Array(cp.commands.clone()))
+        {
             Ok(p) => p,
             Err(e) => {
-                Self::replan_feedback(run, "correction_conflict", &[format!("{}: {}", e.message, e.code)]);
+                Self::replan_feedback(
+                    run,
+                    "correction_conflict",
+                    &[format!("{}: {}", e.message, e.code)],
+                );
                 return Ok(StageResult::ok(Outcome::Conflict));
             }
         };
         if !pv["already_applied"].as_bool().unwrap_or(false) {
-            let token = pv["plan_token"].as_str().ok_or_else(|| IntelError::new("PLAN_TOKEN_MISSING", "no token"))?.to_owned();
+            let token = pv["plan_token"]
+                .as_str()
+                .ok_or_else(|| IntelError::new("PLAN_TOKEN_MISSING", "no token"))?
+                .to_owned();
             fp!("autonomy_correct_before_apply");
             self.ensure_running(&run.id)?;
             let reply = match self.deps.engine.apply(&actor, &token) {
                 Ok(r) => r,
                 Err(e) => {
-                    Self::replan_feedback(run, "correction_apply_failed", &[format!("{}: {}", e.message, e.code)]);
+                    Self::replan_feedback(
+                        run,
+                        "correction_apply_failed",
+                        &[format!("{}: {}", e.message, e.code)],
+                    );
                     return Ok(StageResult::ok(Outcome::Conflict));
                 }
             };
@@ -1675,7 +2293,10 @@ impl Orchestrator {
             });
         }
         let mut r = StageResult::ok(Outcome::CorrectOk);
-        r.events.push(("correction_applied".into(), json!({"cycle": cycle, "findings": cp.finding_refs, "affected": cp.affected_clips})));
+        r.events.push((
+            "correction_applied".into(),
+            json!({"cycle": cycle, "findings": cp.finding_refs, "affected": cp.affected_clips}),
+        ));
         r.output = json!({"correction": cp.id, "findings": cp.finding_refs});
         Ok(r)
     }
@@ -1708,11 +2329,22 @@ impl Orchestrator {
                 if option == "answer" {
                     let answers: Vec<String> = payload["answers"]
                         .as_array()
-                        .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.chars().take(2_000).collect())).collect())
-                        .or_else(|| payload["text"].as_str().map(|t| vec![t.chars().take(4_000).collect()]))
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.chars().take(2_000).collect()))
+                                .collect()
+                        })
+                        .or_else(|| {
+                            payload["text"]
+                                .as_str()
+                                .map(|t| vec![t.chars().take(4_000).collect()])
+                        })
                         .unwrap_or_default();
                     if answers.is_empty() {
-                        return Err(IntelError::new("INVALID_ARGUMENT", "provide `answers` (list) or `text`"));
+                        return Err(IntelError::new(
+                            "INVALID_ARGUMENT",
+                            "provide `answers` (list) or `text`",
+                        ));
                     }
                     // resposta a "sem briefing" vira o brief
                     if p.context["missing"] == "brief" {
@@ -1732,15 +2364,23 @@ impl Orchestrator {
             DecisionKind::PlanApproval => match option {
                 "approve" => go(run, RunStage::ValidatePlan),
                 "change" => {
-                    Self::set_checkpoint(run, "replan", json!({"reason": "user_requested_changes", "comment": payload["comment"].as_str().unwrap_or("").chars().take(1_000).collect::<String>()}));
+                    Self::set_checkpoint(
+                        run,
+                        "replan",
+                        json!({"reason": "user_requested_changes", "comment": payload["comment"].as_str().unwrap_or("").chars().take(1_000).collect::<String>()}),
+                    );
                     go(run, RunStage::Plan);
                 }
                 _ => cancel(run, events),
             },
-            DecisionKind::SpendApproval | DecisionKind::AssetApproval | DecisionKind::GenerationApproval => {
+            DecisionKind::SpendApproval
+            | DecisionKind::AssetApproval
+            | DecisionKind::GenerationApproval => {
                 if option == "approve" {
                     go(run, p.resume_stage);
-                } else if matches!(p.kind, DecisionKind::SpendApproval) && p.resume_stage == RunStage::ValidatePlan {
+                } else if matches!(p.kind, DecisionKind::SpendApproval)
+                    && p.resume_stage == RunStage::ValidatePlan
+                {
                     cancel(run, events);
                 } else {
                     // candidato/geração recusados: não voltam a ser propostos
@@ -1756,9 +2396,13 @@ impl Orchestrator {
                     }
                     if p.kind == DecisionKind::GenerationApproval
                         && let Some(n) = p.context["need"].as_str()
-                        && let Some(need) = run.production_plan.as_mut().and_then(|pl| pl.asset_needs.iter_mut().find(|x| x.id == n))
+                        && let Some(need) = run
+                            .production_plan
+                            .as_mut()
+                            .and_then(|pl| pl.asset_needs.iter_mut().find(|x| x.id == n))
                     {
-                        need.source_priority.retain(|s| *s != AcquireSource::Generate);
+                        need.source_priority
+                            .retain(|s| *s != AcquireSource::Generate);
                     }
                     go(run, p.resume_stage);
                 }
@@ -1773,8 +2417,10 @@ impl Orchestrator {
                     run.budget.max_replans += 1;
                     run.budget.max_generations = run.budget.max_generations.map(|g| g + 1);
                     run.budget.max_tokens = run.budget.max_tokens.map(|t| t.saturating_mul(2));
-                    run.budget.max_provider_calls = run.budget.max_provider_calls.map(|c| c.saturating_mul(2));
-                    run.budget.max_wall_time_ms = run.budget.max_wall_time_ms.map(|t| t.saturating_mul(2));
+                    run.budget.max_provider_calls =
+                        run.budget.max_provider_calls.map(|c| c.saturating_mul(2));
+                    run.budget.max_wall_time_ms =
+                        run.budget.max_wall_time_ms.map(|t| t.saturating_mul(2));
                     go(run, p.resume_stage);
                 } else {
                     cancel(run, events);
@@ -1783,7 +2429,11 @@ impl Orchestrator {
             DecisionKind::ConflictResolution => match option {
                 "retry" => go(run, p.resume_stage),
                 "replan" => {
-                    Self::set_checkpoint(run, "replan", json!({"reason": "user_chose_replan", "context": p.context}));
+                    Self::set_checkpoint(
+                        run,
+                        "replan",
+                        json!({"reason": "user_chose_replan", "context": p.context}),
+                    );
                     go(run, RunStage::Plan);
                 }
                 "accept" => {
@@ -1797,7 +2447,8 @@ impl Orchestrator {
                     run.status = RunStatus::Completed;
                     run.stage = RunStage::Done;
                     run.completed_ms = Some(now_ms());
-                    run.report = Some(self.report_with_warnings(run, option == "accept_with_warnings"));
+                    run.report =
+                        Some(self.report_with_warnings(run, option == "accept_with_warnings"));
                     events.push(("run_done".into(), json!({"report": run.report})));
                 }
                 "extend" => {
