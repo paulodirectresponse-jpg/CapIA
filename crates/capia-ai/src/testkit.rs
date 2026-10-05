@@ -253,3 +253,74 @@ async fn read_request(sock: &mut tokio::net::TcpStream) -> Option<MockRequest> {
         body,
     })
 }
+
+/// Resposta de **texto** em streaming no protocolo nativo de cada família de provider (para testes
+/// de integração que trocam o Brain entre fabricantes sem mudar o código que consome o provider).
+pub fn text_reply(kind: crate::registry::ProviderKind, text: &str) -> MockResponse {
+    use crate::registry::ProviderKind as K;
+    use serde_json::json;
+    let sse = |events: Vec<(Option<&str>, serde_json::Value)>, done: bool| {
+        let mut ev: Vec<(Option<String>, String)> = events
+            .into_iter()
+            .map(|(e, v)| (e.map(str::to_owned), v.to_string()))
+            .collect();
+        if done {
+            ev.push((None, "[DONE]".into()));
+        }
+        MockResponse::Sse {
+            events: ev,
+            delay_ms: 0,
+            hang: false,
+        }
+    };
+    match kind {
+        K::Anthropic => sse(
+            vec![
+                (
+                    Some("message_start"),
+                    json!({"type": "message_start", "message": {"usage": {"input_tokens": 11, "output_tokens": 1}}}),
+                ),
+                (
+                    Some("content_block_start"),
+                    json!({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}),
+                ),
+                (
+                    Some("content_block_delta"),
+                    json!({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text}}),
+                ),
+                (
+                    Some("content_block_stop"),
+                    json!({"type": "content_block_stop", "index": 0}),
+                ),
+                (
+                    Some("message_delta"),
+                    json!({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 2}}),
+                ),
+                (Some("message_stop"), json!({"type": "message_stop"})),
+            ],
+            false,
+        ),
+        K::Google => sse(
+            vec![(
+                None,
+                json!({"candidates": [{"content": {"role": "model", "parts": [{"text": text}]}, "finishReason": "STOP"}],
+                       "usageMetadata": {"promptTokenCount": 11, "candidatesTokenCount": 2}}),
+            )],
+            false,
+        ),
+        _ => sse(
+            vec![
+                (None, json!({"choices": [{"delta": {"content": text}}]})),
+                (
+                    None,
+                    json!({"choices": [{"delta": {}, "finish_reason": "stop"}]}),
+                ),
+                (
+                    None,
+                    json!({"choices": [], "usage": {"prompt_tokens": 11, "completion_tokens": 2}}),
+                ),
+            ],
+            true,
+        ),
+    }
+}

@@ -792,6 +792,35 @@ impl AiRuntime {
         Ok(res)
     }
 
+    /// Lista os modelos que o provider diz ter (quando o endpoint suporta) e os **mescla** no
+    /// registry como desabilitados, preservando a evidência `Probed` dos já conhecidos.
+    pub async fn import_models(
+        &self,
+        provider_id: &str,
+        cancel: &CancelToken,
+    ) -> Result<usize, ProviderError> {
+        let pcfg =
+            {
+                let reg = self.registry.read().map_err(|_| {
+                    ProviderError::new(ErrorCode::NotConfigured, "registry poisoned")
+                })?;
+                reg.providers.get(provider_id).cloned().ok_or_else(|| {
+                    ProviderError::new(ErrorCode::NotConfigured, "provider not found")
+                })?
+            };
+        let provider = self.provider(&pcfg)?;
+        let ctx = CallCtx::new(cancel.clone());
+        let remote = provider.list_models(&ctx).await?;
+        let pairs: Vec<(String, Option<u32>)> = remote
+            .iter()
+            .take(500)
+            .map(|m| (m.id.clone(), m.context_window))
+            .collect();
+        let n = pairs.len();
+        self.update_registry(|r| r.merge_remote_models(provider_id, &pairs));
+        Ok(n)
+    }
+
     pub fn declared_capabilities(&self, endpoint_id: &str) -> Option<Capabilities> {
         self.registry
             .read()

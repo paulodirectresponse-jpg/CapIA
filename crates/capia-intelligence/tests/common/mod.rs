@@ -306,3 +306,178 @@ pub fn transcript_response() -> ReplayResponse {
 pub fn scripted_brain(script: Vec<ReplayResponse>) -> Arc<ReplayProvider> {
     Arc::new(ReplayProvider::scripted("brain", script))
 }
+
+/// Serviço `ai.*` real sobre um projeto real (cofre em memória; AppDb em arquivo).
+pub struct ServiceWorld {
+    pub dir: PathBuf,
+    pub session: Arc<Mutex<Session>>,
+    pub svc: capia_intelligence::service::IntelligenceService,
+    pub store: Arc<MemoryStore>,
+    pub appdb: PathBuf,
+    pub asset_id: String,
+}
+
+pub fn service_world(name: &str, with_media: bool) -> Option<ServiceWorld> {
+    let mut asset_id = String::new();
+    let dir;
+    let session = Arc::new(Mutex::new(Session::new(SessionConfig::default())));
+    if with_media {
+        let tc = ffmpeg()?;
+        dir = tmp(name);
+        let media = make_speech_clip(&tc, &dir);
+        call(
+            &session,
+            "project.create",
+            json!({ "path": dir.join("p.capia").display().to_string() }),
+        );
+        call(
+            &session,
+            "assets.import",
+            json!({ "paths": [media.display().to_string()] }),
+        );
+        let deadline = Instant::now() + Duration::from_secs(60);
+        asset_id = loop {
+            let evs = call(&session, "events.poll", json!({}));
+            if let Some(a) = evs["events"].as_array().and_then(|a| {
+                a.iter()
+                    .find(|e| e["kind"] == "import_finalized")
+                    .map(|e| e["result"]["asset_id"].as_str().unwrap().to_owned())
+            }) {
+                break a;
+            }
+            assert!(Instant::now() < deadline, "import não terminou");
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        call(
+            &session,
+            "command.execute",
+            json!({"label":"build","commands":[
+                {"operation_id":"b1","type":"create_sequence","id":"s","name":"M","frame_rate":"30","width":1080,"height":1920},
+                {"operation_id":"b2","type":"add_track","sequence":"s","id":"v","kind":"visual"},
+                {"operation_id":"b3","type":"insert_clip","track":"v","start":0,
+                 "clip":{"id":"c1","duration":FRAME*280,"content":{"type":"media","asset":asset_id,"has_video":true,"has_audio":true}}}
+            ]}),
+        );
+    } else {
+        dir = tmp(name);
+        call(
+            &session,
+            "project.create",
+            json!({ "path": dir.join("p.capia").display().to_string() }),
+        );
+    }
+    let store = Arc::new(MemoryStore::new());
+    let appdb = dir.join("app.db");
+    let svc = capia_intelligence::service::IntelligenceService::new(
+        Arc::new(SessionEngine::new(session.clone())),
+        capia_intelligence::service::ServiceConfig {
+            appdb_path: Some(appdb.clone()),
+            secrets: store.clone(),
+        },
+    )
+    .unwrap();
+    Some(ServiceWorld {
+        dir,
+        session,
+        svc,
+        store,
+        appdb,
+        asset_id,
+    })
+}
+
+impl ServiceWorld {
+    pub fn ai(&self, m: &str, p: Value) -> Value {
+        self.svc.call(m, p).unwrap_or_else(|e| panic!("{m}: {e}"))
+    }
+
+    pub fn ai_err(&self, m: &str, p: Value) -> capia_intelligence::IntelError {
+        self.svc.call(m, p).expect_err("erro esperado")
+    }
+
+    /// Espera o evento terminal da tarefa; devolve todos os eventos dela.
+    pub fn wait_task(&self, task_id: &str, stop: &[&str]) -> Vec<Value> {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let mut mine: Vec<Value> = Vec::new();
+        loop {
+            for e in self.svc.poll_events() {
+                if e["task_id"] == task_id {
+                    mine.push(e);
+                }
+            }
+            if mine
+                .iter()
+                .any(|e| stop.contains(&e["phase"].as_str().unwrap_or("")))
+            {
+                return mine;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "tarefa {task_id} não terminou: {mine:?}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    pub fn save_provider(
+        &self,
+        id: &str,
+        kind: &str,
+        base_url: Option<&str>,
+        key: Option<&str>,
+    ) -> Value {
+        let mut provider = json!({
+            "id": id, "kind": kind, "display_name": id, "enabled": true,
+            "allow_loopback": base_url.is_some(),
+        });
+        if let Some(u) = base_url {
+            provider["base_url"] = json!(u);
+        }
+        let mut p = json!({ "provider": provider });
+        if let Some(k) = key {
+            p["api_key"] = json!(k);
+        }
+        self.ai("ai.provider.save", p)
+    }
+
+    pub fn save_model(&self, id: &str, provider: &str, model: &str, caps: &[&str]) -> Value {
+        let m = capia_ai::registry::ModelEndpoint::new(id, provider, model);
+        let mut v = serde_json::to_value(&m).unwrap();
+        v["enabled"] = json!(true);
+        v["context_window"] = json!(200_000);
+        v["capabilities"] = serde_json::to_value(Capabilities::declared(
+            &caps
+                .iter()
+                .map(|c| match *c {
+                    "text" => Capability::TextGeneration,
+                    "tools" => Capability::ToolCalling,
+                    "stream" => Capability::Streaming,
+                    "struct" => Capability::StructuredOutput,
+                    "stt" => Capability::SpeechToText,
+                    other => panic!("capability desconhecida {other}"),
+                })
+                .collect::<Vec<_>>(),
+        ))
+        .unwrap();
+        self.ai("ai.model.save", json!({ "endpoint": v }))
+    }
+
+    /// Todos os bytes que o app escreveu em disco para este projeto + app db (para busca do canário).
+    pub fn disk_bytes(&self) -> Vec<(String, Vec<u8>)> {
+        let mut out = Vec::new();
+        fn walk(d: &Path, out: &mut Vec<(String, Vec<u8>)>) {
+            if let Ok(rd) = std::fs::read_dir(d) {
+                for e in rd.flatten() {
+                    let p = e.path();
+                    if p.is_dir() {
+                        walk(&p, out);
+                    } else if let Ok(b) = std::fs::read(&p) {
+                        out.push((p.display().to_string(), b));
+                    }
+                }
+            }
+        }
+        walk(&self.dir, &mut out);
+        out
+    }
+}

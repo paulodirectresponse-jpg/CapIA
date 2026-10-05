@@ -208,6 +208,13 @@ pub fn chain(
         };
         return Err(ProviderError::new(code, msg));
     }
+    // Fallback **só** pelo que o usuário configurou (Brain, overrides, lista de fallbacks): se algum
+    // endpoint nomeado serve, os "auto" ficam de fora — o prompt do usuário nunca vai a um provider
+    // que ele não escolheu para esta capability. "Auto" só escolhe quando nada nomeado serve (ex.:
+    // o Brain não tem STT/visão).
+    if ok.iter().any(|(d, _)| d.reason != "auto") {
+        ok.retain(|(d, _)| d.reason != "auto");
+    }
     // estável: saudáveis antes de degradados, mantendo a ordem de prioridade
     ok.sort_by_key(|(_, h)| u8::from(*h == Health::Degraded));
     Ok(ok
@@ -411,7 +418,9 @@ mod tests {
         b2.id = "cloud:brain2".into();
         two.models.insert(b2.id.clone(), b2);
         two.models.get_mut("cloud:brain").unwrap().health = Health::Degraded;
-        let prof = BrainProfile::new("x", "x", "cloud:brain");
+        let mut prof = BrainProfile::new("x", "x", "cloud:brain");
+        prof.fallbacks
+            .insert(Capability::ToolCalling, vec!["cloud:brain2".into()]);
         let ch = chain(
             &two,
             &prof,
@@ -419,6 +428,20 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ch[0].endpoint_id, "cloud:brain2");
+        // sem fallback configurado, o "auto" NÃO entra na cadeia quando o Brain serve
+        let bare = BrainProfile::new("x", "x", "cloud:brain");
+        let ch = chain(
+            &two,
+            &bare,
+            &RouteRequest::for_capability(Capability::ToolCalling),
+        )
+        .unwrap();
+        assert_eq!(
+            ch.iter()
+                .map(|d| d.endpoint_id.as_str())
+                .collect::<Vec<_>>(),
+            ["cloud:brain"]
+        );
         r.ai_enabled = false;
         assert_eq!(
             resolve(&r, &p, &req).unwrap_err().code,

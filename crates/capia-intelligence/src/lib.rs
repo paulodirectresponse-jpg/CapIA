@@ -17,6 +17,7 @@ pub mod error;
 pub mod records;
 pub mod reference;
 pub mod scenes;
+pub mod service;
 pub mod silence;
 pub mod tools_exec;
 pub mod transcript;

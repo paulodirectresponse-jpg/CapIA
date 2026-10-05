@@ -222,7 +222,7 @@ pub async fn run_turn(
             let t = trim_msg(&m.text_of());
             if !t.is_empty() {
                 messages.push(Message {
-                    role: m.role.clone(),
+                    role: m.role,
                     parts: vec![Part::text(t)],
                 });
             }
@@ -401,6 +401,10 @@ pub async fn run_turn(
                     entry.finished_ms = now_ms();
                     rec.audit.push(entry);
                     rec.pending = Some(pending.clone());
+                    // persiste ANTES de avisar a UI: quem aprovar logo em seguida já encontra o registro
+                    rec.status = TaskStatus::AwaitingApproval;
+                    rec.updated_ms = now_ms();
+                    persist(ctx, &rec);
                     on(AssistantEvent::ApprovalRequired(pending));
                     let delta = vec![user_msg, Message::assistant(trim_msg(&final_text))];
                     return finish(

@@ -250,6 +250,7 @@ pub struct SilencePlan {
 }
 
 /// Mede o áudio do clip, acha os silêncios e faz o **preview** do corte (nada gravado).
+#[allow(clippy::too_many_arguments)]
 pub fn plan_silence_cut(
     ctx: &IntelCtx,
     asset_id: &str,
