@@ -1,0 +1,3343 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CapIA Local API",
+    "version": "0.6.0-rc.1",
+    "description": "Esqueleto gerado do catálogo único de operações. Respostas não são descritas campo a campo; ver docs/api/."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:{port}",
+      "variables": {
+        "port": {
+          "default": "0"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "server.health",
+        "summary": "Liveness probe (public, minimal).",
+        "tags": [
+          "Servidor"
+        ],
+        "x-capia-scope": null,
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "server_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/server": {
+      "get": {
+        "operationId": "server.info",
+        "summary": "Server, engine and limits information.",
+        "tags": [
+          "Servidor"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "server_info",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tokens": {
+      "post": {
+        "operationId": "tokens.create",
+        "summary": "Create a token (the secret is shown once).",
+        "tags": [
+          "Tokens"
+        ],
+        "x-capia-scope": "admin:tokens",
+        "x-capia-mutating": true,
+        "x-capia-class": "admin",
+        "x-capia-mcp-tool": "tokens_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expires_in_seconds": {
+                    "maximum": 31536000,
+                    "minimum": 60,
+                    "type": "integer"
+                  },
+                  "name": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "scopes": {
+                    "items": {
+                      "maxLength": 32,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 11,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "name",
+                  "scopes"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "tokens.list",
+        "summary": "List tokens (never the secrets).",
+        "tags": [
+          "Tokens"
+        ],
+        "x-capia-scope": "admin:tokens",
+        "x-capia-mutating": false,
+        "x-capia-class": "admin",
+        "x-capia-mcp-tool": "tokens_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tokens/{token_id}": {
+      "delete": {
+        "operationId": "tokens.revoke",
+        "summary": "Revoke a token.",
+        "tags": [
+          "Tokens"
+        ],
+        "x-capia-scope": "admin:tokens",
+        "x-capia-mutating": true,
+        "x-capia-class": "admin",
+        "x-capia-mcp-tool": "tokens_revoke",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tokens/{token_id}/rotate": {
+      "post": {
+        "operationId": "tokens.rotate",
+        "summary": "Rotate a token: new secret (shown once), old one revoked.",
+        "tags": [
+          "Tokens"
+        ],
+        "x-capia-scope": "admin:tokens",
+        "x-capia-mutating": true,
+        "x-capia-class": "admin",
+        "x-capia-mcp-tool": "tokens_rotate",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit": {
+      "get": {
+        "operationId": "audit.list",
+        "summary": "Audit log of external calls.",
+        "tags": [
+          "Auditoria"
+        ],
+        "x-capia-scope": "admin:tokens",
+        "x-capia-mutating": false,
+        "x-capia-class": "admin",
+        "x-capia-mcp-tool": "audit_list",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects": {
+      "post": {
+        "operationId": "projects.create",
+        "summary": "Create (and open) a project in the server's project store.",
+        "tags": [
+          "Projetos"
+        ],
+        "x-capia-scope": "project:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "projects_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "projects.list",
+        "summary": "List the server's projects.",
+        "tags": [
+          "Projetos"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "projects_list",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}": {
+      "get": {
+        "operationId": "projects.get",
+        "summary": "One project.",
+        "tags": [
+          "Projetos"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "projects_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/open": {
+      "post": {
+        "operationId": "projects.open",
+        "summary": "Open a project (the engine hosts one at a time).",
+        "tags": [
+          "Projetos"
+        ],
+        "x-capia-scope": "project:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "projects_open",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/close": {
+      "post": {
+        "operationId": "projects.close",
+        "summary": "Close the open project.",
+        "tags": [
+          "Projetos"
+        ],
+        "x-capia-scope": "project:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "projects_close",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/summary": {
+      "get": {
+        "operationId": "projects.summary",
+        "summary": "Revision, sequences, clips, assets and run counts.",
+        "tags": [
+          "Projetos"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "projects_summary",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/uploads": {
+      "post": {
+        "operationId": "uploads.create",
+        "summary": "Stream a file into staging (raw body; Content-Length required).",
+        "tags": [
+          "Uploads"
+        ],
+        "x-capia-scope": "media:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "upload",
+        "x-capia-mcp-tool": null,
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expected_sha256": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "filename": {
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "filename"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "uploads.list",
+        "summary": "List staged uploads.",
+        "tags": [
+          "Uploads"
+        ],
+        "x-capia-scope": "media:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "uploads_list",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/uploads/inline": {
+      "post": {
+        "operationId": "uploads.create_inline",
+        "summary": "Stage a small file sent as base64 (8 MiB max).",
+        "tags": [
+          "Uploads"
+        ],
+        "x-capia-scope": "media:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "upload",
+        "x-capia-mcp-tool": "uploads_create_inline",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content_base64": {
+                    "maxLength": 11534336,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "expected_sha256": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "filename": {
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content_base64",
+                  "filename"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/uploads/{upload_id}": {
+      "delete": {
+        "operationId": "uploads.delete",
+        "summary": "Delete a staged upload.",
+        "tags": [
+          "Uploads"
+        ],
+        "x-capia-scope": "media:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "uploads_delete",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/assets": {
+      "post": {
+        "operationId": "assets.import",
+        "summary": "Import a staged upload through the asset system (hash + probe + catalog).",
+        "tags": [
+          "Assets"
+        ],
+        "x-capia-scope": "media:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "upload",
+        "x-capia-mcp-tool": "assets_import",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Aceito (assíncrono)"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "upload_id": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "upload_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "assets.list",
+        "summary": "List assets.",
+        "tags": [
+          "Assets"
+        ],
+        "x-capia-scope": "media:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "assets_list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/assets/{asset_id}": {
+      "get": {
+        "operationId": "assets.get",
+        "summary": "One asset.",
+        "tags": [
+          "Assets"
+        ],
+        "x-capia-scope": "media:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "assets_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/imports/{ticket_id}": {
+      "get": {
+        "operationId": "imports.get",
+        "summary": "State of an asynchronous import.",
+        "tags": [
+          "Assets"
+        ],
+        "x-capia-scope": "media:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "imports_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/sequences": {
+      "get": {
+        "operationId": "sequences.list",
+        "summary": "List sequences.",
+        "tags": [
+          "Sequences e timeline"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "sequences_list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/sequences/{sequence_id}": {
+      "get": {
+        "operationId": "sequences.get",
+        "summary": "One sequence (full content; use timeline.query for large ones).",
+        "tags": [
+          "Sequences e timeline"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "sequences_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/sequences/{sequence_id}/timeline": {
+      "get": {
+        "operationId": "timeline.query",
+        "summary": "Clips of a sequence by time range, paginated, with a content digest.",
+        "tags": [
+          "Sequences e timeline"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "timeline_query",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from_ticks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "to_ticks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "track",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/commands/preview": {
+      "post": {
+        "operationId": "commands.preview",
+        "summary": "Phase 1 of the write gate: validate a transaction and get a plan token (nothing is written).",
+        "tags": [
+          "Comandos (preview → apply)"
+        ],
+        "x-capia-scope": "project:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "commands_preview",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "commands": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "maxItems": 500,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "expected_revision": {
+                    "maximum": 9223372036854776000,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "label": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "commands"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/commands/apply": {
+      "post": {
+        "operationId": "commands.apply",
+        "summary": "Phase 2 of the write gate: apply only the reviewed plan.",
+        "tags": [
+          "Comandos (preview → apply)"
+        ],
+        "x-capia-scope": "project:write",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "commands_apply",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "plan_token": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "plan_token"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/history": {
+      "get": {
+        "operationId": "history.list",
+        "summary": "Document history entries.",
+        "tags": [
+          "Comandos (preview → apply)"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "history_list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs": {
+      "post": {
+        "operationId": "runs.create",
+        "summary": "Start an AI Run from brief + raw footage + references.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:start",
+        "x-capia-mutating": true,
+        "x-capia-class": "run_start",
+        "x-capia-mcp-tool": "runs_create",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Aceito (assíncrono)"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "assets": {
+                    "items": {
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9._:-]+$",
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  "brief_text": {
+                    "maxLength": 60000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "budget": {
+                    "maxProperties": 12,
+                    "type": "object"
+                  },
+                  "client_id": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "type": "string"
+                  },
+                  "deliverables": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "maxItems": 24,
+                    "type": "array"
+                  },
+                  "documents": {
+                    "items": {
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9._:-]+$",
+                      "type": "string"
+                    },
+                    "maxItems": 12,
+                    "type": "array"
+                  },
+                  "note": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "policy": {
+                    "maxProperties": 8,
+                    "type": "object"
+                  },
+                  "references": {
+                    "items": {
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9._:-]+$",
+                      "type": "string"
+                    },
+                    "maxItems": 8,
+                    "type": "array"
+                  },
+                  "start": {
+                    "type": "boolean"
+                  },
+                  "variants": {
+                    "maxProperties": 8,
+                    "type": "object"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "runs.list",
+        "summary": "List runs.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "runs_list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}": {
+      "get": {
+        "operationId": "runs.get",
+        "summary": "Run snapshot (stages, effects, provenance, pending decision).",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "runs_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/pause": {
+      "post": {
+        "operationId": "runs.pause",
+        "summary": "Pause a run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:start",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "runs_pause",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/resume": {
+      "post": {
+        "operationId": "runs.resume",
+        "summary": "Resume a paused run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:start",
+        "x-capia-mutating": true,
+        "x-capia-class": "run_start",
+        "x-capia-mcp-tool": "runs_resume",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Aceito (assíncrono)"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "runs.cancel",
+        "summary": "Cancel a run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:start",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "runs_cancel",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/approvals": {
+      "post": {
+        "operationId": "runs.approve",
+        "summary": "Answer the pending approval/decision of a run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:approve",
+        "x-capia-mutating": true,
+        "x-capia-class": "approve",
+        "x-capia-mcp-tool": "runs_approve",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision_id": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "type": "string"
+                  },
+                  "option": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "type": "string"
+                  },
+                  "payload": {
+                    "maxProperties": 32,
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "decision_id",
+                  "option"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/plan": {
+      "get": {
+        "operationId": "runs.plan",
+        "summary": "Production plan, edit plans and validation of a run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "runs_plan",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/review": {
+      "get": {
+        "operationId": "runs.review",
+        "summary": "Reviews (critic) of a run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "runs_review",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/cost": {
+      "get": {
+        "operationId": "runs.cost",
+        "summary": "Usage and budget of a run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "runs_cost",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/events": {
+      "get": {
+        "operationId": "runs.events",
+        "summary": "Run event log (paginated by seq).",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "runs_events",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/runs/{run_id}/variants": {
+      "post": {
+        "operationId": "runs.variants",
+        "summary": "Create variants from a completed run.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:start",
+        "x-capia-mutating": true,
+        "x-capia-class": "run_start",
+        "x-capia-mcp-tool": "runs_variants",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Aceito (assíncrono)"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "axis": {
+                    "items": {
+                      "maxLength": 32,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 8,
+                    "type": "array"
+                  },
+                  "count": {
+                    "maximum": 20,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "count"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/memory": {
+      "get": {
+        "operationId": "memory.list",
+        "summary": "Project/client/user memory items (read-only: promotion is a UI action).",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "memory_list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/gateway": {
+      "get": {
+        "operationId": "gateway.status",
+        "summary": "Asset Gateway and generation status.",
+        "tags": [
+          "AI Runs"
+        ],
+        "x-capia-scope": "run:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "gateway_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/exports": {
+      "post": {
+        "operationId": "exports.start",
+        "summary": "Queue exports of sequences (server chooses the output location).",
+        "tags": [
+          "Exports e entregáveis"
+        ],
+        "x-capia-scope": "export:start",
+        "x-capia-mutating": true,
+        "x-capia-class": "export",
+        "x-capia-mcp-tool": "exports_start",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Aceito (assíncrono)"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "encoder": {
+                          "maxLength": 128,
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9._:-]+$",
+                          "type": "string"
+                        },
+                        "height": {
+                          "maximum": 8192,
+                          "minimum": 16,
+                          "type": "integer"
+                        },
+                        "name": {
+                          "maxLength": 64,
+                          "type": "string"
+                        },
+                        "preset": {
+                          "enum": [
+                            "h264-mp4",
+                            "intermediate"
+                          ]
+                        },
+                        "sequence": {
+                          "maxLength": 128,
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9._:-]+$",
+                          "type": "string"
+                        },
+                        "width": {
+                          "maximum": 8192,
+                          "minimum": 16,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "sequence"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 24,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "items"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "exports.list",
+        "summary": "List exports.",
+        "tags": [
+          "Exports e entregáveis"
+        ],
+        "x-capia-scope": "export:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "exports_list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/exports/{export_id}": {
+      "get": {
+        "operationId": "exports.get",
+        "summary": "Export state, report and probe.",
+        "tags": [
+          "Exports e entregáveis"
+        ],
+        "x-capia-scope": "export:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "exports_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/exports/{export_id}/cancel": {
+      "post": {
+        "operationId": "exports.cancel",
+        "summary": "Cancel the batch of an export.",
+        "tags": [
+          "Exports e entregáveis"
+        ],
+        "x-capia-scope": "export:start",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "exports_cancel",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "export_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects/{project_id}/deliverables": {
+      "get": {
+        "operationId": "deliverables.list",
+        "summary": "Completed exports (deliverables) of the project.",
+        "tags": [
+          "Exports e entregáveis"
+        ],
+        "x-capia-scope": "export:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "deliverables_list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks": {
+      "post": {
+        "operationId": "webhooks.create",
+        "summary": "Register a webhook (the signing secret is shown once).",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "webhooks_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "events": {
+                    "items": {
+                      "maxLength": 40,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 16,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "url": {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "events",
+                  "url"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "webhooks.list",
+        "summary": "List webhooks (never the secrets).",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "webhooks_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}": {
+      "get": {
+        "operationId": "webhooks.get",
+        "summary": "One webhook.",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "webhooks_get",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "webhooks.update",
+        "summary": "Update url/events/enabled/description.",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "webhooks_update",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "events": {
+                    "items": {
+                      "maxLength": 40,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 16,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "url": {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "webhooks.delete",
+        "summary": "Delete a webhook and its delivery log.",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "webhooks_delete",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}/rotate-secret": {
+      "post": {
+        "operationId": "webhooks.rotate_secret",
+        "summary": "New signing secret (shown once).",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "webhooks_rotate_secret",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}/test": {
+      "post": {
+        "operationId": "webhooks.test",
+        "summary": "Queue a synthetic `webhook.test` delivery.",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "webhooks_test",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Aceito (assíncrono)"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}/deliveries": {
+      "get": {
+        "operationId": "webhooks.deliveries",
+        "summary": "Delivery log (attempt, status, latency, next retry, terminal state).",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "webhooks_deliveries",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/{webhook_id}/deliveries/{delivery_id}/redeliver": {
+      "post": {
+        "operationId": "webhooks.redeliver",
+        "summary": "Re-deliver one delivery (dead letters included).",
+        "tags": [
+          "Webhooks"
+        ],
+        "x-capia-scope": "webhook:manage",
+        "x-capia-mutating": true,
+        "x-capia-class": "write",
+        "x-capia-mcp-tool": "webhooks_redeliver",
+        "parameters": [
+          {
+            "name": "webhook_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Aceito (assíncrono)"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "events.list",
+        "summary": "Server events after a cursor (polling; SSE at /v1/events/stream).",
+        "tags": [
+          "Eventos"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "events_list",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854776000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {},
+          "request_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

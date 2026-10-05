@@ -14,3 +14,6 @@ tools/s1-preview-spike
 # goldens gerados por serde_json (comparados byte a byte nos testes Rust)
 crates/*/tests/golden/
 tests/fixtures/media/
+
+# catálogo transcrito do Rust (dado gerado; ver tools/docs/fixtures/README.md)
+tools/docs/fixtures/
