@@ -92,6 +92,8 @@ jobs:
       # CAPIA_AI_DEMO_BRAIN). O build de produto (`pnpm desktop:build`) NÃO liga essa feature.
       - name: Build do aplicativo desktop para E2E (sem instalador)
         run: pnpm --filter @capia/desktop tauri build --no-bundle --config src-tauri/tauri.e2e.conf.json -- --features e2e-testkit
+      - name: Build do capia-server de teste (fluxo externo REST → UI no app real)
+        run: cargo build --release -p capia-server --features testkit
       - name: E2E do aplicativo (fluxos críticos, H.264 real, SharedBuffer)
         shell: pwsh
         run: pnpm --filter @capia/e2e e2e --workers=1 --grep-invert "targets with 5k clips"
@@ -225,6 +227,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: cargo build --release -p capia-devserver
+      - name: Build do capia-server de teste (cérebro Replay; só E2E — o produto não liga `testkit`)
+        run: cargo build --release -p capia-server --features testkit
       - name: Chromium do Playwright
         run: pnpm --filter @capia/e2e exec playwright install --with-deps chromium
       - name: E2E (17 fluxos, edição, crash, visual)
