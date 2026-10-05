@@ -28,6 +28,9 @@ capia-editor-api.workspace = true
 capia-webview-surface.workspace = true
 capia-intelligence.workspace = true
 capia-secrets.workspace = true
+capia-support.workspace = true
+capia-updater.workspace = true
+capia-store.workspace = true
 serde_json.workspace = true
 tauri-plugin-dialog = "2"
 

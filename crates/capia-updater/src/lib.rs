@@ -27,4 +27,4 @@ pub use state::{
 pub use verify::{
     Ed25519Signer, Ed25519Verifier, Signature, TrustedKey, Verifier, VerifyError, parse_key_list,
 };
-pub use version::{Decision, UpdateKind, Version, compare, evaluate};
+pub use version::{Decision, UpdateKind, Version, check_manifest, compare, evaluate};

@@ -350,15 +350,14 @@ impl Updater {
         manifest_bytes: &[u8],
         allow_rollback: bool,
     ) -> Result<(UpdateManifest, Decision), UpdateError> {
-        let m = UpdateManifest::parse_and_verify(manifest_bytes, self.verifier.as_ref())?;
-        let d = version::evaluate(
+        version::check_manifest(
+            manifest_bytes,
+            self.verifier.as_ref(),
             &self.cfg.current_version,
             self.cfg.channel,
-            &m,
             allow_rollback,
             &self.rec.rejected_versions,
-        )?;
-        Ok((m, d))
+        )
     }
 
     /// `Idle → Downloaded`. A assinatura é verificada **antes** de qualquer download.

@@ -5,6 +5,10 @@
 //! (quadros/miniaturas). Quais métodos existem é decidido por `capia_editor_api::Session::call` —
 //! método desconhecido devolve `UNKNOWN_METHOD`; não há `eval`, shell nem acesso amplo a arquivos.
 
+pub mod cli;
+pub mod selftest;
+pub mod support_api;
+
 use capia_editor_api::{Outcome, Reply, Session, SessionConfig};
 use capia_intelligence::{IntelligenceService, ServiceConfig, SessionEngine};
 use capia_project::EngineInfo;
@@ -39,6 +43,12 @@ type Held = ();
 #[cfg(windows)]
 fn held_region(h: &Held) -> &capia_webview_surface::FrameRegion {
     h.region()
+}
+
+/// Serviço `support.*`/`update.*` (Fase 6). Opcional por desenho: o editor funciona igual sem ele.
+#[derive(Debug)]
+pub struct SupportState {
+    svc: Option<Arc<support_api::SupportService>>,
 }
 
 /// Serviço `ai.*` da Fase 4. Opcional por desenho: o editor funciona igual sem ele.
@@ -112,9 +122,19 @@ fn run_call(session: &Mutex<Session>, method: &str, params: Value) -> Result<Rep
 pub fn call_json_ai(
     session: &Mutex<Session>,
     ai: Option<&IntelligenceService>,
+    support: Option<&support_api::SupportService>,
     method: &str,
     params: Value,
 ) -> Result<Value, Value> {
+    // Fase 6: preferências de privacidade, diagnóstico e atualização (nada toca o documento)
+    if support_api::SupportService::handles(method) {
+        return match support {
+            Some(svc) => svc.call(method, &params),
+            None => Err(
+                json!({"code": "UNKNOWN_METHOD", "message": "support service is not available"}),
+            ),
+        };
+    }
     if IntelligenceService::handles(method) {
         return match ai {
             Some(svc) => svc.call_json(method, params),
@@ -175,15 +195,18 @@ pub fn call_binary(
 async fn editor_call(
     state: tauri::State<'_, EditorState>,
     ai: tauri::State<'_, AiState>,
+    support: tauri::State<'_, SupportState>,
     method: String,
     params: Option<Value>,
 ) -> Result<Value, Value> {
     let session = Arc::clone(&state.session);
     let svc = Arc::clone(&ai.svc);
+    let sup = support.svc.clone();
     tauri::async_runtime::spawn_blocking(move || {
         call_json_ai(
             &session,
             Some(&svc),
+            sup.as_deref(),
             &method,
             params.unwrap_or_else(|| json!({})),
         )
@@ -304,18 +327,31 @@ fn render_into_surface(
 
 /// Inicia a aplicação desktop.
 pub fn run() {
-    // saída de crash sem segredo (SECURITY.md): a mensagem de pânico é redigida
+    // saída de crash sem segredo (SECURITY.md): a mensagem de pânico é redigida (o serviço de suporte, se
+    // iniciar, a substitui por um gancho que também grava o registro local)
     capia_secrets::install_redacting_panic_hook();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(EditorState::default())
         .setup(|app| {
             // dados do app (registry/perfis; nunca segredos) ficam no diretório de dados do usuário
-            let appdb = app
-                .path()
-                .app_data_dir()
-                .ok()
-                .map(|d| d.join("capia-app.db"));
+            let app_data = app.path().app_data_dir().ok();
+            // Fase 6: suporte (logs limitados, diagnóstico, crash opt-in). Falha aqui nunca impede o editor.
+            let mut support_svc = None;
+            if let Some(dir) = &app_data {
+                let _ = std::fs::create_dir_all(dir);
+                match support_api::SupportService::new(dir) {
+                    Ok(sup) => {
+                        // grava registro de crash LOCAL e redigido; nada é enviado sem opt-in + destino
+                        sup.reporter().install_panic_hook();
+                        let _ = sup.reporter().flush_pending();
+                        support_svc = Some(Arc::new(sup));
+                    }
+                    Err(e) => eprintln!("support service unavailable: {e}"),
+                }
+            }
+            app.manage(SupportState { svc: support_svc });
+            let appdb = app_data.map(|d| d.join("capia-app.db"));
             let session = Arc::clone(&app.state::<EditorState>().session);
             let state = AiState::new(Arc::clone(&session), appdb)
                 .or_else(|_| AiState::new(session, None))
@@ -361,19 +397,19 @@ mod tests {
     fn ai_methods_are_routed_to_the_service_and_absent_without_it() {
         let s = Arc::new(session());
         // sem serviço: a IA não existe, o editor segue igual
-        let e = call_json_ai(&s, None, "ai.status", json!({})).unwrap_err();
+        let e = call_json_ai(&s, None, None, "ai.status", json!({})).unwrap_err();
         assert_eq!(e["code"], "UNKNOWN_METHOD");
-        assert!(call_json_ai(&s, None, "engine.info", json!({})).is_ok());
+        assert!(call_json_ai(&s, None, None, "engine.info", json!({})).is_ok());
         // com serviço (cofre em memória): `ai.status` responde e nunca traz segredo
         let ai = AiState::new(Arc::clone(&s), None).unwrap();
-        let st = call_json_ai(&s, Some(&ai.svc), "ai.status", json!({})).unwrap();
+        let st = call_json_ai(&s, Some(&ai.svc), None, "ai.status", json!({})).unwrap();
         assert_eq!(st["any_usable_model"], false);
         assert!(st["providers"].as_array().unwrap().is_empty());
         // eventos de IA entram no `events.poll` do editor (um único laço)
-        let ev = call_json_ai(&s, Some(&ai.svc), "events.poll", json!({})).unwrap();
+        let ev = call_json_ai(&s, Some(&ai.svc), None, "events.poll", json!({})).unwrap();
         assert!(ev["events"].is_array());
         // método inexistente do namespace ai.* é erro estruturado
-        let e = call_json_ai(&s, Some(&ai.svc), "ai.shell", json!({})).unwrap_err();
+        let e = call_json_ai(&s, Some(&ai.svc), None, "ai.shell", json!({})).unwrap_err();
         assert_eq!(e["code"], "UNKNOWN_METHOD");
     }
 

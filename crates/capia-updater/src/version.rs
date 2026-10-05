@@ -90,6 +90,20 @@ pub fn evaluate(
     })
 }
 
+/// Verifica a assinatura do manifesto **antes de qualquer outra coisa** e decide pela política.
+pub fn check_manifest(
+    manifest_bytes: &[u8],
+    verifier: &dyn crate::verify::Verifier,
+    current: &Version,
+    channel: Channel,
+    allow_rollback: bool,
+    rejected_versions: &[String],
+) -> Result<(UpdateManifest, Decision), UpdateError> {
+    let m = UpdateManifest::parse_and_verify(manifest_bytes, verifier)?;
+    let d = evaluate(current, channel, &m, allow_rollback, rejected_versions)?;
+    Ok((m, d))
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
