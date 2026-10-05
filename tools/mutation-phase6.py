@@ -133,7 +133,9 @@ M = [
       f"{SR} a_stalled_upload_times_out_and_frees_the_worker_and_the_slot"),
     m(31, "cota de staging desligada", f"{S}/uploads.rs",
       [("        if used.saturating_add(declared_len.unwrap_or(0)) > self.cfg.upload_quota_bytes {",
-        "        if false && used.saturating_add(declared_len.unwrap_or(0)) > self.cfg.upload_quota_bytes {")],
+        "        if false && used.saturating_add(declared_len.unwrap_or(0)) > self.cfg.upload_quota_bytes {"),
+       ("            if used.saturating_add(size) > self.cfg.upload_quota_bytes {",
+        "            if false && used.saturating_add(size) > self.cfg.upload_quota_bytes {")],
       f"{SR} staging_quota_zero_byte_checksum_and_dedupe_isolation"),
     m(32, "URL de webhook não canônica aceita", f"{S}/ops.rs",
       [("        if rest.is_none_or(|r| r.starts_with(['/', '\\\\']) || url.contains(char::is_whitespace)) {",
@@ -148,11 +150,15 @@ M = [
         "fn bearer(req: &Request) -> Option<&str> {\n    if let Some((_, t)) = req.query.iter().find(|(k, _)| k == \"token\") {\n        return Some(t.as_str());\n    }\n    let h = req.header(\"authorization\")?;")],
       f"{SR} authorization_header_tricks_never_authenticate"),
     m(35, "idempotência: pendente órfão não vira indeterminado na abertura", "crates/capia-store/src/serverdb.rs",
-      [('.execute("UPDATE idempotency SET created_ms = 0 WHERE status = 0", [])? as u64)', '.execute("SELECT 0", [])? as u64)')],
+      [('.execute("UPDATE idempotency SET created_ms = 0 WHERE status = 0", [])?', '.execute("SELECT 0", [])?')],
       f"{ENV} cargo test -q -p capia-server --test crash_rest -- sigkill_during_idempotent_requests_never_executes_a_key_twice"),
     m(36, "staging órfão não é varrido na abertura", f"{S}/core.rs",
       [('                if p.is_dir() && !p.join("meta.json").exists() {', '                if false && p.is_dir() && !p.join("meta.json").exists() {')],
       f"{ENV} cargo test -q -p capia-server --test crash_rest -- sigkill_during_an_upload"),
+    m(37, "teto de tamanho de upload desligado (declarado e em streaming)", f"{S}/uploads.rs",
+      [("            && n > self.cfg.max_upload_bytes\n", "            && n > u64::MAX\n"),
+       ("            if size > self.cfg.max_upload_bytes {", "            if false && size > self.cfg.max_upload_bytes {")],
+      f"{SR} oversized_declared_and_streamed_uploads_are_refused_and_leave_nothing"),
 ]
 
 
