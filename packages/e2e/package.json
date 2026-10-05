@@ -1,7 +1,7 @@
 {
   "name": "@capia/e2e",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.6.0-rc.1",
   "type": "module",
   "description": "E2E (Playwright) do editor contra o engine real: capia-devserver + front compilado. Sem importar código do produto.",
   "scripts": {

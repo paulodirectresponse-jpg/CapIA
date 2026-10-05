@@ -1,7 +1,7 @@
 {
   "name": "@capia/engine-bindings",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.6.0-rc.1",
   "type": "module",
   "description": "Contrato tipado entre a UI e o engine Rust. Agnóstico de transporte: NÃO conhece Tauri nem React.",
   "exports": {
