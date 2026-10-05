@@ -27,7 +27,7 @@ const rel = (f: string) => f.slice(SRC.length + 1).replaceAll("\\", "/");
 describe("UI → engine boundary", () => {
   it("só o controlador chama métodos do cliente que escrevem (execute/undo/redo/projeto/import/relink/export)", () => {
     const writers =
-      /\bclient\s*\.(execute|undo|redo|createProject|openProject|closeProject|importAssets|relink|relinkFolder|startExport|cancelExport|verifyAsset)\(/;
+      /\bclient\s*\.(execute|undo|undoSelective|redo|createProject|openProject|closeProject|importAssets|relink|relinkFolder|startExport|cancelExport|verifyAsset)\(/;
     const offenders = prod
       .filter((f) => rel(f) !== "store/controller.ts")
       .filter((f) => /client\b/.test(readFileSync(f, "utf8")))
@@ -114,5 +114,18 @@ describe("IA na UI (Fase 4): sem segredos, sem provider, sem escrita direta", ()
         /"insert_clip"|"delete_clip"|"split_clip"|"add_track"|type:\s*"set_/,
       );
     }
+  });
+
+  it("Fase 5: nenhum método `ai.run.*`/`ai.memory.*` montado à mão fora dos bindings; Runs não escrevem na timeline", () => {
+    const offenders = prod
+      .filter((f) => !rel(f).startsWith("store/controller.ts"))
+      .filter((f) => /"ai\.(run|memory|gateway|generation)\./.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(offenders).toEqual([]);
+    const panel = stripComments(readFileSync(join(SRC, "components/AiRunsPanel.tsx"), "utf8"));
+    // o painel nunca chama o cliente: só o controlador (undo de Run passa pelo `stepHistory`)
+    expect(panel).not.toMatch(/\bclient\b/);
+    expect(panel).not.toMatch(/"insert_clip"|"delete_clip"|"split_clip"|"add_track"|type:\s*"set_/);
+    expect(panel).toMatch(/c\.undoRun\(/);
   });
 });

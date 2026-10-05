@@ -257,6 +257,158 @@ export interface UsageSummary {
   unknown_cost_calls: number;
 }
 
+// ---- Fase 5: AI Runs, memória, gateway -------------------------------------------------------
+
+export type RunStatusName =
+  "pending" | "running" | "waiting_user" | "paused" | "completed" | "failed" | "cancelled";
+
+export type RunStageName =
+  "understand" | "plan" | "validate_plan" | "acquire" | "edit" | "review" | "correct" | "done";
+
+export interface RunDecisionOption {
+  id: string;
+  label: string;
+}
+
+export interface RunPendingDecision {
+  id: string;
+  kind: string;
+  question: string;
+  options: RunDecisionOption[];
+  context?: Record<string, unknown>;
+  consequences: string;
+  default_option?: string | null;
+  resume_stage: RunStageName;
+}
+
+export interface RunUsage {
+  cost_micros: number;
+  unknown_cost_calls: number;
+  tokens: number;
+  provider_calls: number;
+  generations: number;
+  review_loops: number;
+  replans: number;
+  wall_time_ms: number;
+}
+
+export interface RunBudgetView {
+  max_cost_micros: number | null;
+  max_tokens: number | null;
+  max_provider_calls: number | null;
+  max_generations: number | null;
+  max_review_loops: number;
+  max_replans: number;
+  max_wall_time_ms: number | null;
+}
+
+export interface ProducedSequenceView {
+  deliverable: string;
+  sequence_id: string;
+  role: string;
+}
+
+export interface RunSummary {
+  id: string;
+  status: RunStatusName;
+  stage: RunStageName;
+  revision: number;
+  created_ms: number;
+  updated_ms: number;
+  completed_ms: number | null;
+  usage: RunUsage;
+  budget: RunBudgetView;
+  pending: RunPendingDecision | null;
+  error: { code: string; message: string } | null;
+  parent_run_id: string | null;
+  variant_group_id: string | null;
+  deliverables: string[] | null;
+  sequences: ProducedSequenceView[];
+  resume_class: string;
+}
+
+export interface RunFinding {
+  id: string;
+  key: string;
+  severity: "blocker" | "major" | "minor" | "info";
+  category: string;
+  expected: string;
+  observed: string;
+  needs_replan: boolean;
+}
+
+export interface RunStageRow {
+  seq: number;
+  stage: RunStageName;
+  attempt: number;
+  status: string;
+}
+
+export interface RunSnapshot {
+  run: RunSummary & {
+    inputs?: Record<string, unknown>;
+    policy?: Record<string, unknown>;
+    checkpoint?: Record<string, unknown>;
+    production_plan?: Record<string, unknown> | null;
+  };
+  usage: RunUsage;
+  stages: RunStageRow[];
+  provenance: Record<string, unknown>[];
+  last_event_seq: number;
+  resume_class: string;
+}
+
+export interface RunEvent {
+  seq: number;
+  kind: string;
+  ts_ms: number;
+  data: Record<string, unknown>;
+}
+
+export interface RunCreateInput {
+  briefText?: string;
+  assets?: string[];
+  references?: string[];
+  documents?: string[];
+  deliverables?: { key: string; maxDurationS?: number; width?: number; height?: number }[];
+  variants?: { count: number; axis: string[] };
+  clientId?: string;
+  /** Política: `always` pede aprovação do plano; `auto` aplica quando validado. */
+  planApproval?: "always" | "auto";
+  allowGateway?: boolean;
+  allowGeneration?: boolean;
+  maxCostMicros?: number;
+}
+
+export type MemoryScopeName = "system" | "user" | "client" | "project";
+export type MemoryStatusName = "proposed" | "active" | "rejected" | "archived";
+
+export interface MemoryItemView {
+  id: string;
+  scope: MemoryScopeName;
+  client_id: string | null;
+  kind: string;
+  content: string;
+  source: string;
+  status: MemoryStatusName;
+  confidence: number;
+  evidence: { kind: string; detail: string }[];
+  origin_run: string | null;
+}
+
+export interface GatewayAdapterView {
+  id: string;
+  kind: string;
+  enabled: boolean;
+  hosts: string[];
+  paid: boolean;
+}
+
+export interface GatewayStatusView {
+  adapters: GatewayAdapterView[];
+  generation: { enabled: boolean; available: boolean };
+}
+
 /** Cliente do `ai.*`: só traduz chamadas; nenhuma regra de IA vive na UI. */
 export class AiClient {
   constructor(private readonly transport: EditorTransport) {}
@@ -384,5 +536,118 @@ export class AiClient {
   }
   usage(taskId?: string) {
     return this.json<UsageSummary>("ai.usage.summary", taskId ? { task_id: taskId } : {});
+  }
+
+  // ---- Fase 5: Runs -------------------------------------------------------------------------
+  runCreate(input: RunCreateInput, start = true) {
+    const policy: Record<string, unknown> = {};
+    if (input.planApproval) policy.plan = input.planApproval;
+    if (input.allowGateway !== undefined) policy.allow_gateway = input.allowGateway;
+    if (input.allowGeneration !== undefined) policy.allow_generation = input.allowGeneration;
+    return this.json<{ run: RunSummary }>("ai.run.create", {
+      inputs: {
+        ...(input.briefText ? { brief_text: input.briefText } : {}),
+        assets: input.assets ?? [],
+        references: input.references ?? [],
+        documents: input.documents ?? [],
+        deliverables: (input.deliverables ?? []).map((d) => ({
+          key: d.key,
+          ...(d.maxDurationS ? { max_duration_s: d.maxDurationS } : {}),
+          ...(d.width ? { width: d.width } : {}),
+          ...(d.height ? { height: d.height } : {}),
+        })),
+        ...(input.variants ? { variants: input.variants } : {}),
+        ...(input.clientId ? { client_id: input.clientId } : {}),
+      },
+      policy,
+      ...(input.maxCostMicros ? { budget: { max_cost_micros: input.maxCostMicros } } : {}),
+      start,
+    });
+  }
+  runList(limit = 100) {
+    return this.json<{ runs: RunSummary[] }>("ai.run.list", { limit });
+  }
+  runGet(runId: string) {
+    return this.json<RunSnapshot>("ai.run.get", { run_id: runId });
+  }
+  runEvents(runId: string, after = 0) {
+    return this.json<{ events: RunEvent[] }>("ai.run.events", { run_id: runId, after });
+  }
+  runPause(runId: string) {
+    return this.json<{ run: RunSummary }>("ai.run.pause", { run_id: runId });
+  }
+  runResume(runId: string) {
+    return this.json<{ run: RunSummary }>("ai.run.resume", { run_id: runId });
+  }
+  runCancel(runId: string) {
+    return this.json<{ run: RunSummary }>("ai.run.cancel", { run_id: runId });
+  }
+  runDecide(runId: string, decisionId: string, option: string, payload?: unknown) {
+    return this.json<{ run: RunSummary }>("ai.run.decide", {
+      run_id: runId,
+      decision_id: decisionId,
+      option,
+      ...(payload !== undefined ? { payload } : {}),
+    });
+  }
+  runRerun(runId: string, brief?: string) {
+    return this.json<{ run: RunSummary }>("ai.run.rerun", {
+      run_id: runId,
+      ...(brief ? { brief } : {}),
+    });
+  }
+  runVariants(runId: string, count: number, axis: string[]) {
+    return this.json<{ run: RunSummary; variant_group: string }>("ai.run.variants", {
+      run_id: runId,
+      count,
+      axis,
+    });
+  }
+  runGroup(variantGroup: string) {
+    return this.json<{ runs: RunSummary[] }>("ai.run.group", { variant_group: variantGroup });
+  }
+  runProvenance(runId: string) {
+    return this.json<{ provenance: Record<string, unknown>[] }>("ai.run.provenance", {
+      run_id: runId,
+    });
+  }
+  // ---- Fase 5: memória e fontes -------------------------------------------------------------
+  memoryList(scope?: MemoryScopeName, status?: MemoryStatusName) {
+    return this.json<{ items: MemoryItemView[] }>("ai.memory.list", {
+      ...(scope ? { scope } : {}),
+      ...(status ? { status } : {}),
+    });
+  }
+  memoryAdd(scope: MemoryScopeName, content: string, clientId?: string) {
+    return this.json<{ item: MemoryItemView }>("ai.memory.add", {
+      scope,
+      content,
+      ...(clientId ? { client_id: clientId } : {}),
+    });
+  }
+  memoryApprove(id: string, scope?: MemoryScopeName, clientId?: string) {
+    return this.json<{ item: MemoryItemView }>("ai.memory.approve", {
+      id,
+      ...(scope ? { scope } : {}),
+      ...(clientId ? { client_id: clientId } : {}),
+    });
+  }
+  memoryReject(id: string) {
+    return this.json<{ item: MemoryItemView }>("ai.memory.reject", { id });
+  }
+  memoryArchive(id: string) {
+    return this.json<{ item: MemoryItemView }>("ai.memory.archive", { id });
+  }
+  memoryDelete(id: string) {
+    return this.json<{ deleted: boolean }>("ai.memory.delete", { id });
+  }
+  gatewayStatus() {
+    return this.json<GatewayStatusView>("ai.gateway.status");
+  }
+  gatewaySetEnabled(id: string, enabled: boolean) {
+    return this.json<GatewayStatusView>("ai.gateway.set_enabled", { id, enabled });
+  }
+  generationSetEnabled(enabled: boolean) {
+    return this.json<GatewayStatusView>("ai.generation.set_enabled", { enabled });
   }
 }

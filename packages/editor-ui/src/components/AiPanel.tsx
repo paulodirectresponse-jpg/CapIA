@@ -3,12 +3,13 @@ import { Badge, Button, EmptyState, Icon, Select, Tabs } from "@capia/ui-kit";
 import type { DemandSpec, SpecField, SpecItem } from "@capia/engine-bindings";
 import { useAi, useController, useUi } from "../context";
 import { useT, type MessageKey } from "../i18n";
+import { AiRunsPanel } from "./AiRunsPanel";
 
 /** Painel de IA do rail: chat pontual, ferramentas locais/assistidas, referência e briefing. */
 export function AiPanel({ onOpenSettings }: { onOpenSettings: () => void }) {
   const c = useController();
   const t = useT();
-  const [tab, setTab] = useState<"chat" | "tools" | "brief">("chat");
+  const [tab, setTab] = useState<"chat" | "tools" | "brief" | "runs">("chat");
   const { status, offer } = useAi((s) => ({ status: s.status, offer: s.offer }));
   useEffect(() => {
     void c.ai.refresh();
@@ -25,18 +26,20 @@ export function AiPanel({ onOpenSettings }: { onOpenSettings: () => void }) {
         label={t("ai.title")}
         active={tab}
         onSelect={(v) => {
-          setTab(v as "chat" | "tools" | "brief");
+          setTab(v as "chat" | "tools" | "brief" | "runs");
         }}
         items={[
           { id: "chat", label: t("ai.chat.title") },
           { id: "tools", label: t("ai.tools.title") },
           { id: "brief", label: t("ai.demand.title") },
+          { id: "runs", label: t("ai.runs.title") },
         ]}
       />
       {offer && <OfferCard />}
       {tab === "chat" && <ChatTab onOpenSettings={onOpenSettings} />}
       {tab === "tools" && <ToolsTab />}
       {tab === "brief" && <BriefTab />}
+      {tab === "runs" && <AiRunsPanel />}
       <div className="ed-row">
         <Button data-testid="ai-open-settings" onClick={onOpenSettings}>
           <Icon name="settings" /> {t("ai.settings.open")}

@@ -15,8 +15,14 @@ import {
   type ApprovalMode,
   type BrainProfileView,
   type DemandSpec,
+  type GatewayStatusView,
+  type MemoryItemView,
+  type MemoryScopeName,
   type PendingApproval,
   type ReferenceGrammar,
+  type RunCreateInput,
+  type RunSnapshot,
+  type RunSummary,
   type UsageSummary,
 } from "@capia/engine-bindings";
 import { createStore, type Store } from "./createStore";
@@ -68,6 +74,12 @@ export interface AiState {
   usage: UsageSummary | null;
   diagnostics: string | null;
   lastError: { code: string; message: string } | null;
+  /** Fase 5: execuções de IA (Runs), memória e fontes. */
+  runs: RunSummary[];
+  selectedRun: string | null;
+  runDetail: RunSnapshot | null;
+  memory: MemoryItemView[];
+  gateway: GatewayStatusView | null;
 }
 
 const MAX_MESSAGES = 200;
@@ -83,6 +95,7 @@ export class AiController {
   readonly store: Store<AiState>;
   private msgId = 0;
   private disposed = false;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly client: AiClient,
@@ -110,6 +123,11 @@ export class AiController {
       usage: null,
       diagnostics: null,
       lastError: null,
+      runs: [],
+      selectedRun: null,
+      runDetail: null,
+      memory: [],
+      gateway: null,
     });
   }
 
@@ -119,6 +137,138 @@ export class AiController {
 
   dispose(): void {
     this.disposed = true;
+    this.stopRunPolling();
+  }
+
+  // ------------------------------------------------------------------------- Fase 5: Runs
+
+  async refreshRuns(): Promise<void> {
+    const r = await this.wrap(() => this.client.runList());
+    if (!r || this.disposed) return;
+    this.store.set({ runs: r.runs });
+    if (this.state.selectedRun) await this.refreshRunDetail();
+  }
+
+  async refreshRunDetail(): Promise<void> {
+    const id = this.state.selectedRun;
+    if (!id) return;
+    const r = await this.wrap(() => this.client.runGet(id));
+    // a seleção pode ter mudado enquanto a resposta voltava
+    if (r && !this.disposed && this.state.selectedRun === id) this.store.set({ runDetail: r });
+  }
+
+  /** Cria (e inicia) uma Run. A UI só descreve o pedido; plano/edição são do engine. */
+  async createRun(input: RunCreateInput): Promise<string | null> {
+    const r = await this.wrap(() => this.client.runCreate(input, true));
+    if (!r) return null;
+    this.store.set({ selectedRun: r.run.id, runDetail: null });
+    await this.refreshRuns();
+    return r.run.id;
+  }
+
+  async selectRun(id: string | null): Promise<void> {
+    this.store.set({ selectedRun: id, runDetail: null });
+    if (id) await this.refreshRunDetail();
+  }
+
+  /** Atualiza Runs enquanto o painel está aberto (reconecta pelo snapshot; nada em memória é fonte). */
+  startRunPolling(intervalMs = 1000): void {
+    if (this.pollTimer || this.disposed) return;
+    this.pollTimer = setInterval(() => {
+      if (this.state.runs.some((r) => r.status === "running" || r.status === "pending"))
+        void this.refreshRuns();
+    }, intervalMs);
+  }
+
+  stopRunPolling(): void {
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = null;
+  }
+
+  async decide(optionId: string, payload?: unknown): Promise<void> {
+    const run = this.state.runDetail?.run;
+    const pending = run?.pending;
+    if (!run || !pending) return;
+    // a decisão vai amarrada ao id que a UI está vendo: decisão velha o engine recusa
+    await this.wrap(() => this.client.runDecide(run.id, pending.id, optionId, payload));
+    await this.refreshRuns();
+  }
+
+  async pauseRun(id: string): Promise<void> {
+    await this.wrap(() => this.client.runPause(id));
+    await this.refreshRuns();
+  }
+
+  async resumeRun(id: string): Promise<void> {
+    await this.wrap(() => this.client.runResume(id));
+    await this.refreshRuns();
+  }
+
+  async cancelRun(id: string): Promise<void> {
+    await this.wrap(() => this.client.runCancel(id));
+    await this.refreshRuns();
+  }
+
+  async rerun(id: string): Promise<void> {
+    const r = await this.wrap(() => this.client.runRerun(id));
+    if (r) await this.selectRun(r.run.id);
+    await this.refreshRuns();
+  }
+
+  async makeVariants(id: string, count: number, axis: string[]): Promise<void> {
+    const r = await this.wrap(() => this.client.runVariants(id, count, axis));
+    if (r) await this.selectRun(r.run.id);
+    await this.refreshRuns();
+  }
+
+  // ----------------------------------------------------------------- Fase 5: memória e fontes
+
+  async refreshMemory(): Promise<void> {
+    const r = await this.wrap(() => this.client.memoryList());
+    if (r && !this.disposed) this.store.set({ memory: r.items });
+  }
+
+  async addMemory(scope: MemoryScopeName, content: string): Promise<void> {
+    const text = content.trim();
+    if (!text) return;
+    await this.wrap(() => this.client.memoryAdd(scope, text));
+    await this.refreshMemory();
+  }
+
+  /** Só um clique explícito do usuário ativa uma proposta da IA. */
+  async approveMemory(id: string): Promise<void> {
+    await this.wrap(() => this.client.memoryApprove(id));
+    await this.refreshMemory();
+  }
+
+  async rejectMemory(id: string): Promise<void> {
+    await this.wrap(() => this.client.memoryReject(id));
+    await this.refreshMemory();
+  }
+
+  async archiveMemory(id: string): Promise<void> {
+    await this.wrap(() => this.client.memoryArchive(id));
+    await this.refreshMemory();
+  }
+
+  async deleteMemory(id: string): Promise<void> {
+    await this.wrap(() => this.client.memoryDelete(id));
+    await this.refreshMemory();
+  }
+
+  async refreshGateway(): Promise<void> {
+    const r = await this.wrap(() => this.client.gatewayStatus());
+    if (r && !this.disposed) this.store.set({ gateway: r });
+  }
+
+  async setSourceEnabled(id: string, enabled: boolean): Promise<void> {
+    const r = await this.wrap(() => this.client.gatewaySetEnabled(id, enabled));
+    if (r) this.store.set({ gateway: r });
+  }
+
+  async setGenerationEnabled(enabled: boolean): Promise<void> {
+    const r = await this.wrap(() => this.client.generationSetEnabled(enabled));
+    if (r) this.store.set({ gateway: r });
   }
 
   // ------------------------------------------------------------------------------ configuração

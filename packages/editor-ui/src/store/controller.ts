@@ -763,6 +763,27 @@ export class EditorController {
     return this.stepHistory(() => this.client.redo());
   }
 
+  /** Quantos conflitos teria desfazer tudo que uma AI Run fez (não aplica nada). */
+  async undoRunReport(runId: string): Promise<{ entries: number; conflicts: number } | null> {
+    try {
+      const r = await this.client.undoReport(`run:${runId}`);
+      return { entries: r.entries.length, conflicts: r.conflicts.length };
+    } catch (e) {
+      this.reportError(e);
+      return null;
+    }
+  }
+
+  /**
+   * Undo seletivo: desfaz só o que a Run fez, como NOVA entrada de histórico (desfazível). O modo
+   * `safe` recusa se houver edição manual em cima; `partial` pula o que conflita.
+   */
+  undoRun(runId: string, mode: "safe" | "partial" = "safe"): Promise<void> {
+    return this.stepHistory(() =>
+      this.client.undoSelective(`run:${runId}`, mode, this.t("ai.runs.undoLabel")),
+    );
+  }
+
   private stepHistory(fn: () => Promise<ChangeSet>): Promise<void> {
     const run = async () => {
       try {

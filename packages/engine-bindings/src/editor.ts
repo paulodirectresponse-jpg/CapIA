@@ -359,6 +359,21 @@ export class EditorClient {
   history() {
     return this.json<HistoryList>("history.list");
   }
+  /** Relatório (sem aplicar) do undo seletivo de tudo que um ator fez (ex.: `run:<id>`). */
+  undoReport(actorId: string) {
+    return this.json<{
+      entries: number[];
+      conflicts: { entry_id: number; blocked_by: number; blocked_by_actor: { id: string } }[];
+    }>("history.undo_report", { actor_id: actorId });
+  }
+  /** Desfaz só o que o ator fez, como NOVA entrada de histórico (modo `safe` nunca apaga edição manual). */
+  undoSelective(actorId: string, mode: "safe" | "partial" = "safe", label?: string) {
+    return this.json<ChangeSet>("history.undo_selective", {
+      actor_id: actorId,
+      mode,
+      ...(label ? { label } : {}),
+    });
+  }
 
   importAssets(paths: string[]) {
     return this.json<{
