@@ -1,0 +1,6 @@
+POST /v1/projects HTTP/1.1
+Host: {{HOST}}
+Authorization: Bearer {{TOKEN}}
+Connection: close
+Content-Length: -1
+

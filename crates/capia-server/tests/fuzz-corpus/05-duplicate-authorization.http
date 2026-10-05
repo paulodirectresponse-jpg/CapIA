@@ -1,0 +1,6 @@
+GET /v1/server HTTP/1.1
+Host: {{HOST}}
+Authorization: Bearer {{TOKEN}}
+Authorization: Bearer nope
+Connection: close
+

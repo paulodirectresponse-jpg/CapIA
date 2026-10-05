@@ -1,0 +1,6 @@
+GET /v1/server HTTP/1.1
+Host: {{HOST}}
+Authorization: Bearer {{TOKEN}}
+Connection: close
+X-Request-Id: a%0d%0aSet-Cookie:x
+

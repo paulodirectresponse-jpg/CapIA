@@ -2,7 +2,7 @@
 //! PRNG determinístico, varredura de árvores de arquivos, contagem de threads/fds e o detector de
 //! vazamento em corpo de resposta. Sem dependências novas. Incluído por `#[path]` nos testes que
 //! o usam (`mod common; #[path = "common/attack.rs"] mod attack;`).
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
+#![allow(dead_code, unreachable_pub, clippy::unwrap_used, clippy::expect_used)]
 
 use crate::common::{Resp, TestServer};
 use std::io::{Read, Write};

@@ -1,0 +1,9 @@
+POST /v1/projects HTTP/1.1
+Host: {{HOST}}
+Authorization: Bearer {{TOKEN}}
+Connection: close
+Origin: null
+Content-Type: text/plain
+Content-Length: {{CL}}
+
+{"name":"csrf"}
