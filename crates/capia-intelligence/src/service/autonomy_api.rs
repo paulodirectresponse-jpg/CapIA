@@ -50,6 +50,8 @@ pub(super) fn load_gateway_config(
     gw: &GatewayRegistry,
     gens: &GenerationRegistry,
 ) {
+    // geração externa gasta dinheiro: desligada até o usuário ligar (e persistir) explicitamente
+    gens.set_enabled(false);
     let Some(v) = db.and_then(|d| d.get(NS_GW, KEY_GW).ok().flatten()) else {
         return;
     };
@@ -82,8 +84,8 @@ pub(super) fn load_gateway_config(
             gw.set_enabled(id, false);
         }
     }
-    if v["generation_enabled"].as_bool() == Some(false) {
-        gens.set_enabled(false);
+    if v["generation_enabled"].as_bool() == Some(true) {
+        gens.set_enabled(true);
     }
 }
 

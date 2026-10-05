@@ -102,6 +102,7 @@ pub enum CriticalUnavailable {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RunPolicy {
     pub demand_spec: SpecApproval,
     pub plan: PlanApproval,
@@ -152,6 +153,7 @@ impl Default for RunPolicy {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RunBudget {
     pub max_cost_micros: Option<u64>,
     pub max_tokens: Option<u64>,

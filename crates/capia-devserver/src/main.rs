@@ -351,6 +351,10 @@ fn main() {
             });
         ai.load_replay_scripts(&scripts).expect("replay scripts");
     }
+    if std::env::var_os("CAPIA_AI_DEMO_BRAIN").is_some() {
+        // cérebro determinístico para E2E de UI (nunca no produto)
+        ai.install_demo_autonomy();
+    }
     let app = Arc::new(App { session, ai });
     let root = Arc::new(root);
     let token = Arc::new(token);

@@ -5,6 +5,8 @@
 //! depende deste serviço (o editor funciona com ele ausente ou com a IA desligada).
 
 mod autonomy_api;
+#[cfg(feature = "testkit")]
+mod demo;
 
 use crate::assistant::{self, ApprovalMode, AssistantEvent, AssistantOptions};
 use crate::autonomy::gateway::GatewayRegistry;
