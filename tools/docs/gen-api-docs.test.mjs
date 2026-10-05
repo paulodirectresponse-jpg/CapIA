@@ -10,6 +10,7 @@ import {
   exampleRequest,
   generate,
   injectBlock,
+  renderMcpTools,
   renderRestReference,
   renderScopeMatrix,
   splitParams,
@@ -127,7 +128,7 @@ test("generate é determinístico", () => {
   const a = generate(catalog());
   const b = generate(catalog());
   assert.deepEqual(a, b);
-  assert.deepEqual(Object.keys(a).sort(), ["auth-and-scopes.md", "openapi.json", "rest-reference.md"]);
+  assert.deepEqual(Object.keys(a).sort(), ["auth-and-scopes.md", "mcp-tools.md", "openapi.json", "rest-reference.md"]);
   JSON.parse(a["openapi.json"]);
 });
 
@@ -145,4 +146,15 @@ test("--catalog - lê o catálogo da entrada padrão e --check detecta defasagem
   });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /DESATUALIZADO/);
+});
+
+test("a tabela MCP lista as tools com o nome da regra (ponto vira sublinhado) e separa as só-REST", () => {
+  const c = catalog();
+  const t = renderMcpTools(c);
+  assert.ok(t.includes("| `runs_create` | `runs.create`"));
+  assert.ok(t.includes("| `uploads_create_inline` |"));
+  assert.ok(!t.includes("| `uploads_create` |"));
+  assert.match(t, /Só REST[\s\S]*`uploads.create`/);
+  for (const o of c.operations.filter((x) => x.surface === "both"))
+    assert.ok(t.includes(`| \`${o.tool}\` |`), o.tool);
 });

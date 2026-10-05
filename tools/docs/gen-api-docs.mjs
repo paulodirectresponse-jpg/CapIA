@@ -335,6 +335,31 @@ export function injectBlock(text, block) {
   return `${text.replace(/\s*$/, "")}\n\n${body}\n`;
 }
 
+/** Tabela das tools MCP (nome, scope, efeito) — mesma fonte do REST. */
+export function renderMcpTools(c) {
+  const tools = c.operations.filter((o) => o.surface === "both");
+  const rest = c.operations.filter((o) => o.surface !== "both");
+  const lines = [
+    "# Tools MCP (geradas)",
+    "",
+    "> **Gerado** por `node tools/docs/gen-api-docs.mjs` a partir do catálogo único (ADR-102). Não edite à mão. Regras gerais, resources e falhas: [mcp.md](mcp.md).",
+    "",
+    `${tools.length} tools (uma por operação do catálogo, exceto as só-REST). Nome da tool = nome da operação com \`.\` trocado por \`_\`.`,
+    "",
+    "| Tool | Operação / rota REST | Scope | Efeito | Classe |",
+    "|---|---|---|---|---|",
+  ];
+  for (const o of tools)
+    lines.push(
+      `| \`${o.tool}\` | \`${o.name}\` · \`${o.method} ${o.path}\` | ${o.scope ? `\`${o.scope}\`` : "—"} | ${o.mutating ? "mutante" : "leitura"} | \`${o.class}\` |`,
+    );
+  if (rest.length) {
+    lines.push("", "Só REST (sem tool MCP):", "");
+    for (const o of rest) lines.push(`- \`${o.name}\` (\`${o.method} ${o.path}\`): ${o.summary}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 // ---- OpenAPI -----------------------------------------------------------------------------------
 
 const ERROR_SCHEMA = {
@@ -432,6 +457,7 @@ export function generate(c, { existing = {}, version } = {}) {
   return {
     "rest-reference.md": `${renderRestReference(c)}`,
     "openapi.json": `${JSON.stringify(buildOpenApi(c, version), null, 2)}\n`,
+    "mcp-tools.md": renderMcpTools(c),
     "auth-and-scopes.md": injectBlock(authBase, renderScopeMatrix(c)),
   };
 }
