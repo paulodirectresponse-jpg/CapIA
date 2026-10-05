@@ -414,7 +414,13 @@ impl ChildServer {
         )?)
     }
 
-    pub fn json_call(&self, method: &str, path: &str, token: &str, body: &serde_json::Value) -> Option<Resp> {
+    pub fn json_call(
+        &self,
+        method: &str,
+        path: &str,
+        token: &str,
+        body: &serde_json::Value,
+    ) -> Option<Resp> {
         let b = body.to_string();
         self.call(
             method,
@@ -431,7 +437,10 @@ impl ChildServer {
     }
 
     pub fn wait_ready(&self) {
-        assert!(wait_until(Duration::from_secs(20), || self.alive()), "server never became healthy");
+        assert!(
+            wait_until(Duration::from_secs(20), || self.alive()),
+            "server never became healthy"
+        );
     }
 
     /// SIGKILL (sem shutdown gracioso).
