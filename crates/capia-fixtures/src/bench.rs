@@ -57,6 +57,12 @@ pub fn time_reps<T>(reps: usize, mut f: impl FnMut(usize) -> T) -> Vec<f64> {
         .collect()
 }
 
+/// Como [`time_reps`], mas a própria `f` devolve os ms a registrar (para medir só um trecho do
+/// corpo, p.ex. excluindo o preparo/limpeza da repetição).
+pub fn ms_reps(reps: usize, mut f: impl FnMut(usize) -> f64) -> Vec<f64> {
+    (0..reps).map(&mut f).collect()
+}
+
 /// Dados da máquina que produziu os números (sem isto um número não é comparável).
 pub fn machine_info() -> Value {
     let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
