@@ -1,6 +1,8 @@
 //! Mundo de teste: projeto real (Session), mídia real gerada pelo ffmpeg, provider Replay.
 #![allow(dead_code, unreachable_pub, clippy::unwrap_used, clippy::expect_used)]
 
+pub mod auto;
+
 use capia_ai::brain::BrainProfile;
 use capia_ai::capability::{Capabilities, Capability};
 use capia_ai::dispatcher::{AiRuntime, MemoryCache, TaskCtx};
