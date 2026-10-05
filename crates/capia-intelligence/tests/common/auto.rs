@@ -312,10 +312,20 @@ pub fn auto_world(
     name: &str,
     script_for: impl FnOnce(Arc<Mutex<String>>) -> Arc<Script>,
 ) -> Option<AutoWorld> {
+    auto_world_at(name, None, script_for)
+}
+
+/// `reopen = Some(dir)`: reabre o projeto deixado por um processo morto (kill real).
+pub fn auto_world_at(
+    name: &str,
+    reopen: Option<std::path::PathBuf>,
+    script_for: impl FnOnce(Arc<Mutex<String>>) -> Arc<Script>,
+) -> Option<AutoWorld> {
     let asset_cell = Arc::new(Mutex::new(String::new()));
     let script = script_for(asset_cell.clone());
-    let w = world_full(
+    let w = world_full_at(
         name,
+        reopen,
         Some(make_speech_clip),
         vec![transcript_response()],
         true,

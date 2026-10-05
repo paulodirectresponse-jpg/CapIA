@@ -37,6 +37,13 @@ pub fn ffmpeg() -> Option<MediaToolchain> {
 }
 
 pub fn tmp(name: &str) -> PathBuf {
+    // `CAPIA_TEST_DIR`: o processo-filho dos testes de kill grava num diretório que o pai conhece.
+    if let Ok(d) = std::env::var("CAPIA_TEST_DIR") {
+        let d = PathBuf::from(d);
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        return d;
+    }
     let d = std::env::temp_dir().join(format!("capia-intel-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
@@ -196,20 +203,52 @@ pub fn world_full(
     with_stt: bool,
     brain: Option<Arc<ReplayProvider>>,
 ) -> Option<World> {
+    world_full_at(name, None, make, stt_script, with_stt, brain)
+}
+
+/// Como `world_full`; com `reopen = Some(dir)` **reabre** o projeto que um processo anterior (morto)
+/// deixou em `dir` em vez de criar um novo (testes de kill real).
+pub fn world_full_at(
+    name: &str,
+    reopen: Option<PathBuf>,
+    make: Option<fn(&MediaToolchain, &Path) -> PathBuf>,
+    stt_script: Vec<ReplayResponse>,
+    with_stt: bool,
+    brain: Option<Arc<ReplayProvider>>,
+) -> Option<World> {
     let tc = if make.is_some() {
         Some(ffmpeg()?)
     } else {
         None
     };
-    let dir = tmp(name);
-    let media = make.map(|m| m(tc.as_ref().unwrap(), &dir));
+    let dir = reopen.clone().unwrap_or_else(|| tmp(name));
+    let media = if reopen.is_some() {
+        None
+    } else {
+        make.map(|m| m(tc.as_ref().unwrap(), &dir))
+    };
     let session = Arc::new(Mutex::new(Session::new(SessionConfig::default())));
-    call(
-        &session,
-        "project.create",
-        json!({ "path": dir.join("p.capia").display().to_string() }),
-    );
     let mut asset_id = String::new();
+    if reopen.is_some() {
+        call(
+            &session,
+            "project.open",
+            json!({ "path": dir.join("p.capia").display().to_string() }),
+        );
+        let l = call(&session, "assets.list", json!({}));
+        asset_id = l
+            .as_array()
+            .and_then(|a| a.iter().find(|x| x["name"] == "speech.mp4"))
+            .and_then(|x| x["id"].as_str())
+            .unwrap_or("")
+            .to_owned();
+    } else {
+        call(
+            &session,
+            "project.create",
+            json!({ "path": dir.join("p.capia").display().to_string() }),
+        );
+    }
     if let Some(media) = media {
         call(
             &session,
