@@ -87,7 +87,8 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
       .toBe(true);
     const img = (await editor.clips()).find((c) => c.track === overlay.id);
     if (!img) throw new Error("imagem não colocada");
-    const from = await editor.clipPoint(img.id, 0.5, 0.5);
+    // perto do início do clip: com a janela estreita do app real o centro pode cair fora do canvas
+    const from = await editor.clipPoint(img.id, 0.08, 0.5);
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move(from.x + 260, from.y, { steps: 16 });
