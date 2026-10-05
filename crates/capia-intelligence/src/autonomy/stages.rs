@@ -68,6 +68,21 @@ pub fn demand_json(s: &DemandSpec) -> Value {
     })
 }
 
+/// Registro derivado mais novo de um asset (as análises são gravadas com o asset como *sujeito*;
+/// o id do registro é um hash dos parâmetros, então a busca é por sujeito).
+fn latest_for_asset(
+    records: &crate::records::Records,
+    kind: &str,
+    asset: &str,
+) -> IntelResult<Option<Value>> {
+    Ok(records
+        .store()
+        .list(kind, Some(asset), true, 1)?
+        .into_iter()
+        .next()
+        .map(|r| r.json))
+}
+
 fn brief_facts(s: &DemandSpec, run: &AiRun) -> BriefFacts {
     let max_s = run
         .inputs
@@ -333,7 +348,7 @@ impl Orchestrator {
         // análises determinísticas reaproveitáveis: referência (gramática) e transcrição do bruto
         let mut warnings: Vec<String> = Vec::new();
         for asset in run.inputs.references.clone() {
-            if records.latest_json(KIND_REFERENCE, &asset)?.is_some() {
+            if latest_for_asset(&records, KIND_REFERENCE, &asset)?.is_some() {
                 continue;
             }
             match reference::analyze_reference(
@@ -479,7 +494,7 @@ impl Orchestrator {
         );
         let mut transcripts = Vec::new();
         for asset in &run.inputs.assets {
-            if let Some(v) = records.latest_json(KIND_TRANSCRIPT, asset)? {
+            if let Some(v) = latest_for_asset(&records, KIND_TRANSCRIPT, asset)? {
                 let segs: Vec<String> = v["transcript"]["segments"]
                     .as_array()
                     .into_iter()
@@ -501,7 +516,7 @@ impl Orchestrator {
             .inputs
             .references
             .first()
-            .map(|a| records.latest_json(KIND_REFERENCE, a))
+            .map(|a| latest_for_asset(&records, KIND_REFERENCE, a))
             .transpose()?
             .flatten();
         let memory: Vec<String> = run

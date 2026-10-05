@@ -1,0 +1,126 @@
+{
+  "spec": "docs/phase5/PHASE5_AUTONOMY_TESTS.md §3",
+  "note": "Cada caso aponta para o teste executável que o cobre (verificado por autonomy_corpus.rs). Qualidade percebida (nota humana) NÃO está aqui: ver tools/phase5-acceptance/real-demands.",
+  "cases": [
+    {
+      "id": 1,
+      "name": "UGC talking head + B-roll + captions",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "a_missing_broll_is_acquired_through_the_gateway_with_approval_and_provenance"
+    },
+    {
+      "id": 2,
+      "name": "Produto físico com referência",
+      "file": "crates/capia-intelligence/tests/autonomy_corpus.rs",
+      "test": "cases_2_and_9_a_reference_informs_the_plan_and_the_brief_wins_on_conflict"
+    },
+    {
+      "id": 3,
+      "name": "Testimonial (fala + CTA)",
+      "file": "crates/capia-intelligence/tests/autonomy_run.rs",
+      "test": "happy_path_runs_the_whole_pipeline_and_leaves_editable_clips"
+    },
+    {
+      "id": 4,
+      "name": "Múltiplos hooks + BODY_MASTER",
+      "file": "crates/capia-intelligence/tests/autonomy_variants.rs",
+      "test": "one_run_makes_a_master_and_variants_that_are_distinct_editable_sequences"
+    },
+    {
+      "id": 5,
+      "name": "Variantes de CTA",
+      "file": "crates/capia-intelligence/tests/autonomy_variants.rs",
+      "test": "one_run_makes_a_master_and_variants_that_are_distinct_editable_sequences"
+    },
+    {
+      "id": 6,
+      "name": "B-roll ausente resolvido pelo gateway",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "a_missing_broll_is_acquired_through_the_gateway_with_approval_and_provenance"
+    },
+    {
+      "id": 7,
+      "name": "Asset ausente resolvido por geração (Replay)",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "generation_needs_approval_and_budget_and_records_full_provenance"
+    },
+    {
+      "id": 8,
+      "name": "Sem referência",
+      "file": "crates/capia-intelligence/tests/autonomy_run.rs",
+      "test": "happy_path_runs_the_whole_pipeline_and_leaves_editable_clips"
+    },
+    {
+      "id": 9,
+      "name": "Referência e brief em conflito",
+      "file": "crates/capia-intelligence/tests/autonomy_corpus.rs",
+      "test": "cases_2_and_9_a_reference_informs_the_plan_and_the_brief_wins_on_conflict"
+    },
+    {
+      "id": 10,
+      "name": "must_include/must_avoid estritos",
+      "file": "crates/capia-intelligence/tests/autonomy_corpus.rs",
+      "test": "case_10_strict_must_include_and_must_avoid_are_enforced_by_the_critic_loop"
+    },
+    {
+      "id": 11,
+      "name": "Orçamento baixo exige WAITING_USER",
+      "file": "crates/capia-intelligence/tests/autonomy_budget.rs",
+      "test": "a_limit_equal_to_the_estimate_runs_and_one_micro_less_asks_first"
+    },
+    {
+      "id": 12,
+      "name": "Falha/fallback de provider",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "a_rate_limited_provider_is_retried_and_the_cost_is_accounted"
+    },
+    {
+      "id": 13,
+      "name": "Edição manual durante a Run",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "a_manual_edit_between_validation_and_apply_is_caught_by_the_diff_digest"
+    },
+    {
+      "id": 14,
+      "name": "Cancelar durante ACQUIRE",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "cancelling_during_generation_stops_everything_and_applies_nothing"
+    },
+    {
+      "id": 15,
+      "name": "Crash durante EDIT",
+      "file": "crates/capia-intelligence/tests/autonomy_kill.rs",
+      "test": "sigkill_right_after_the_apply_resumes_without_applying_twice"
+    },
+    {
+      "id": 16,
+      "name": "Crash após submit de geração",
+      "file": "crates/capia-intelligence/tests/autonomy_crash_acquire.rs",
+      "test": "crash_after_the_generation_submit_never_submits_or_pays_twice"
+    },
+    {
+      "id": 17,
+      "name": "Loop de correção do Critic",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "the_correction_loop_fixes_in_one_cycle_with_minimal_commands"
+    },
+    {
+      "id": 18,
+      "name": "Esgotamento do loop",
+      "file": "crates/capia-intelligence/tests/autonomy_scenarios.rs",
+      "test": "a_correction_that_does_not_help_stops_the_loop_and_asks_the_user"
+    },
+    {
+      "id": 19,
+      "name": "Proposta de memória",
+      "file": "crates/capia-intelligence/tests/autonomy_security.rs",
+      "test": "a_hostile_model_cannot_spend_fetch_or_promote_memory_without_a_human"
+    },
+    {
+      "id": 20,
+      "name": "Isolamento multi-cliente",
+      "file": "crates/capia-intelligence/tests/autonomy_memory.rs",
+      "test": "client_memory_is_isolated_and_precedence_resolves_conflicts_visibly"
+    }
+  ]
+}
