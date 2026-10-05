@@ -80,7 +80,9 @@ async function waitPortFree(port: number, timeoutMs = 30_000): Promise<void> {
         sock.destroy();
         resolve(true);
       });
-      sock.once("error", () => { resolve(false); });
+      sock.once("error", () => {
+        resolve(false);
+      });
     });
     if (!inUse) return;
     await new Promise((r) => setTimeout(r, 200));
@@ -90,7 +92,11 @@ async function waitPortFree(port: number, timeoutMs = 30_000): Promise<void> {
 /** Encerra o app e (no Windows) a árvore de processos do WebView2, esperando a saída de verdade. */
 async function killTree(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.pid === undefined) return;
-  const exited = new Promise<void>((resolve) => child.once("exit", () => { resolve(); }));
+  const exited = new Promise<void>((resolve) =>
+    child.once("exit", () => {
+      resolve();
+    }),
+  );
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
   } else {
