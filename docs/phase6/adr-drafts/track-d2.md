@@ -62,5 +62,5 @@ No Windows vale a herança de ACL do perfil do usuário (documentado como pré-r
 ## D2-7 — Suíte de segurança como gate
 
 `tools/phase6-acceptance/security-suite/run.mjs` roda pentest + canário + fuzz + queda + unitários +
-`pnpm check:arch` e, opcionalmente, `tools/mutation-phase6.py` (36 mutações; cada uma deve ser
+`pnpm check:arch` e, opcionalmente, `tools/mutation-phase6.py` (37 mutações; cada uma deve ser
 detectada). Mutante sobrevivente é achado e exige teste novo — nunca enfraquecer asserção.

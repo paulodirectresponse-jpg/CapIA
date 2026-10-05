@@ -582,7 +582,7 @@ fn sigkill_during_an_export_marks_it_interrupted_and_leaves_no_partial_final_fil
     );
     if state == "failed" {
         let e = &got.json()["export"]["error"];
-        assert!(e["code"] == "INTERRUPTED" || e.is_object(), "{e}");
+        assert_eq!(e["code"], "INTERRUPTED", "{e}");
         // nenhum arquivo final parcial: o diretório do export só tem o final válido ou nada
         let finals: Vec<_> = walk(&dir.path().join("exports"))
             .into_iter()
@@ -593,4 +593,74 @@ fn sigkill_during_an_export_marks_it_interrupted_and_leaves_no_partial_final_fil
             "a partial final file survived: {finals:?}"
         );
     }
+}
+
+#[test]
+fn a_pending_idempotency_key_from_a_dead_process_is_indeterminate_at_once() {
+    let dir = TempDir::new("crash-idem-pending");
+    let (mut srv, tok) = boot(&dir);
+    let tid = srv
+        .call("GET", "/v1/tokens", Some(&tok), &[], b"")
+        .unwrap()
+        .json()["tokens"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    srv.kill();
+    // o estado exato de uma queda NO MEIO de um pedido: linha `pending` (status 0) recém-criada
+    let body = json!({"url": "https://example.com/pending", "events": ["*"]});
+    let key = "in-flight-key";
+    {
+        let db = capia_store::ServerDb::open(&dir.path().join("server.db"), Duration::from_secs(5))
+            .unwrap();
+        let hashed = format!(
+            "ik_{}",
+            &capia_server::mac::sha256_hex(key.as_bytes())[..40]
+        );
+        let hash = capia_server::mac::sha256_hex(format!("webhooks.create\n{body}").as_bytes());
+        let now = capia_server::auth::now_ms();
+        let r = db
+            .idem_begin(&tid, &hashed, "webhooks.create", &hash, now, 300_000)
+            .unwrap();
+        assert!(matches!(r, capia_store::IdemBegin::New));
+    }
+    let srv = reboot(&dir, &tok);
+    let r = srv
+        .call(
+            "POST",
+            "/v1/webhooks",
+            Some(&tok),
+            &[
+                ("Content-Type", "application/json"),
+                ("Idempotency-Key", key),
+            ],
+            body.to_string().as_bytes(),
+        )
+        .unwrap();
+    assert_eq!(r.status, 409, "{}", String::from_utf8_lossy(&r.body));
+    assert_eq!(
+        r.code(),
+        "IDEMPOTENCY_INDETERMINATE",
+        "an orphaned pending key must not read as in progress"
+    );
+    // nada foi executado por causa disso
+    let list = srv
+        .call("GET", "/v1/webhooks", Some(&tok), &[], b"")
+        .unwrap()
+        .json();
+    assert_eq!(list["webhooks"].as_array().unwrap().len(), 0);
+    // com uma chave NOVA o pedido executa normalmente
+    let ok = srv
+        .call(
+            "POST",
+            "/v1/webhooks",
+            Some(&tok),
+            &[
+                ("Content-Type", "application/json"),
+                ("Idempotency-Key", "fresh-key"),
+            ],
+            body.to_string().as_bytes(),
+        )
+        .unwrap();
+    assert_eq!(ok.status, 201);
 }

@@ -151,7 +151,7 @@ M = [
       f"{SR} authorization_header_tricks_never_authenticate"),
     m(35, "idempotência: pendente órfão não vira indeterminado na abertura", "crates/capia-store/src/serverdb.rs",
       [('.execute("UPDATE idempotency SET created_ms = 0 WHERE status = 0", [])?', '.execute("SELECT 0", [])?')],
-      f"{ENV} cargo test -q -p capia-server --test crash_rest -- sigkill_during_idempotent_requests_never_executes_a_key_twice"),
+      f"{ENV} cargo test -q -p capia-server --test crash_rest -- a_pending_idempotency_key_from_a_dead_process_is_indeterminate_at_once"),
     m(36, "staging órfão não é varrido na abertura", f"{S}/core.rs",
       [('                if p.is_dir() && !p.join("meta.json").exists() {', '                if false && p.is_dir() && !p.join("meta.json").exists() {')],
       f"{ENV} cargo test -q -p capia-server --test crash_rest -- sigkill_during_an_upload"),
