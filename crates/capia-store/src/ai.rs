@@ -82,6 +82,9 @@ fn bad(msg: impl Into<String>) -> StoreError {
     StoreError::new(StoreErrorCode::InvalidArgument, msg)
 }
 
+/// Linha crua de `ai_records` (kind, id, version, parent, schema, created, updated, json).
+type RawRecord = (String, String, i64, Option<String>, i64, i64, i64, String);
+
 impl AiStore {
     /// Abre a conexão de um projeto **já aberto/migrado** por `ProjectStore` (schema ≥ 4).
     pub fn open(path: &Path, busy_timeout: Duration) -> StoreResult<Self> {
@@ -138,9 +141,7 @@ impl AiStore {
         Ok(())
     }
 
-    fn row(
-        r: &rusqlite::Row<'_>,
-    ) -> rusqlite::Result<(String, String, i64, Option<String>, i64, i64, i64, String)> {
+    fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawRecord> {
         Ok((
             r.get(0)?,
             r.get(1)?,
@@ -153,9 +154,7 @@ impl AiStore {
         ))
     }
 
-    fn build(
-        t: (String, String, i64, Option<String>, i64, i64, i64, String),
-    ) -> StoreResult<RecordRow> {
+    fn build(t: RawRecord) -> StoreResult<RecordRow> {
         let json: Value = serde_json::from_str(&t.7).map_err(|e| {
             StoreError::corrupted(format!("record {}/{} is not valid JSON", t.0, t.1)).with_cause(e)
         })?;

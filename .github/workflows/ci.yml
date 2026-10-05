@@ -127,9 +127,9 @@ jobs:
           ffmpeg -version | head -1
       - run: cargo fmt --all -- --check
       - name: Clippy do núcleo, jobs, mídia, assets, store, projeto e CLI
-        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli --all-targets -- -D warnings
+        run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli -p capia-secrets -p capia-ai -p capia-intelligence --all-targets -- -D warnings
       - name: Testes (núcleo, nested/compose, jobs, mídia, assets, migrations, crash, concorrência, CLI)
-        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli
+        run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli -p capia-secrets -p capia-ai -p capia-intelligence
       - name: "Propriedades com IO ampliadas (release) — salvar/reabrir e assets"
         run: |
           cargo test --release -p capia-store --test properties -- --nocapture

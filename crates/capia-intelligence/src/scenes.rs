@@ -184,7 +184,7 @@ impl SceneAnalyzer {
         // quadro j é o "i+l" de i = j-l; precisa do quadro i-1 = j-l-1
         let ring_len = self.ring.len();
         for l in 1..=self.params.flash_max {
-            if j >= l + 1 {
+            if j > l {
                 let i = j - l;
                 let back = j - l - 1; // índice absoluto do quadro i-1
                 let ring_start = j - ring_len; // índice absoluto do primeiro no anel
@@ -558,21 +558,6 @@ mod tests {
         assert!((bd[0].frame as i64 - 36).abs() <= 3, "{bd:?}");
     }
 
-    pub fn fade_frames() -> Vec<Vec<u8>> {
-        let a = scene(60, 0, [120, 90, 60]);
-        let b = scene(60, 2, [60, 140, 160]);
-        let black = vec![0u8; W * H * 3];
-        let mut f: Vec<Vec<u8>> = a[..30].to_vec();
-        for k in 0..16 {
-            f.push(blend(&a[30 + k], &black, (k + 1) as f32 / 16.0));
-        }
-        for k in 0..16 {
-            f.push(blend(&black, &b[k], (k + 1) as f32 / 16.0));
-        }
-        f.extend_from_slice(&b[16..]);
-        f
-    }
-
     #[test]
     fn a_fade_through_black_is_classified_as_fade() {
         let a = scene(60, 0, [120, 90, 60]);
@@ -582,8 +567,8 @@ mod tests {
         for k in 0..16 {
             f.push(blend(&a[30 + k], &black, (k + 1) as f32 / 16.0));
         }
-        for k in 0..16 {
-            f.push(blend(&black, &b[k], (k + 1) as f32 / 16.0));
+        for (k, frame) in b.iter().take(16).enumerate() {
+            f.push(blend(&black, frame, (k + 1) as f32 / 16.0));
         }
         f.extend_from_slice(&b[16..]);
         let bd = detect(&f, &SceneParams::default());

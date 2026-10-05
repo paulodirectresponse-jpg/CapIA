@@ -11,24 +11,25 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+// Só geradores DETERMINÍSTICOS (verificado: `gradients`/`sierpinski` sem cores/seed explícitos variam
+// entre execuções do ffmpeg e foram descartados) — o corpus tem de ser reproduzível bit a bit.
 const FPS: u32 = 25;
 const SIZE: &str = "320x180";
 const SOURCES: [&str; 6] = [
     "testsrc",
     "smptebars",
     "rgbtestsrc",
-    "gradients=seed=7",
+    "gradients=c0=0x203060:c1=0xe0b040:c2=0x20a070:nb_colors=3:seed=7",
     "mandelbrot",
     "yuvtestsrc",
 ];
 
 /// Fontes **não usadas** no ajuste dos limiares (conjunto de validação separado).
-const HELDOUT: [&str; 5] = [
+const HELDOUT: [&str; 4] = [
     "pal100bars",
-    "cellauto",
-    "sierpinski",
-    "gradients=seed=21",
-    "life",
+    "cellauto=random_seed=3",
+    "life=random_seed=5",
+    "gradients=c0=0x30c070:c1=0x802090:nb_colors=2:seed=3:speed=0.02:type=radial",
 ];
 
 fn toolchain() -> Option<MediaToolchain> {
@@ -205,7 +206,12 @@ fn annotated_corpus_meets_the_five_percent_cut_error_target() {
         fades(&tc, &dir, 4, 0),
         fades(&tc, &dir, 4, 2),
         no_cut(&tc, &dir, "mandelbrot", "mandelbrot"),
-        no_cut(&tc, &dir, "gradients", "gradients=seed=3"),
+        no_cut(
+            &tc,
+            &dir,
+            "gradients",
+            "gradients=c0=0xd03020:c1=0x2040e0:nb_colors=2:seed=21:speed=0.03",
+        ),
         no_cut(&tc, &dir, "testsrc", "testsrc"),
     ];
     let (mut tp, mut fp, mut fnn, mut total) = (0usize, 0usize, 0usize, 0usize);
