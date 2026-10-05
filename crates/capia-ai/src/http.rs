@@ -154,8 +154,8 @@ fn blocked_v6(ip: Ipv6Addr) -> bool {
 
 /// Resolver que **filtra** o que o DNS devolve (anti DNS-rebinding para hosts públicos).
 #[derive(Clone, Copy, Debug)]
-struct GuardedResolver {
-    policy: UrlPolicy,
+pub(crate) struct GuardedResolver {
+    pub(crate) policy: UrlPolicy,
 }
 
 impl Resolve for GuardedResolver {

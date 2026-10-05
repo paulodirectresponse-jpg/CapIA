@@ -28,6 +28,7 @@ pub mod testkit;
 pub mod tools;
 pub mod types;
 pub mod usage;
+pub mod webhook;
 
 pub use cancel::CancelToken;
 pub use error::{ErrorCode, ProviderError};
