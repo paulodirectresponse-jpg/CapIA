@@ -1,5 +1,13 @@
 import { strict as assert } from "node:assert";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -37,49 +45,66 @@ case "$*" in *-buildconf*) echo "  ${conf}";; *-L*) echo "${lic}";; *) echo "con
 
 const opts = (extra) => ({ flags: new Set(extra.flags ?? []), ...extra.kv });
 
-test("stage refuses an unapproved ffmpeg without the dev flag and labels it with the flag", {
-  skip: process.platform === "win32",
-}, () => {
-  const st = mkdtempSync(join(tmpdir(), "capia-stage-tauri-"));
-  const gpl = fakeFfmpegDir({ gpl: true });
-  try {
-    assert.throws(
-      () => stage(opts({ kv: { "ffmpeg-dir": gpl, "src-tauri": st }, flags: ["allow-missing-server"] })),
-      /FFmpeg não aprovado/,
-    );
-    const r = stage(
-      opts({ kv: { "ffmpeg-dir": gpl, "src-tauri": st }, flags: ["allow-missing-server", "allow-dev-ffmpeg"] }),
-    );
-    assert.equal(r.ffmpegApproved, false);
-    assert.ok(existsSync(join(st, "bundle-staging/ffmpeg/DEV-TEST-ONLY-UNAPPROVED.txt")));
-    assert.ok(existsSync(join(st, "bundle-staging/SERVER-PLACEHOLDER.txt")));
-    const cfg = JSON.parse(readFileSync(r.configPath, "utf8"));
-    assert.equal(cfg.bundle.externalBin, undefined);
-  } finally {
-    rmSync(st, { recursive: true });
-    rmSync(gpl, { recursive: true });
-  }
-});
+test(
+  "stage refuses an unapproved ffmpeg without the dev flag and labels it with the flag",
+  {
+    skip: process.platform === "win32",
+  },
+  () => {
+    const st = mkdtempSync(join(tmpdir(), "capia-stage-tauri-"));
+    const gpl = fakeFfmpegDir({ gpl: true });
+    try {
+      assert.throws(
+        () =>
+          stage(
+            opts({ kv: { "ffmpeg-dir": gpl, "src-tauri": st }, flags: ["allow-missing-server"] }),
+          ),
+        /FFmpeg não aprovado/,
+      );
+      const r = stage(
+        opts({
+          kv: { "ffmpeg-dir": gpl, "src-tauri": st },
+          flags: ["allow-missing-server", "allow-dev-ffmpeg"],
+        }),
+      );
+      assert.equal(r.ffmpegApproved, false);
+      assert.ok(existsSync(join(st, "bundle-staging/ffmpeg/DEV-TEST-ONLY-UNAPPROVED.txt")));
+      assert.ok(existsSync(join(st, "bundle-staging/SERVER-PLACEHOLDER.txt")));
+      const cfg = JSON.parse(readFileSync(r.configPath, "utf8"));
+      assert.equal(cfg.bundle.externalBin, undefined);
+    } finally {
+      rmSync(st, { recursive: true });
+      rmSync(gpl, { recursive: true });
+    }
+  },
+);
 
-test("stage with an approved ffmpeg and a server binary wires the sidecar; missing server is an error without the switch", {
-  skip: process.platform === "win32",
-}, () => {
-  const st = mkdtempSync(join(tmpdir(), "capia-stage-tauri-"));
-  const ok = fakeFfmpegDir({ gpl: false });
-  const srv = join(ok, "server.exe");
-  writeFileSync(srv, "bin");
-  try {
-    assert.throws(() => stage(opts({ kv: { "ffmpeg-dir": ok, "src-tauri": st } })), /capia-server/);
-    mkdirSync(st, { recursive: true });
-    const r = stage(opts({ kv: { "ffmpeg-dir": ok, "src-tauri": st, "server-bin": srv } }));
-    assert.equal(r.ffmpegApproved, true);
-    assert.equal(r.hasServer, true);
-    assert.ok(existsSync(join(st, "binaries/capia-server-x86_64-pc-windows-msvc.exe")));
-    assert.ok(existsSync(join(st, "bundle-staging/ffmpeg/ffprobe")));
-    const cfg = JSON.parse(readFileSync(r.configPath, "utf8"));
-    assert.deepEqual(cfg.bundle.externalBin, ["binaries/capia-server"]);
-  } finally {
-    rmSync(st, { recursive: true });
-    rmSync(ok, { recursive: true });
-  }
-});
+test(
+  "stage with an approved ffmpeg and a server binary wires the sidecar; missing server is an error without the switch",
+  {
+    skip: process.platform === "win32",
+  },
+  () => {
+    const st = mkdtempSync(join(tmpdir(), "capia-stage-tauri-"));
+    const ok = fakeFfmpegDir({ gpl: false });
+    const srv = join(ok, "server.exe");
+    writeFileSync(srv, "bin");
+    try {
+      assert.throws(
+        () => stage(opts({ kv: { "ffmpeg-dir": ok, "src-tauri": st } })),
+        /capia-server/,
+      );
+      mkdirSync(st, { recursive: true });
+      const r = stage(opts({ kv: { "ffmpeg-dir": ok, "src-tauri": st, "server-bin": srv } }));
+      assert.equal(r.ffmpegApproved, true);
+      assert.equal(r.hasServer, true);
+      assert.ok(existsSync(join(st, "binaries/capia-server-x86_64-pc-windows-msvc.exe")));
+      assert.ok(existsSync(join(st, "bundle-staging/ffmpeg/ffprobe")));
+      const cfg = JSON.parse(readFileSync(r.configPath, "utf8"));
+      assert.deepEqual(cfg.bundle.externalBin, ["binaries/capia-server"]);
+    } finally {
+      rmSync(st, { recursive: true });
+      rmSync(ok, { recursive: true });
+    }
+  },
+);

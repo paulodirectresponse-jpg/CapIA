@@ -9,7 +9,14 @@
 // Chave: SOMENTE de segredos de CI — CAPIA_UPDATE_SIGNING_SEED_HEX (64 hex = semente Ed25519) e
 // CAPIA_UPDATE_KEY_ID. Nada de chave no repositório nem em log. `--test-key` cria uma chave descartável
 // (key_id `test-ephemeral`, par escrito em <out>.test-pubkey.json só com a PÚBLICA) para provar o pipeline.
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  sign,
+  verify,
+} from "node:crypto";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -30,12 +37,14 @@ export function canonicalJson(v) {
 }
 
 export function signingPayload(manifest) {
-  const { signature: _drop, ...rest } = manifest;
+  const rest = { ...manifest };
+  delete rest.signature;
   return Buffer.from(canonicalJson(rest), "utf8");
 }
 
 export function privateKeyFromSeedHex(hex) {
-  if (!/^[0-9a-f]{64}$/i.test(hex)) throw new Error("a semente deve ter 64 caracteres hexadecimais");
+  if (!/^[0-9a-f]{64}$/i.test(hex))
+    throw new Error("a semente deve ter 64 caracteres hexadecimais");
   return createPrivateKey({
     key: Buffer.concat([PKCS8_ED25519_PREFIX, Buffer.from(hex, "hex")]),
     format: "der",
@@ -56,8 +65,18 @@ export function publicKeyFromHex(hex) {
   });
 }
 
-export function buildManifest({ artifactPath, version, channel, url, notes = "", minVersion, rollback = false }) {
-  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(version)) {
+export function buildManifest({
+  artifactPath,
+  version,
+  channel,
+  url,
+  notes = "",
+  minVersion,
+  rollback = false,
+}) {
+  if (
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(version)
+  ) {
     throw new Error(`versão inválida: ${version}`);
   }
   if (!["stable", "beta"].includes(channel)) throw new Error(`canal inválido: ${channel}`);
@@ -89,7 +108,12 @@ export function signManifest(manifest, privateKey, keyId) {
 export function verifyManifest(manifest, publicKeyHexValue, keyId) {
   const s = manifest.signature;
   if (!s || s.alg !== "ed25519" || s.key_id !== keyId) return false;
-  return verify(null, signingPayload(manifest), publicKeyFromHex(publicKeyHexValue), Buffer.from(s.value, "hex"));
+  return verify(
+    null,
+    signingPayload(manifest),
+    publicKeyFromHex(publicKeyHexValue),
+    Buffer.from(s.value, "hex"),
+  );
 }
 
 function parseArgs(argv) {
@@ -144,7 +168,11 @@ function main(argv, env) {
   if (testPub) {
     writeFileSync(
       `${out}.test-pubkey.json`,
-      JSON.stringify({ key_id: keyId, public_hex: testPub, label: "TEST-ONLY ephemeral key" }, null, 2),
+      JSON.stringify(
+        { key_id: keyId, public_hex: testPub, label: "TEST-ONLY ephemeral key" },
+        null,
+        2,
+      ),
     );
   }
   console.log(`manifesto escrito em ${out} (key_id=${keyId}${testPub ? ", chave de TESTE" : ""})`);

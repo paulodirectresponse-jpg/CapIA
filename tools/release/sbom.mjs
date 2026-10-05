@@ -60,7 +60,10 @@ export function ffmpegComponent(meta) {
     purl: `pkg:generic/ffmpeg@${meta.source_tag ?? "unknown"}`,
     licenses: [{ expression: meta.license ?? "LGPL-2.1-or-later" }],
     ecosystem: "bundled",
-    properties: Object.entries(meta).map(([name, value]) => ({ name: `ffmpeg:${name}`, value: String(value) })),
+    properties: Object.entries(meta).map(([name, value]) => ({
+      name: `ffmpeg:${name}`,
+      value: String(value),
+    })),
   };
 }
 
@@ -74,7 +77,11 @@ export function buildSbom({ version, components, now = new Date().toISOString() 
       component: { type: "application", name: "CapIA", version },
       tools: [{ name: "capia tools/release/sbom.mjs" }],
     },
-    components: components.map(({ ecosystem: _e, ...c }) => c),
+    components: components.map((c) => {
+      const out = { ...c };
+      delete out.ecosystem;
+      return out;
+    }),
   };
 }
 
@@ -136,17 +143,25 @@ function main(argv) {
     );
     comps = comps.concat(cargoComponents(meta));
   }
-  if (existsSync("pnpm-lock.yaml")) comps = comps.concat(pnpmComponents(readFileSync("pnpm-lock.yaml", "utf8")));
+  if (existsSync("pnpm-lock.yaml"))
+    comps = comps.concat(pnpmComponents(readFileSync("pnpm-lock.yaml", "utf8")));
   const ffDir = arg(argv, "--ffmpeg-dir");
   let ff = null;
   if (ffDir && existsSync(join(ffDir, "ffmpeg-build.json"))) {
     ff = ffmpegComponent(JSON.parse(readFileSync(join(ffDir, "ffmpeg-build.json"), "utf8")));
     comps.push(ff);
   }
-  writeFileSync(join(outDir, "sbom.cdx.json"), JSON.stringify(buildSbom({ version, components: comps }), null, 2));
+  writeFileSync(
+    join(outDir, "sbom.cdx.json"),
+    JSON.stringify(buildSbom({ version, components: comps }), null, 2),
+  );
   writeFileSync(join(outDir, "license-report.json"), JSON.stringify(licenseReport(comps), null, 2));
-  writeFileSync(join(outDir, "THIRD_PARTY_NOTICES.txt"), thirdPartyNotices({ version, components: comps, ffmpeg: ff }));
+  writeFileSync(
+    join(outDir, "THIRD_PARTY_NOTICES.txt"),
+    thirdPartyNotices({ version, components: comps, ffmpeg: ff }),
+  );
   console.log(`SBOM: ${comps.length} componentes em ${outDir}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  main(process.argv.slice(2));

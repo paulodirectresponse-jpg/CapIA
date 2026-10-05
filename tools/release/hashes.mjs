@@ -82,7 +82,9 @@ async function main(argv) {
     return 0;
   }
   if (inputs.length === 0) {
-    console.error("uso: hashes.mjs <dir|arquivo>... [--out SHA256SUMS.txt] [--json hashes.json] | --verify <sums> <dir>");
+    console.error(
+      "uso: hashes.mjs <dir|arquivo>... [--out SHA256SUMS.txt] [--json hashes.json] | --verify <sums> <dir>",
+    );
     return 2;
   }
   const entries = await hashAll(inputs);

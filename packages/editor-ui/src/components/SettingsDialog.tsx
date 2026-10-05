@@ -14,6 +14,7 @@ import {
   type ActionId,
 } from "../lib/keymap";
 import type { Language } from "../lib/prefs";
+import { PrivacySettings } from "./PrivacySettings";
 
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const c = useController();
@@ -95,6 +96,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           </Button>
           <span className="ed-hint">{t("settings.diagnosticsHint")}</span>
         </div>
+        <PrivacySettings />
         <div className="ed-row">
           <h3 className="ed-subhead">{t("settings.keymap")}</h3>
           <Button

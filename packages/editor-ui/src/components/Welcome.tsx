@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, TextInput } from "@capia/ui-kit";
 import { useController, useUi } from "../context";
 import { useT } from "../i18n";
+import { Onboarding } from "./Onboarding";
 
 export function Welcome() {
   const c = useController();
@@ -94,6 +95,7 @@ export function Welcome() {
           </div>
         )}
       </form>
+      <Onboarding />
     </div>
   );
 }

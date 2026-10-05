@@ -80,7 +80,11 @@ function copyDirFlat(src, dst) {
   const copied = [];
   for (const name of readdirSync(src)) {
     const p = join(src, name);
-    if (/\.(exe|dll|json|txt|md)$/i.test(name) || /^(LICENSE|COPYING|ffmpeg|ffprobe)$/i.test(name) || /^(LICENSE|COPYING)/i.test(name)) {
+    if (
+      /\.(exe|dll|json|txt|md)$/i.test(name) ||
+      /^(LICENSE|COPYING|ffmpeg|ffprobe)$/i.test(name) ||
+      /^(LICENSE|COPYING)/i.test(name)
+    ) {
       copyFileSync(p, join(dst, name));
       copied.push(name);
     }
@@ -93,7 +97,9 @@ export function stage(opts) {
   const log = [];
   const ff = opts["ffmpeg-dir"];
   if (!ff) throw new Error("--ffmpeg-dir é obrigatório");
-  const inspected = inspectDir(resolve(ff), { requireMetadata: !opts.flags.has("allow-dev-ffmpeg") });
+  const inspected = inspectDir(resolve(ff), {
+    requireMetadata: !opts.flags.has("allow-dev-ffmpeg"),
+  });
   if (!inspected.approved && !opts.flags.has("allow-dev-ffmpeg")) {
     throw new Error(`FFmpeg não aprovado (ADR-032): ${inspected.reasons.join("; ")}`);
   }

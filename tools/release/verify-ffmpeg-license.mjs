@@ -107,7 +107,8 @@ export function inspectDir(dir, { requireMetadata = false } = {}) {
   warnings.push(...ev.warnings);
   const files = readdirSync(dir);
   const hasLicenseFile = files.some((f) => /^(LICENSE|COPYING|LICENSES?)\b/i.test(f));
-  if (!hasLicenseFile) reasons.push("arquivos de licença (LICENSE*/COPYING*) ausentes ao lado do binário");
+  if (!hasLicenseFile)
+    reasons.push("arquivos de licença (LICENSE*/COPYING*) ausentes ao lado do binário");
   const metaPath = join(dir, "ffmpeg-build.json");
   let metadata = null;
   if (existsSync(metaPath)) {
@@ -136,7 +137,9 @@ export function inspectDir(dir, { requireMetadata = false } = {}) {
 function main(argv) {
   const dir = argv.find((a) => !a.startsWith("--"));
   if (!dir) {
-    console.error("uso: verify-ffmpeg-license.mjs <dir> [--allow-dev-unapproved] [--require-metadata] [--report f.json]");
+    console.error(
+      "uso: verify-ffmpeg-license.mjs <dir> [--allow-dev-unapproved] [--require-metadata] [--report f.json]",
+    );
     return 2;
   }
   const ri = argv.indexOf("--report");

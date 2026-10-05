@@ -14,12 +14,21 @@ test("cargo components skip workspace members and path crates, keep license", ()
     workspace_members: ["ws#1"],
     packages: [
       { id: "ws#1", name: "capia-x", version: "0.6.0", source: null, license: null },
-      { id: "r#1", name: "serde", version: "1.0.1", source: "registry+x", license: "MIT OR Apache-2.0" },
+      {
+        id: "r#1",
+        name: "serde",
+        version: "1.0.1",
+        source: "registry+x",
+        license: "MIT OR Apache-2.0",
+      },
       { id: "r#2", name: "weird", version: "0.1.0", source: "registry+x", license: null },
     ],
   };
   const c = cargoComponents(meta);
-  assert.deepEqual(c.map((x) => x.name), ["serde", "weird"]);
+  assert.deepEqual(
+    c.map((x) => x.name),
+    ["serde", "weird"],
+  );
   assert.equal(c[0].licenses[0].expression, "MIT OR Apache-2.0");
   assert.equal(c[1].licenses[0].expression, "NOASSERTION");
 });

@@ -775,3 +775,25 @@
   display: block;
   opacity: 0.85;
 }
+
+.ed-privacy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.ed-privacy ul {
+  margin: 0;
+  padding-left: var(--sp-4);
+}
+.ed-onboarding {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 560px;
+  color: var(--text-muted);
+}
+.ed-onboarding ul {
+  margin: var(--sp-2) 0;
+  padding-left: var(--sp-4);
+}

@@ -65,7 +65,12 @@ test("validation: bad version, channel and non-https url are refused", () => {
   const d = mkdtempSync(join(tmpdir(), "capia-man-"));
   try {
     const art = base(d);
-    const ok = { artifactPath: art, version: "0.7.0", channel: "stable", url: "https://x.invalid/a" };
+    const ok = {
+      artifactPath: art,
+      version: "0.7.0",
+      channel: "stable",
+      url: "https://x.invalid/a",
+    };
     assert.throws(() => buildManifest({ ...ok, version: "7" }));
     assert.throws(() => buildManifest({ ...ok, channel: "nightly" }));
     assert.throws(() => buildManifest({ ...ok, url: "http://x.invalid/a" }));
@@ -88,7 +93,19 @@ test("CLI: refuses to run without a key; --test-key writes only the PUBLIC key a
   try {
     const art = base(d);
     const out = join(d, "m.json");
-    const args = [SCRIPT, "--artifact", art, "--version", "0.7.0", "--channel", "stable", "--url", "https://x.invalid/a", "--out", out];
+    const args = [
+      SCRIPT,
+      "--artifact",
+      art,
+      "--version",
+      "0.7.0",
+      "--channel",
+      "stable",
+      "--url",
+      "https://x.invalid/a",
+      "--out",
+      out,
+    ];
     const env = { PATH: process.env.PATH };
     const none = spawnSync(process.execPath, args, { env, encoding: "utf8" });
     assert.notEqual(none.status, 0);
@@ -101,11 +118,18 @@ test("CLI: refuses to run without a key; --test-key writes only the PUBLIC key a
     assert.ok(!JSON.stringify(pub).includes("seed") && !JSON.stringify(pub).includes("private"));
     // com a chave "real" vinda do ambiente
     const real = spawnSync(process.execPath, args, {
-      env: { ...env, CAPIA_UPDATE_SIGNING_SEED_HEX: "cd".repeat(32), CAPIA_UPDATE_KEY_ID: "prod-1" },
+      env: {
+        ...env,
+        CAPIA_UPDATE_SIGNING_SEED_HEX: "cd".repeat(32),
+        CAPIA_UPDATE_KEY_ID: "prod-1",
+      },
       encoding: "utf8",
     });
     assert.equal(real.status, 0, real.stderr);
-    assert.ok(!real.stdout.includes("cdcdcd") && !real.stderr.includes("cdcdcd"), "seed must never be logged");
+    assert.ok(
+      !real.stdout.includes("cdcdcd") && !real.stderr.includes("cdcdcd"),
+      "seed must never be logged",
+    );
     const m2 = JSON.parse(readFileSync(out, "utf8"));
     assert.equal(
       verifyManifest(m2, publicKeyHex(privateKeyFromSeedHex("cd".repeat(32))), "prod-1"),

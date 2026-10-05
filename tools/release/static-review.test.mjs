@@ -41,11 +41,18 @@ test("installer workflow builds without e2e-testkit, runs the smoke, and does no
   assert.match(installerYml, /cargo test -p capia-updater -p capia-support/);
   assert.match(installerYml, /--bundles nsis/);
   assert.match(installerYml, /dev-test/);
-  assert.doesNotMatch(installerYml, /CAPIA_UPDATE_SIGNING_SEED_HEX/, "no update key in the CI workflow");
+  assert.doesNotMatch(
+    installerYml,
+    /CAPIA_UPDATE_SIGNING_SEED_HEX/,
+    "no update key in the CI workflow",
+  );
 });
 
 test("secrets appear only in env mappings, never in run lines", () => {
-  for (const [name, text] of [["installer", installerYml], ["release", releaseYml]]) {
+  for (const [name, text] of [
+    ["installer", installerYml],
+    ["release", releaseYml],
+  ]) {
     for (const line of text.split("\n")) {
       if (line.includes("secrets.")) {
         assert.match(line, /^\s+[A-Z0-9_]+: \${{ secrets\.[A-Z0-9_]+ }}\s*$/, `${name}: ${line}`);

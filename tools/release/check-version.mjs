@@ -21,7 +21,15 @@ export function workspaceVersion(cargoToml) {
   return v ? v[1] : null;
 }
 
-const SKIP = new Set(["node_modules", "target", ".git", "dist", "spikes", "s1-preview-spike", "pkg"]);
+const SKIP = new Set([
+  "node_modules",
+  "target",
+  ".git",
+  "dist",
+  "spikes",
+  "s1-preview-spike",
+  "pkg",
+]);
 
 function walk(dir, out) {
   for (const name of readdirSync(dir)) {

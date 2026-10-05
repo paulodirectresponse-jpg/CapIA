@@ -596,6 +596,38 @@ export const en = {
   "ai.sources.paid": "paid",
   "ai.sources.generationHint":
     "Off by default. Generation always asks for approval and respects the run budget.",
+  "privacy.title": "Privacy and updates",
+  "privacy.unavailable": "Available in the desktop app.",
+  "privacy.version": "Version {build}",
+  "privacy.devBuild": "development/test build",
+  "privacy.crash.label": "Send anonymous crash reports",
+  "privacy.crash.hint":
+    "Off by default. If you turn it on, only the app version, your OS, where the crash happened and a redacted message are sent. Never your media, projects, prompts or keys. You can turn it off at any time.",
+  "privacy.crash.localOnly":
+    "Reports are not sent anywhere yet (no destination is configured); they stay on this computer.",
+  "privacy.diag.generate": "Generate diagnostics…",
+  "privacy.diag.hint": "You see exactly what is included before anything is saved or shared.",
+  "privacy.diag.willInclude": "This bundle will include:",
+  "privacy.diag.neverIncluded": "It will never include:",
+  "privacy.diag.save": "Save diagnostic bundle",
+  "privacy.diag.saved": "Saved: {path}",
+  "privacy.channel": "Update channel",
+  "privacy.channel.stable": "Stable",
+  "privacy.channel.beta": "Beta",
+  "privacy.update.check": "Check for updates",
+  "privacy.update.notConfigured": "Updates are not configured in this build.",
+  "privacy.update.upToDate": "You are up to date ({version}).",
+  "privacy.update.available": "Version {version} is available (signature verified).",
+  "privacy.update.intermediate": "Install version {version} first.",
+  "privacy.update.rejected": "Update not applicable: {reason}",
+  "privacy.update.invalid": "The update manifest was rejected: {reason}",
+  "onboarding.title": "Welcome to CapIA",
+  "onboarding.tip1":
+    "Create or open a project to start editing. Everything works without AI or internet.",
+  "onboarding.tip2": "AI is optional and off until you add a provider in the AI settings.",
+  "onboarding.tip3":
+    "Your projects stay on your computer; updating or uninstalling never deletes them.",
+  "onboarding.dismiss": "Got it",
 } as const;
 
 export type MessageKey = keyof typeof en;

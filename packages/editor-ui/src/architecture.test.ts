@@ -131,3 +131,28 @@ describe("IA na UI (Fase 4): sem segredos, sem provider, sem escrita direta", ()
     expect(panel).toMatch(/c\.undoRun\(/);
   });
 });
+
+describe("Fase 6: privacidade e atualização na UI", () => {
+  it("só `store/supportController.ts` fala com `support.*`/`update.*`; ninguém monta o método à mão", () => {
+    const offenders = prod
+      .filter((f) => !["store/supportController.ts", "store/controller.ts"].includes(rel(f)))
+      .filter((f) =>
+        /\bclient\.support\b|\bSupportClient\b|"(support|update)\./.test(readFileSync(f, "utf8")),
+      )
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it("o crash report não é ligado por código: só o `onChange` do checkbox chama setCrashReporting", () => {
+    const hits = prod
+      .filter((f) => /setCrashReporting\(/.test(stripComments(readFileSync(f, "utf8"))))
+      .map(rel)
+      .sort();
+    expect(hits).toEqual(["components/PrivacySettings.tsx", "store/supportController.ts"]);
+    const comp = stripComments(readFileSync(join(SRC, "components/PrivacySettings.tsx"), "utf8"));
+    expect(comp).toMatch(
+      /onChange=\{\(e\) => \{\s*void c\.support\.setCrashReporting\(e\.currentTarget\.checked\)/,
+    );
+    expect(comp).not.toMatch(/localStorage|sessionStorage/);
+  });
+});

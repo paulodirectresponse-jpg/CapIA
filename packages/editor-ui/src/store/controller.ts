@@ -72,6 +72,7 @@ import {
 } from "./edit";
 import { createStore, type Store } from "./createStore";
 import { AiController } from "./aiController";
+import { SupportController } from "./supportController";
 import { MediaVisuals } from "./visuals";
 import { PerfLog } from "./perf";
 import { noPlatform, type PlatformServices } from "../platform";
@@ -175,6 +176,8 @@ export class EditorController {
   readonly perf = new PerfLog();
   /** IA (Fase 4): opcional; o editor não depende dela. */
   readonly ai: AiController;
+  /** Privacidade/diagnóstico/atualização (Fase 6): opcional; sem o serviço a seção não aparece. */
+  readonly support: SupportController;
   readonly frames: FrameSource;
   private readonly audio: AudioMonitor;
 
@@ -193,6 +196,7 @@ export class EditorController {
     this.ai = new AiController(client.ai, (tone, title, detail) => {
       this.toast(tone, title, detail);
     });
+    this.support = new SupportController(client.support);
     this.storage = opts.storage === undefined ? browserStorage() : opts.storage;
     const { prefs, recovered } = loadPrefs(this.storage);
     this.t = createTranslator(prefs.language);

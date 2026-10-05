@@ -79,7 +79,7 @@ jobs:
           "SERVER_BIN=$PWD\target\release\capia-server.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - run: pnpm --filter @capia/desktop build
-      - name: Staging (WebView2: bootstrapper embutido)
+      - name: "Staging (WebView2 bootstrapper embutido)"
         run: node tools/release/stage-bundle.mjs --ffmpeg-dir ffmpeg-approved --server-bin $env:SERVER_BIN --webview embed --notices dist-release/THIRD_PARTY_NOTICES.txt
       - name: Instalador NSIS
         run: pnpm --filter @capia/desktop tauri build --bundles nsis --config src-tauri/tauri.installer.generated.json
