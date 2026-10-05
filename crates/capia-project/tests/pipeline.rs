@@ -200,8 +200,10 @@ fn async_import_returns_long_before_the_full_hash_of_a_huge_file() {
         t1.elapsed()
     };
     eprintln!("import return: {returned:?} · full SHA-256 of 160 MiB: {full:?}");
+    // folga 2x: no Windows o antivírus do runner atrasa a primeira leitura do arquivo
+    // recém-criado (observado 1,19 s vs 3,57 s); pagar o hash completo daria >= 1x
     assert!(
-        returned * 4 < full || returned < Duration::from_millis(100),
+        returned * 2 < full || returned < Duration::from_millis(100),
         "{returned:?} vs {full:?}"
     );
 }
