@@ -1,12 +1,12 @@
 # STATUS
 
-**Última atualização:** 2026-10-05 · **Fase atual:** FASE 5 — Autonomia · **Estado: `PHASE 5 ENGINEERING IN INTEGRATION`** (branch `claude/phase5-autonomy`; rótulo final decidido pelo agente principal; seção "Fase 5" abaixo). Fase 4 permanece `PHASE 4 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING` e Fase 3 `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING` (pendências **não marcadas**). **Fase 6 NÃO iniciada.**
+**Última atualização:** 2026-10-05 · **Fase atual:** FASE 5 — Autonomia · **Estado: `PHASE 5 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase5-autonomy`; seção "Fase 5" abaixo). Fase 4 permanece `PHASE 4 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING` e Fase 3 `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING` (pendências **não marcadas**). **Fase 6 NÃO iniciada.**
 
 > **Fase 3 (engenharia):** editor manual utilizável de ponta a ponta — shell + design system, `ui-timeline` em canvas virtualizado, projeto/sequences/nested, biblioteca com arrastar-e-soltar, edição manual completa, inspector + keyframes, texto/legendas/transições/áudio, preview P2, histórico, relink, export + deliverables, atalhos, pt-BR/en — tudo por **comandos do Command Engine**. Branch `claude/phase3-editor` (sem PR: não solicitado). **Pendências inevitáveis (humanas/hardware):** (1) teste com ≥ 3 usuários reais (`tools/phase3-acceptance/`); (2) residual de CPU/pacing do P2 em GPU real (`tools/phase3-acceptance/gpu-residual.ps1`); (3) decisão de produto/jurídica de `OUTPUT-H264` (patentes, OpenH264, qualidade de produção) — a **engenharia** do caminho H.264 está integrada e testada no CI Windows.
 
 ## Fase 5 — Autonomia: o que existe
 
-> Especificações: `docs/phase5/` · decisões: ADR-087..099 · pacote de aceitação: `tools/phase5-acceptance/`. **CI no HEAD final: a preencher** (o agente principal registra aqui o run/commit verde; nada nesta seção afirma CI verde).
+> Especificações: `docs/phase5/` · decisões: ADR-087..099 · pacote de aceitação: `tools/phase5-acceptance/`. **CI:** run 37336701064 no commit `f917430` — os 6 jobs verdes (Núcleo Rust Linux, Rust+desktop Windows, TypeScript, Arquitetura/licenças/segredos, E2E Linux, E2E Windows). O HEAD final difere de `f917430` apenas por esta atualização de documentação.
 
 | Área | Estado (engenharia) | Evidência (arquivos de teste) |
 |---|---|---|
@@ -36,7 +36,7 @@
 1. **≥ 10 demandas reais avaliadas por um humano**, média ≥ 4,0, validadas por `node tools/phase5-acceptance/real-demands/validate.mjs --file <resultados.json>` (sem arquivo: `pending_external`).
 2. **Providers e chaves reais** (Brain real, provider de geração real, fontes reais do Gateway): nenhum teste da Fase 5 usa rede externa; qualidade/custo/latência reais **não medidos**.
 3. Checagem humana no desktop **Windows real** do fluxo Run → aprovação → timeline → undo seletivo, se exigida pelo PO (E2E usa devserver + Replay).
-4. **CI no HEAD final: a preencher.**
+4. ~~CI no HEAD final~~ — verde: run 37336701064 / `f917430` (6 jobs); o HEAD final difere só por documentação.
 5. Pendências da Fase 4 (LLM real no DemandSpec, corpus real de cenas, STT real) e da Fase 3 (3 usuários, residual de GPU/P2, decisão jurídica de H.264) **continuam abertas**.
 
 ### Limitações conhecidas (Fase 5)
