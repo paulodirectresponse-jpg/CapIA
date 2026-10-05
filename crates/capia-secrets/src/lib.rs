@@ -10,10 +10,12 @@
 
 #![forbid(unsafe_code)]
 
+mod panic;
 mod redact;
 mod store;
 mod string;
 
+pub use panic::{install_panic_hook_with, install_redacting_panic_hook};
 pub use redact::{
     SecretRegistry, redact, redact_global, redact_registered_global, register_global,
 };

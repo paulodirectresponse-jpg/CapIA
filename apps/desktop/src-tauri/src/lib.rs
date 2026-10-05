@@ -293,6 +293,8 @@ fn render_into_surface(
 
 /// Inicia a aplicação desktop.
 pub fn run() {
+    // saída de crash sem segredo (SECURITY.md): a mensagem de pânico é redigida
+    capia_secrets::install_redacting_panic_hook();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(EditorState::default())

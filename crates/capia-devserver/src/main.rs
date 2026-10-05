@@ -301,6 +301,8 @@ fn serve(stream: TcpStream, app: &App, root: &Path, token: Option<&str>) {
 }
 
 fn main() {
+    // pânico nunca imprime segredo (mensagem passa pelo redator do processo)
+    capia_secrets::install_redacting_panic_hook();
     let mut port = 5199u16;
     let mut root = PathBuf::from("apps/desktop/dist");
     let mut args = std::env::args().skip(1);

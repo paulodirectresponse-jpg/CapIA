@@ -192,3 +192,7 @@ O engine recebe um `Journal` (`set_journal`); cada commit/undo/redo chama `Journ
 ## Comandos do editor (Fase 3)
 
 Novos comandos (todos com `operation_id`, validados e invertíveis): `set_text`, `set_transition`, `detach_audio`, `group_clips`/`ungroup`, `reorder_clip` (reordenação em trilha magnética), `create_folder`/`rename_folder`/`move_folder`/`delete_folder`, `move_sequence_to_folder`, `set_sequence_format`, `create_deliverable`/`delete_deliverable`; `create_sequence` aceita `width/height/folder`. Refs simbólicos (`ref`/`$ref`) permitem uma única transação criar faixa + clip. **Gestos = uma transação** (arrastar vários clips, merge de legendas, aplicar estilo a todas, drop que cria faixa) ⇒ um passo de undo. **Multi-cliente:** todo `command.execute/undo/redo` publica `revision_changed`; clientes defasados ressincronizam (a UI ignora a revisão que já aplicou). Verificação automática de que a UI só escreve por comandos: `packages/editor-ui/src/architecture.test.ts` + `store/controller.test.ts`.
+
+## Fase 4 — entradas de IA no Command Engine
+
+`Session::agent_preview(actor, label, commands)` e `Session::agent_apply(actor, token)` (só Rust) são as **únicas** portas de escrita da IA: `Actor::Agent` recebe `PREVIEW_REQUIRED` em `execute`. O token HMAC fica preso ao ator; o apply refaz o plano sobre o estado atual e falha com `PLAN_STATE_CHANGED` se o diff mudou. `operation_id` derivado de tarefa+passo+índice ⇒ retry após commit é idempotente (`replayed`). Lista fechada de comandos permitidos ao assistente: ADR-081.

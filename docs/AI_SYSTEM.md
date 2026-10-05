@@ -211,3 +211,6 @@ Regras anticontaminação:
 ## 11. Interfaces para automação externa (Fase 6)
 
 `ai.start_run({ inputs: [copy, raw_video, reference], profile, deliverables, approvals: "auto"|"required" })` → `run_id`; eventos de progresso; resultado com deliverables. REST/MCP chamam exatamente isso — mesma engine, mesmas permissões (o cliente de API é um `Actor::Api` com escopos).
+
+---
+**Estado de implementação (Fase 4):** Tool System (`capia-ai::tools`), Demand Interpreter, Reference Analyzer, assistente pontual, transcrição/legendas/silêncio/cenas — ver ADR-081..086 e `docs/STATUS.md`. Fora desta fase: AI Run autônomo, Producer/Planner/Critic, variantes, memória autônoma, Asset Gateway completo (Fase 5).

@@ -274,3 +274,77 @@ async fn canary_never_appears_in_any_artifact_the_core_produces() {
         assert!(!r.path.contains(CANARY));
     }
 }
+
+/// TLS: um servidor que fala HTTP puro numa URL `https://` falha no handshake — o cliente **nunca**
+/// rebaixa para `http` nem aceita o que não é TLS válido (sem `danger_accept_invalid_certs`).
+#[tokio::test]
+async fn https_to_a_non_tls_server_fails_and_never_downgrades() {
+    let srv = MockServer::start(|_| MockResponse::Json(200, json!({"data": []}).to_string())).await;
+    let store: Arc<dyn SecretStore> = Arc::new(MemoryStore::new());
+    let mut cfg = local_cfg(
+        "tls",
+        &format!("https://127.0.0.1:{}", srv.addr.port()),
+        &store,
+    );
+    cfg.allow_loopback = true;
+    cfg.connect_timeout_s = Some(2);
+    let p = build_provider(&cfg, store).unwrap();
+    let e = p.list_models(&CallCtx::default()).await.unwrap_err();
+    assert!(
+        matches!(
+            e.code,
+            ErrorCode::ProviderUnavailable | ErrorCode::ProviderTimeout
+        ),
+        "{e}"
+    );
+    assert!(
+        srv.seen().is_empty(),
+        "nenhuma requisição HTTP em claro pode ter chegado ao servidor"
+    );
+}
+
+/// Política de código: nenhum crate de produto desliga a verificação de certificado.
+#[test]
+fn no_product_code_disables_tls_verification() {
+    fn walk(dir: &std::path::Path, hits: &mut Vec<String>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if !matches!(
+                    p.file_name().and_then(|n| n.to_str()),
+                    Some("target" | "node_modules" | ".git")
+                ) {
+                    walk(&p, hits);
+                }
+            } else if p.extension().is_some_and(|x| x == "rs") && !p.ends_with("security.rs") {
+                let t = std::fs::read_to_string(&p).unwrap_or_default();
+                if t.contains("danger_accept_invalid_certs")
+                    || t.contains("danger_accept_invalid_hostnames")
+                    || t.contains("dangerous()")
+                {
+                    hits.push(p.display().to_string());
+                }
+            }
+        }
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates");
+    let mut hits = Vec::new();
+    walk(&root, &mut hits);
+    assert!(hits.is_empty(), "verificação TLS desligada em: {hits:?}");
+}
+
+/// Headers extras maliciosos (CRLF, reservados) são recusados na configuração.
+#[test]
+fn malicious_custom_headers_are_rejected() {
+    for (k, v) in [
+        ("Authorization", "Bearer x"),
+        ("x-api-key", "k"),
+        ("Cookie", "a=b"),
+        ("X-Ok", "a\r\nInjected: 1"),
+        ("Bad Name", "v"),
+    ] {
+        let mut c = ProviderConfig::new("p", ProviderKind::OpenAiCompatible, "p");
+        c.extra_headers.insert(k.to_owned(), v.to_owned());
+        assert!(c.validate().is_err(), "header `{k}` deveria ser recusado");
+    }
+}

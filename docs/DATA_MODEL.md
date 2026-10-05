@@ -179,3 +179,7 @@ O schema permanece **3**. Novidades **fora do documento e do undo**: (a) derivad
 - **Grupo:** `Clip.group` (rótulo); move junto, desagrupa por comando.
 - **Pastas e deliverables:** `Document.folders` (árvore de sequences) e `Document.deliverables` (sequence + preset + destino + tamanho) — persistidos no `.capia` e **desfazíveis**; preferências de UI **não** entram no projeto.
 - Propriedades `fade_in/fade_out` (s), `volume_db` (existente). Ids de entidades novas: `folder_*`, `deliv_*`.
+
+## Fase 4 — persistência de IA (schema 4)
+
+`ai_records(kind, id, version, parent, schema_version, created_ms, updated_ms, json)` — transcrições (`transcript`), gramáticas (`reference_grammar`), `demand_spec`, tarefas do assistente (`assistant_task`); `ai_usage` — uma linha por chamada (tokens, custo conhecido, latência, status; custo desconhecido ≠ 0). **Fora do documento e do undo.** Global do app: `AppDb` (kv `ai/registry`; sem segredos). Ver ADR-082.

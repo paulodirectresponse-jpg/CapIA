@@ -1,8 +1,50 @@
 # STATUS
 
-**Última atualização:** 2026-10-04 · **Fase atual:** FASE 3 — Editor manual · **Estado: `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING`** (ver "Fase 3" abaixo; a aceitação humana e o residual de GPU real **não** foram executados e **não** estão marcados) · **Fase 4 NÃO iniciada.**
+**Última atualização:** 2026-10-05 · **Fase atual:** FASE 4 — Inteligência · **Estado: `PHASE 4 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase4-intelligence`; evidência de CI na seção "Fase 4"). Fase 3 permanece `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING` (3 usuários reais, residual de GPU/P2 e decisão jurídica de H.264 continuam **pendentes e não marcados**). **Fase 5 NÃO iniciada.**
 
 > **Fase 3 (engenharia):** editor manual utilizável de ponta a ponta — shell + design system, `ui-timeline` em canvas virtualizado, projeto/sequences/nested, biblioteca com arrastar-e-soltar, edição manual completa, inspector + keyframes, texto/legendas/transições/áudio, preview P2, histórico, relink, export + deliverables, atalhos, pt-BR/en — tudo por **comandos do Command Engine**. Branch `claude/phase3-editor` (sem PR: não solicitado). **Pendências inevitáveis (humanas/hardware):** (1) teste com ≥ 3 usuários reais (`tools/phase3-acceptance/`); (2) residual de CPU/pacing do P2 em GPU real (`tools/phase3-acceptance/gpu-residual.ps1`); (3) decisão de produto/jurídica de `OUTPUT-H264` (patentes, OpenH264, qualidade de produção) — a **engenharia** do caminho H.264 está integrada e testada no CI Windows.
+
+## Fase 4 — Inteligência (IA assistida): o que existe
+
+> Closeout da Fase 3 (Etapa 0): run 75 do CI verde nos 6 jobs no commit `530ebbf` (ver "CI verde" da Fase 3). Fase 4 desenvolvida em `claude/phase4-intelligence` (sem PR).
+
+| Área | Estado |
+|---|---|
+| `capia-secrets` | ✅ `SecretString` (zeroize), `SecretStore` (Credential Manager no Windows; memória explícita nos demais), redator central (+ gancho de pânico), canário |
+| `capia-ai` | ✅ contrato canônico + adapters **OpenAI-compatível, Anthropic, Google, Replay, whisper.cpp**; registry (capabilities com origem), probe real, Brain Profile, Capability Router (privacidade/orçamento/contexto, fallback só configurado), dispatcher (retry/backoff, fallback, cancelamento real, custo em micro-unidades, cache determinístico), Tool System com gate e auditoria |
+| Persistência | ✅ schema 4 (`ai_records`, `ai_usage`) + `AppDb` global; nenhum segredo em disco |
+| `capia-intelligence` | ✅ transcrição (chunks, cache), **legendas automáticas**, **remoção de silêncio**, **detecção de cenas** (local), **Reference Analyzer** (`ReferenceGrammar`), extração DOCX/PDF/TXT/MD, **Demand Interpreter** (`DemandSpec` com fontes verificadas), **assistente de chat** (tools; `preview → apply_plan`; Ask/Auto; cancelamento; idempotência), serviço `ai.*` |
+| Hospedagem | ✅ `capia-devserver` e `capia-desktop` roteiam `ai.*` e mesclam eventos no `events.poll`; sem o serviço o editor é idêntico |
+| UI | ✅ painel de IA (chat com streaming/aprovação, ferramentas, referência, briefing), configuração (providers write-only, modelos com origem das capabilities, Brain/privacidade/orçamento, diagnóstico redigido, uso/custo) — pt-BR/en |
+| Pacotes de aceitação | ✅ `tools/phase4-acceptance/` (segurança em um comando; cenas; DemandSpec ≥ 10 briefings) |
+
+### Critérios de saída (ROADMAP Fase 4) — evidência
+| Critério | Resultado |
+|---|---|
+| Brain entre ≥ 3 providers só por configuração; probe detecta capabilities | ✅ `service.rs::the_brain_swaps_between_three_provider_families_by_configuration_only` (OpenAI-compatível ↔ Anthropic ↔ Google, header nativo de cada um) + `contract.rs::probe_measures_real_capabilities_on_all_families` (servidores HTTP falsos que falam cada protocolo). **Externo:** smoke com chaves reais (não é gate) |
+| Canário: chave nunca em logs/projeto/IPC/crash | ✅ 0 ocorrências em eventos, status, diagnóstico, histórico, snapshot, uso e **todos os arquivos em disco** (projeto, WAL, cache, AppDb); erro 401 que ecoa a chave volta redigido; pânico redigido; UI sem chave no DOM/estado/`localStorage` (E2E + vitest) |
+| Reference Analyzer: erro de cortes ≤ 5 % | ✅ **0 %** (26/26) no corpus anotado por construção (cortes, dissolves, fades, planos sem corte) e *held-out* 4/4, reproduzível (geradores determinísticos). **Externo/pendente:** corpus de vídeos **reais** anotados por humanos (`reference-analyzer/run.mjs --corpus`) — o corpus sintético **não** substitui |
+| DemandSpec de DOCX+PDF+vídeo com `sources` | ✅ `demand_flow.rs` (DOCX + PDF + transcrição de vídeo; fonte com documento/unidade/página/instante/citação **verificada**; citação inventada vira `unverified`) e `demand_eval.rs` (10 briefings, modo Replay: 30/30 fatos com fonte verificada, 4/4 fabricações descartadas). **Externo:** avaliação com LLM real e ≥ 10 briefs reais (`demand-spec/run.mjs --live`) **não executada** |
+| Tudo desligado ⇒ editor 100 % manual | ✅ E2E "AI Off": edição completa com **zero** chamadas `ai.*` e zero requisições fora do devserver; `ai.enabled=false` e ausência do serviço cobertas (`service.rs`, desktop) |
+
+### Segurança (resumo; detalhes nas ADRs 078–086)
+Credencial write-only (UI não define referência/host), host binding, sem credencial em redirect, SSRF, TLS sem `danger_*` (teste de política + handshake), headers maliciosos/CRLF recusados, corpo gigante/stream infinito/JSON malformado, tool inexistente/argumentos inválidos, injeção em transcrição/PDF/DOCX sem permissão extra (o Interpreter não recebe tools), tool entre projetos/lifecycle de projeto inexistentes, escalada de permissão, tool tardia após cancelar, `operation_id` repetido idempotente. Suíte: `node tools/phase4-acceptance/security/run.mjs` → `target/phase4-acceptance/security-summary.json`.
+
+### Desempenho medido (Linux, release, FFmpeg real)
+- Varredura de cenas em 1080p: 120 s de vídeo em 7,8 s ⇒ **≈ 15× tempo real** (RGB24 64×36 a 25 fps; memória O(n·200 B)); `scene_corpus.rs::perf_scan_throughput_1080p` (`--ignored`).
+- Suíte de cenas anotada: 10 clipes + *held-out* em ≈ 8 s. Transcrição/LLM: dependem do provider (não medidas sem provider real).
+
+### Pendências (exatas) para `PHASE 4 COMPLETE`
+1. **Qualidade de LLM real** no DemandSpec e smoke das 3 famílias com chaves reais (`tools/phase4-acceptance/demand-spec/run.mjs --live`; `CAPIA_ACCEPT_API_KEY`).
+2. **Corpus real anotado por humanos** para cortes (`reference-analyzer/run.mjs --corpus`).
+3. Transcrição **real** (whisper.cpp local/nuvem) medida em áudio de fala real — o CI usa o provider Replay.
+4. Pendências humanas/hardware herdadas da Fase 3.
+
+### Limitações conhecidas (Fase 4)
+- Detecção de cenas calibrada em material sintético: vídeo real com movimento de câmera/efeitos pesados pode exigir ajuste dos limiares (`SceneParams`).
+- `render.frame` não é oferecido ao assistente (sem codificador PNG de RGBA no caminho de visão); amostragem de quadros usa o FFmpeg e só com modelo de visão e privacidade que permita.
+- O assistente é pontual (≤ 8 passos); não há AI Run autônomo, variantes, memória autônoma nem Asset Gateway completo (Fase 5).
+- Sem cofre seguro fora do Windows, as chaves ficam só em memória (a UI informa o backend em uso).
 
 ## Fase 3 — o que existe
 

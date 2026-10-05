@@ -76,7 +76,7 @@ Escopo: `capia-time`, `capia-model`, `capia-commands` (undo/redo, transações, 
 
 Escopo: shell UI + design system, `ui-timeline` (canvas), painel Project (árvore) + abas de sequence + `+`, biblioteca (projeto/global), drag-and-drop, trim/split/snapping/zoom/ripple/grupos/copy-paste, tracks (lock/mute/solo/hide/magnetic), nested (abrir, make unique, flatten, follow length), inspector, keyframes, texto, legendas manuais + estilos, transições, áudio (volume/fades/detach), preview com proxies, export de deliverables em lote, histórico visível, relink UI, atalhos configuráveis, pt-BR/en.
 
-**Estado da Fase 3: `ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING`** (branch `claude/phase3-editor`; ver `docs/STATUS.md`). Fase 4 **não** iniciada.
+**Estado da Fase 3: `ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING`** (branch `claude/phase3-editor`; ver `docs/STATUS.md`).
 
 **Critérios de conclusão:**
 - [ ] Editor experiente produz um UGC ad de 30–45 s (talking head + B-roll + texto + legendas + música + SFX) em ≤ 15 min, sem bugs bloqueantes (teste com ≥ 3 usuários). **PENDENTE — exige pessoas reais; pacote pronto em `tools/phase3-acceptance/` (nenhum resultado foi fabricado).**
@@ -90,16 +90,20 @@ Escopo: shell UI + design system, `ui-timeline` (canvas), painel Project (árvor
 
 ## FASE 4 — Inteligência (IA assistida, um passo por vez)
 
+**Estado da Fase 4: `ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase4-intelligence`; ver `docs/STATUS.md`). Fase 5 **não** iniciada.
+
 **Objetivo:** camada de IA configurável e segura; IA executa tarefas pontuais como transações.
 
 Escopo: `capia-secrets` (Credential Manager), Provider abstraction (OpenAI-compatible, Anthropic, Google, local), Model Registry, probe, Brain Profile, Capability Router, Tool System com permissões/auditoria, transcrição (local + cloud), legendas automáticas, análise de mídia, **Reference Analyzer**, Demand Interpreter (DemandSpec), assistente de chat que executa pedidos pontuais ("adicione legendas", "corte silêncios") via transações, contabilidade de custo, provider de replay para testes.
 
 **Critérios de conclusão:**
-- [ ] Trocar o Brain entre ≥ 3 providers diferentes sem mudança de código; probe detecta capabilities.
-- [ ] Teste canário: chave nunca aparece em logs/projeto/IPC/crash dumps.
-- [ ] Reference Analyzer produz `ReferenceGrammar` em corpus de referência com erro de detecção de cortes ≤ 5% (vs. anotação manual).
-- [ ] DemandSpec gerada de DOCX+PDF+vídeo com `sources` rastreáveis; avaliação manual em ≥ 10 briefs reais.
-- [ ] Com todos os providers desligados, 100% das funções manuais funcionam.
+- [x] Trocar o Brain entre ≥ 3 providers diferentes sem mudança de código; probe detecta capabilities. *(OpenAI-compatível/Anthropic/Google por servidores HTTP falsos nativos + Replay; smoke com chaves reais pendente, externo)*
+- [x] Teste canário: chave nunca aparece em logs/projeto/IPC/crash dumps. *(`service.rs`, `security.rs`, panic hook, UI)*
+- [x] Reference Analyzer produz `ReferenceGrammar` com erro de detecção de cortes ≤ 5% — **no corpus anotado por construção** (0 %; held-out 0 %).
+  - [ ] **PENDENTE EXTERNO:** corpus de vídeos reais anotados manualmente (`tools/phase4-acceptance/reference-analyzer --corpus`).
+- [x] DemandSpec gerada de DOCX+PDF+vídeo com `sources` rastreáveis e **verificadas** (10 briefings em modo Replay: integridade do pipeline).
+  - [ ] **PENDENTE EXTERNO:** avaliação manual com LLM real em ≥ 10 briefs reais (`tools/phase4-acceptance/demand-spec --live`).
+- [x] Com todos os providers desligados, 100% das funções manuais funcionam. *(E2E "AI Off": zero chamadas `ai.*`, zero rede externa)*
 
 ---
 

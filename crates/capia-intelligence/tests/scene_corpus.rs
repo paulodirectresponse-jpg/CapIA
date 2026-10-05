@@ -289,3 +289,42 @@ fn heldout_sources_generalize() {
         ev.error_rate
     );
 }
+
+/// Medição (não é gate): velocidade da varredura de cenas em 1080p. `cargo test --release -p
+/// capia-intelligence --test scene_corpus -- --ignored --nocapture perf`.
+#[test]
+#[ignore = "medição"]
+fn perf_scan_throughput_1080p() {
+    let Some(tc) = toolchain() else { return };
+    let dir = std::env::temp_dir().join(format!("capia-scene-perf-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("p.mp4");
+    let st = Command::new(tc.ffmpeg.as_ref().unwrap())
+        .args([
+            "-v", "error", "-y", "-nostdin", "-f", "lavfi", "-t", "120", "-i",
+        ])
+        .arg("testsrc2=size=1920x1080:rate=30")
+        .args(["-pix_fmt", "yuv420p", "-c:v", "mpeg4", "-q:v", "5"])
+        .arg(&out)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let t0 = std::time::Instant::now();
+    let b = detect_media(
+        &tc,
+        &out,
+        0,
+        (25, 1),
+        &SceneParams::default(),
+        Duration::from_secs(600),
+        &|| false,
+    )
+    .unwrap();
+    let el = t0.elapsed().as_secs_f64();
+    eprintln!(
+        "PERF scenes 1080p: 120 s de vídeo em {el:.2} s ⇒ {:.1}× tempo real; fronteiras={}",
+        120.0 / el,
+        b.len()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

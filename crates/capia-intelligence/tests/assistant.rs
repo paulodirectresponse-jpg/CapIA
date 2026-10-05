@@ -535,3 +535,64 @@ async fn the_step_limit_stops_a_looping_model() {
     assert_eq!(out.task.error.as_ref().unwrap().0, "STEP_LIMIT");
     assert_eq!(out.task.audit.len(), 3);
 }
+
+#[tokio::test]
+async fn ids_from_another_project_and_project_lifecycle_are_out_of_reach() {
+    let brain = Arc::new(ReplayProvider::responder(
+        "brain",
+        Box::new(|_, n| match n {
+            // ids que existem em OUTRO projeto, não neste
+            0 => call(
+                "c0",
+                "assets.get",
+                json!({"asset": "sha256:from-another-project"}),
+            ),
+            1 => call(
+                "c1",
+                "timeline.get_state",
+                json!({"sequence": "other-project-seq"}),
+            ),
+            // abrir/fechar/criar projeto não é tool
+            2 => call(
+                "c2",
+                "project.open",
+                json!({"path": "/home/victim/secret.capia"}),
+            ),
+            // registrar mídia de um caminho qualquer não é comando permitido
+            3 => call(
+                "c3",
+                "timeline.preview",
+                json!({"label":"x","commands":[{"type":"register_asset","asset":"a","path":"/etc/passwd"}]}),
+            ),
+            _ => text("não consegui"),
+        }),
+    ));
+    let Some(w) = world_full(
+        "asst-xp",
+        Some(make_speech_clip),
+        vec![],
+        false,
+        Some(brain),
+    ) else {
+        return;
+    };
+    let t = TaskCtx::new("task-xp", &w.ctx.profile);
+    let h0 = hist_len(&w);
+    let out = run_turn(
+        &w.ctx,
+        &t,
+        &[],
+        "abra outro projeto",
+        &AssistantOptions::default(),
+        &silent,
+    )
+    .await;
+    assert_eq!(out.task.status, TaskStatus::Completed, "{:?}", out.task);
+    assert_eq!(out.task.audit.len(), 4);
+    assert!(
+        out.task.audit.iter().all(|a| a.status != "ok"),
+        "{:?}",
+        out.task.audit
+    );
+    assert_eq!(hist_len(&w), h0);
+}

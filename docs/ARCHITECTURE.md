@@ -229,3 +229,7 @@ Preview: render.frame ─ preparado sob o lock, renderizado fora (Job) ─▶ Sh
 Áudio: render.audio (mixer do export) ─▶ WebAudio; relógio de áudio mestre a 1×
 ```
 Regras: a UI nunca escreve fora do Command Engine (teste de fronteira); preferências de UI (`localStorage`, validadas campo a campo) são separadas do projeto; eventos do engine (`events.poll`) e inscrições são liberados no `dispose`; sem IPC por quadro de interação (arrasto = WASM local, IPC só no drop); outros clientes são notificados por `revision_changed` (ADR-072). Decisões: ADR-070..077.
+
+## Fase 4 — camada de IA (implementada)
+
+`capia-secrets` (folha) → `capia-ai` (providers, registry, router, dispatcher, tools; único HTTP de saída) → `capia-intelligence` (pipelines + assistente + serviço `ai.*`; cliente do Engine API) → hospedado pelos composition roots `capia-devserver`/`capia-desktop`. A matriz está em `tools/check-architecture.mjs`; o núcleo puro (time/model/commands) continua sem rede/IA. Decisões: ADR-078..086. A UI só fala `ai.*` por `store/aiController.ts`.

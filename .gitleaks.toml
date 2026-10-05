@@ -1,0 +1,15 @@
+# Configuração do gitleaks (CI: "Varredura de segredos"). Mantém as regras padrão e só admite os
+# **canários sintéticos** dos testes de segurança da Fase 4 (valores inventados que existem justamente
+# para provar que um segredo nunca vaza). Nenhuma credencial real entra aqui.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "canários sintéticos de teste (nunca são credenciais)"
+regexes = [
+  '''(?i)canary''',
+  '''CNRY-[0-9a-z-]+''',
+  '''WRNG-[0-9a-z-]+''',
+  '''KEY-[a-z0-9-]+-[0-9a-f]{8,}''',
+  '''sk-E2E-[A-Za-z0-9-]+''',
+]

@@ -152,3 +152,7 @@ Regressões > 10% falham o CI de benchmark (rodado em máquina dedicada, não em
 - **Unitários só com lógica:** kit de componentes, comandos de edição puros, agendador do preview, áudio, teclas, preferências, ponte WASM, transporte; **fronteira UI→engine** por varredura de fonte (`architecture.test.ts`) e controlador com cliente falso.
 - **Rust:** `capia-commands/tests/editor.rs`, `capia-render/tests/editor_render.rs` (inclui `design_size`), cache de grafo (`render_project.rs`), `capia-editor-api/tests/session.rs` (inclui `Job` fora do lock, `revision_changed`, `render.audio`), `capia-webview-surface` (região de frame), `capia-desktop` (IPC fixo).
 - **Humano/hardware (não automatizável):** `tools/phase3-acceptance/`.
+
+## Fase 4 — testes de IA
+
+Sem credenciais externas no CI: Replay (digest/roteiro/respondedor) + servidores HTTP falsos que falam o protocolo de cada fabricante (suíte de contrato idêntica para OpenAI-compatível, Anthropic, Google). Segurança: `capia-ai/tests/security.rs`, `capia-intelligence/tests/{service,assistant,demand_flow}.rs`, UI (`architecture.test.ts`, `aiController.test.ts`, `AiPanel.test.tsx`), E2E (`packages/e2e/tests/ai.spec.ts`), tudo agregado por `tools/phase4-acceptance/security/run.mjs`. Qualidade: corpus de cenas anotado por construção + *held-out*; 10 briefings em modo Replay. Qualidade de LLM real, corpus real e smoke com chaves reais são **externos** e opcionais.

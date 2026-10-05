@@ -125,3 +125,6 @@ O **Brain continua a autoridade**: modelos auxiliares são chamados *como tools*
 ## 9. Registro de uso
 
 `ai_usage(run_id, step_id, model_endpoint_id, provider_kind, tokens_in/out/cached, units (imagens/segundos), cost_estimated, latency_ms, status, timestamp)` — sem conteúdo de credenciais. Prompts/respostas ficam no `.capia` (para auditoria/replay), com opção do usuário de não reter.
+
+---
+**Estado de implementação (Fase 4):** OpenAI-compatível, Anthropic, Google, Replay e whisper.cpp implementados com suíte de contrato comum; probe real; Router com privacidade/orçamento; fallback só configurado (ADR-079/080).

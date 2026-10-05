@@ -74,3 +74,14 @@ Candidatos já avaliados (decisão arquivo a arquivo **na Fase 2**, só após te
 - [ ] Dependências transitivas verificadas (`cargo-deny`/verificador JS)
 - [ ] Testes próprios cobrem o comportamento (não só os do terceiro)
 - [ ] Nenhum ativo/modelo/fonte sem licença individual
+
+### Fase 4 — dependências novas (verificadas por `cargo-deny`; nenhum código copiado)
+
+| Fonte | Versão | Classe | Para quê | Onde |
+|---|---|---|---|---|
+| `reqwest` 0.13 (+ `rustls`, `hyper`, `tokio`) | 0.13.x | MIT/Apache-2.0 | HTTP de saída **só** em `capia-ai` (TLS normal, sem `danger_*`) | ADR-079 |
+| `CDLA-Permissive-2.0` (dados de `webpki-roots`) | — | permissiva (adicionada à allow-list do `deny.toml` com justificativa) | raízes de confiança TLS | `deny.toml` |
+| `zeroize`, `keyring` (feature `windows-native`) | 1 / 3 | MIT/Apache-2.0 | `SecretString`; Credential Manager do Windows | ADR-078 |
+| `jsonschema` 0.30, `async-trait`, `futures-util`, `bytes`, `url`, `base64` | — | MIT/Apache-2.0 | validação de schemas de tools/saída estruturada; streaming | ADR-079/081 |
+| `zip` 2, `quick-xml` 0.37, `pdf-extract` 0.7 | — | MIT/Apache-2.0 | extração segura de DOCX/PDF (entrada hostil; limites no código) | ADR-085 |
+| Fixtures DOCX/PDF/mídia da Fase 4 | — | Próprias | geradas em teste (`docs::testing`, ffmpeg/lavfi com geradores determinísticos) | `capia-intelligence/tests` |
