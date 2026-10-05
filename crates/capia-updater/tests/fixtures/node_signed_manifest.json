@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "product": "capia",
+  "version": "0.7.0",
+  "channel": "stable",
+  "artifact": {
+    "name": "CapIA_0.7.0_x64-setup.exe",
+    "url": "https://updates.example.invalid/CapIA_0.7.0_x64-setup.exe",
+    "sha256": "6bdaeb0f1c7ca247498c215ed39a7cf3536e4e11104ce0d2f6e9d18840ef2103",
+    "size": 17
+  },
+  "notes": "Notas de teste: acentuação é ok",
+  "rollback": false,
+  "min_version": "0.6.0-rc.1",
+  "signature": {
+    "alg": "ed25519",
+    "key_id": "test-ephemeral",
+    "value": "e847829cf04c3a1c63bc5ad8189b05b327dc7081f04ffb810afa93d2bf2a907d44a9d991af7b83ef39493b51239e78ce3a573c9527b73e8acb02bc8f114f3208"
+  }
+}

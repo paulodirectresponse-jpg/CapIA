@@ -1,7 +1,7 @@
 {
   "name": "@capia/editor-ui",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.6.0-rc.1",
   "type": "module",
   "description": "UI do editor (React). Cliente do engine: depende s\u00f3 da interface EngineClient, nunca de Tauri.",
   "exports": {

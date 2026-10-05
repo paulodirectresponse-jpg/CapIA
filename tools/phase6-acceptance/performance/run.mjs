@@ -32,7 +32,12 @@ export function evaluate(reports, thresholds, env = {}) {
   const results = [];
   for (const [name, thr] of Object.entries(thresholds.metrics)) {
     const metrics = reports.map((r) => r?.metrics?.[name]);
-    const base = { metric: name, hard: !!thr.hard, source: thr.source ?? null, runs: reports.length };
+    const base = {
+      metric: name,
+      hard: !!thr.hard,
+      source: thr.source ?? null,
+      runs: reports.length,
+    };
     const fail = (why) => results.push({ ...base, status: "fail", reason: why });
     if (reports.length === 0 || metrics.some((m) => m === undefined)) {
       fail("métrica ausente em pelo menos uma execução");
@@ -41,7 +46,11 @@ export function evaluate(reports, thresholds, env = {}) {
     const skipped = metrics.filter((m) => m.skipped);
     if (skipped.length) {
       const reason = skipped[0].skipped;
-      if (thr.allow_skip && String(reason).includes(thr.allow_skip) && skipped.length === metrics.length) {
+      if (
+        thr.allow_skip &&
+        String(reason).includes(thr.allow_skip) &&
+        skipped.length === metrics.length
+      ) {
         results.push({ ...base, status: "skipped", reason });
       } else {
         fail(`pulada sem motivo permitido: ${reason}`);
@@ -93,8 +102,16 @@ function runBenchmark(dir) {
   const r = spawnSync(
     "cargo",
     [
-      "test", "--release", "-p", "capia-project", "--test", "perf_large", "--",
-      "--ignored", "--nocapture", "--test-threads=1",
+      "test",
+      "--release",
+      "-p",
+      "capia-project",
+      "--test",
+      "perf_large",
+      "--",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1",
     ],
     {
       cwd: root,
@@ -140,7 +157,9 @@ function main() {
   writeFileSync(join(dest, "performance.json"), JSON.stringify(out, null, 2));
   for (const r of verdict.results) {
     const detail = r.checks
-      ? r.checks.map((c) => `${c.stat} ${c.median_ms.toFixed(2)}/${c.limit_ms.toFixed(2)}ms`).join("  ")
+      ? r.checks
+          .map((c) => `${c.stat} ${c.median_ms.toFixed(2)}/${c.limit_ms.toFixed(2)}ms`)
+          .join("  ")
       : r.reason;
     console.log(`${r.status.toUpperCase().padEnd(7)} ${r.metric.padEnd(34)} ${detail}`);
   }

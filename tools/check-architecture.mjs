@@ -254,6 +254,22 @@ export const RUST_RULES = {
     build: [],
     dev: [],
   },
+  // Suporte do app (Fase 6, Track C): build info, diagnóstico redigido com preview, crash report opt-in,
+  // rotação de logs. SEM código de rede (o destino de upload é um trait externo); só lê/grava o AppDb.
+  "capia-support": {
+    workspace: ["capia-secrets", "capia-store"],
+    normal: ["serde", "serde_json", "getrandom", "zip"],
+    build: [],
+    dev: [],
+  },
+  // Atualização assinada (Fase 6, Track C): manifesto Ed25519, política semver, máquina de estados com
+  // recuperação. Folha: sem rede, sem projeto, sem documento; download e troca são traits do host.
+  "capia-updater": {
+    workspace: [],
+    normal: ["serde", "serde_json", "sha2", "semver", "ed25519-dalek"],
+    build: [],
+    dev: ["getrandom"],
+  },
   "capia-desktop": {
     // composition root: hospeda `ai.*` (Credential Manager via capia-secrets); a IA nunca é
     // dependência do editor — sem o serviço o shell funciona igual
@@ -263,6 +279,10 @@ export const RUST_RULES = {
       "capia-webview-surface",
       "capia-intelligence",
       "capia-secrets",
+      // Fase 6: suporte (diagnóstico/crash opt-in), updater e AppDb das preferências
+      "capia-support",
+      "capia-updater",
+      "capia-store",
     ],
     normal: ["tauri", "tauri-plugin-dialog", "serde_json"],
     build: ["tauri-build"],

@@ -85,3 +85,6 @@ Candidatos já avaliados (decisão arquivo a arquivo **na Fase 2**, só após te
 | `jsonschema` 0.30, `async-trait`, `futures-util`, `bytes`, `url`, `base64` | — | MIT/Apache-2.0 | validação de schemas de tools/saída estruturada; streaming | ADR-079/081 |
 | `zip` 2, `quick-xml` 0.37, `pdf-extract` 0.7 | — | MIT/Apache-2.0 | extração segura de DOCX/PDF (entrada hostil; limites no código) | ADR-085 |
 | Fixtures DOCX/PDF/mídia da Fase 4 | — | Próprias | geradas em teste (`docs::testing`, ffmpeg/lavfi com geradores determinísticos) | `capia-intelligence/tests` |
+| crates `ed25519-dalek` 2, `curve25519-dalek` 4, `ed25519` 2, `signature` 2 (+ `subtle`, `const-oid`, `base64ct`) | 2.2 / 4.1 | BSD-3-Clause / Apache-2.0 / MIT | Verificação de assinatura do manifesto de update (`capia-updater`, Fase 6 Track C). Puro Rust, pequeno, auditado, sem `rand` (a semente de teste vem de `getrandom`), `verify_strict`; a alternativa `ring` não é puro Rust | `cargo-deny` (licenças já permitidas) |
+| crate `semver` 1 | 1.0 | MIT/Apache-2.0 | Precedência semver com pré-release no updater | `cargo-deny` |
+| Chave de update / certificado Authenticode | — | — | **Nunca no repositório**: a chave pública entra na build (`CAPIA_UPDATE_PUBKEYS`); privada/PFX só em segredos de CI | `docs/phase6/IMPL_DESKTOP_DISTRIBUTION.md` |

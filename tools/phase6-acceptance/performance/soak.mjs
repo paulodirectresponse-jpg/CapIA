@@ -24,17 +24,35 @@ if (!Number.isFinite(seconds) || seconds < 1 || !["default", "medium"].includes(
 const t0 = Date.now();
 const r = spawnSync(
   "cargo",
-  ["test", "--release", "-p", "capia-project", "--test", "soak", "soak_long", "--", "--ignored", "--nocapture"],
+  [
+    "test",
+    "--release",
+    "-p",
+    "capia-project",
+    "--test",
+    "soak",
+    "soak_long",
+    "--",
+    "--ignored",
+    "--nocapture",
+  ],
   {
     cwd: root,
     stdio: "inherit",
-    env: { ...process.env, CAPIA_SOAK_SECS: String(seconds), CAPIA_SOAK_SPEC: spec, CARGO_INCREMENTAL: "0" },
+    env: {
+      ...process.env,
+      CAPIA_SOAK_SECS: String(seconds),
+      CAPIA_SOAK_SPEC: spec,
+      CARGO_INCREMENTAL: "0",
+    },
     shell: process.platform === "win32",
   },
 );
 let report = null;
 try {
-  const base = process.env.CAPIA_PERF_OUT ?? join(process.env.CARGO_TARGET_DIR ?? join(root, "target"), "perf");
+  const base =
+    process.env.CAPIA_PERF_OUT ??
+    join(process.env.CARGO_TARGET_DIR ?? join(root, "target"), "perf");
   report = JSON.parse(readFileSync(join(base, "phase6-soak.json"), "utf8"));
 } catch {
   /* sem relatório: reprova abaixo */

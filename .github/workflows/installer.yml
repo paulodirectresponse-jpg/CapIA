@@ -1,0 +1,157 @@
+name: Installer (Windows)
+
+# Fase 6, Track C. Constrói o instalador NSIS (sem a feature e2e-testkit), prova o pipeline de instalação em uma
+# máquina Windows do CI e publica os artefatos ROTULADOS: sem certificado de produção o instalador é
+# "UNSIGNED-DEV-TEST-ONLY". A lógica vive em tools/release/* (testada em Linux); aqui só se encadeia.
+# Gates EXTERNOS (não provados aqui): certificado real, máquinas limpas físicas Win10 22H2/Win11, beta humano.
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "apps/desktop/**"
+      - "crates/capia-support/**"
+      - "crates/capia-updater/**"
+      - "tools/release/**"
+      - ".github/workflows/installer.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "crates/capia-support/**"
+      - "crates/capia-updater/**"
+      - "tools/release/**"
+      - ".github/workflows/installer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CAPIA_BUILD_ID: ${{ github.run_id }}
+  CAPIA_GIT_SHA: ${{ github.sha }}
+
+jobs:
+  installer-windows:
+    name: Instalador NSIS, smoke, update, uninstall
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+
+      - name: Versão única (fonte da verdade)
+        run: pnpm check:version
+
+      - name: Testes das ferramentas de release
+        run: node --test "tools/release/*.test.mjs"
+
+      - name: Updater e suporte (máquina de estados, falhas injetadas, diagnóstico)
+        run: cargo test -p capia-updater -p capia-support
+
+      - name: Instalar FFmpeg (do CI, só para testes)
+        run: ./tools/ci/install-ffmpeg-windows.ps1
+
+      - name: Copiar FFmpeg do CI para staging
+        shell: pwsh
+        run: |
+          $dir = Split-Path (Get-Command ffprobe).Source
+          New-Item -ItemType Directory -Force -Path ffmpeg-ci | Out-Null
+          Copy-Item "$dir\ffmpeg.exe", "$dir\ffprobe.exe" ffmpeg-ci\
+          Get-ChildItem $dir -Filter *.dll | Copy-Item -Destination ffmpeg-ci\
+          if (Test-Path "$dir\..\LICENSE") { Copy-Item "$dir\..\LICENSE" ffmpeg-ci\LICENSE.txt } else { Set-Content ffmpeg-ci\LICENSE.txt 'CI-only FFmpeg build; see upstream license.' }
+
+      - name: Licença do FFmpeg (ADR-032) — relatório
+        # O FFmpeg do CI normalmente é GPL (essentials): o relatório prova que o verificador REPROVA e o
+        # artefato fica DEV-TEST-ONLY. O release.yml exige a build LGPL aprovada.
+        run: node tools/release/verify-ffmpeg-license.mjs ffmpeg-ci --allow-dev-unapproved --report ffmpeg-license-report.json
+
+      - name: SBOM, relatório de licenças e THIRD_PARTY_NOTICES
+        run: node tools/release/sbom.mjs --out-dir dist-release --ffmpeg-dir ffmpeg-ci
+
+      - name: Compilar o capia-server (sidecar), se o crate existir
+        shell: pwsh
+        run: |
+          if (Test-Path crates/capia-server) {
+            cargo build --release -p capia-server
+            "SERVER_BIN=$PWD\target\release\capia-server.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          } else { Write-Host 'crates/capia-server ausente nesta branch: placeholder documentado' }
+
+      - name: Front-end
+        run: pnpm --filter @capia/desktop build
+
+      - name: Staging do bundle (FFmpeg, sidecar, config do instalador)
+        shell: pwsh
+        run: |
+          $a = @('tools/release/stage-bundle.mjs','--ffmpeg-dir','ffmpeg-ci','--allow-dev-ffmpeg','--webview','skip','--notices','dist-release/THIRD_PARTY_NOTICES.txt')
+          if ($env:SERVER_BIN) { $a += @('--server-bin',$env:SERVER_BIN) } else { $a += '--allow-missing-server' }
+          node @a
+
+      - name: Instalador NSIS (por usuário; SEM e2e-testkit)
+        run: pnpm --filter @capia/desktop tauri build --bundles nsis --config src-tauri/tauri.installer.generated.json
+
+      - name: Coletar o instalador
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-release | Out-Null
+          $s = Get-ChildItem target/release/bundle/nsis -Filter *-setup.exe | Select-Object -First 1
+          if (-not $s) { throw 'instalador NSIS não encontrado' }
+          Copy-Item $s.FullName dist-release\
+          "INSTALLER=$($s.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Smoke — instalar, self-test instalado, primeira execução, desinstalar sem apagar projetos, reinstalar
+        run: ./tools/release/installer-smoke.ps1 -Installer $env:INSTALLER -ReportPath dist-release/smoke-report.json
+
+      - name: Assinatura — prova do pipeline com certificado autoassinado DESCARTÁVEL
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path pipeline-proof | Out-Null
+          Copy-Item $env:INSTALLER pipeline-proof\proof-setup.exe
+          ./tools/release/sign.ps1 -Path pipeline-proof\proof-setup.exe -TestMode -ReportPath dist-release/signing-pipeline-proof.json
+          ./tools/release/verify-signature.ps1 -Path pipeline-proof\proof-setup.exe -Require test -ReportPath dist-release/signature-pipeline-proof.json
+
+      - name: Assinatura — real se houver segredos; senão rótulo UNSIGNED-DEV-TEST-ONLY
+        shell: pwsh
+        env:
+          CAPIA_SIGN_PFX_BASE64: ${{ secrets.CAPIA_SIGN_PFX_BASE64 }}
+          CAPIA_SIGN_PFX_PASSWORD: ${{ secrets.CAPIA_SIGN_PFX_PASSWORD }}
+        run: |
+          $f = Get-ChildItem dist-release -Filter *-setup.exe | Select-Object -First 1
+          ./tools/release/sign.ps1 -Path $f.FullName -ReportPath dist-release/signing.json
+          $unsigned = Get-ChildItem dist-release -Filter *UNSIGNED-DEV-TEST-ONLY*
+          if ($unsigned) {
+            # o original sem rótulo não deve sobrar ao lado do rotulado
+            Remove-Item $f.FullName -Force
+            ./tools/release/verify-signature.ps1 -Path $unsigned[0].FullName -Require any -ReportPath dist-release/signature-verification.json
+          } else {
+            ./tools/release/verify-signature.ps1 -Path $f.FullName -Require valid -ReportPath dist-release/signature-verification.json
+          }
+
+      - name: Hashes
+        run: node tools/release/hashes.mjs dist-release --out dist-release/SHA256SUMS.txt --json dist-release/hashes.json
+
+      - name: Manifesto de update assinado com chave de TESTE (prova do formato)
+        shell: pwsh
+        run: |
+          $f = Get-ChildItem dist-release -Filter *setup*.exe | Select-Object -First 1
+          node tools/release/make-update-manifest.mjs --artifact $f.FullName --version (node -p "require('./package.json').version") --channel beta --url "https://updates.example.invalid/$($f.Name)" --out dist-release/update-manifest.TEST-ONLY.json --test-key
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-windows-dev-test
+          if-no-files-found: warn
+          path: |
+            dist-release/**
+            ffmpeg-license-report.json

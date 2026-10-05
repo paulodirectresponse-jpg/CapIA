@@ -5,6 +5,7 @@
  */
 
 import { AiClient } from "./ai";
+import { SupportClient } from "./support";
 
 export type Ticks = number;
 export const TICKS_PER_SECOND = 705_600_000;
@@ -317,9 +318,12 @@ function nextOperationId(): string {
 export class EditorClient {
   /** Serviço de IA (`ai.*`): o editor funciona igual se ele nunca for usado. */
   readonly ai: AiClient;
+  /** Privacidade, diagnóstico e atualização (`support.*`/`update.*`, Fase 6). Só o app desktop os expõe. */
+  readonly support: SupportClient;
 
   constructor(private readonly transport: EditorTransport) {
     this.ai = new AiClient(transport);
+    this.support = new SupportClient(transport);
   }
 
   private json<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {

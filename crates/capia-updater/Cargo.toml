@@ -1,0 +1,21 @@
+[package]
+name = "capia-updater"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Atualização assinada (Fase 6, Track C): manifesto, verificação Ed25519, política de versão/canal e máquina de estados atômica com recuperação e rollback"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+semver = "1"
+# Ed25519 puro Rust (BSD-3-Clause), sem rand: a semente da chave de teste vem de getrandom (ver docs/PROVENANCE.md)
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+getrandom.workspace = true

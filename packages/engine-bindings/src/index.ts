@@ -82,3 +82,4 @@ export function createEngineClient(transport: EngineTransport): EngineClient {
 export * from "./ai";
 export * from "./editor";
 export * from "./readmodel";
+export * from "./support";

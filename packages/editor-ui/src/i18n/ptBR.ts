@@ -600,4 +600,37 @@ export const ptBR: Record<MessageKey, string> = {
   "ai.sources.paid": "paga",
   "ai.sources.generationHint":
     "Desligada por padrão. A geração sempre pede aprovação e respeita o orçamento da execução.",
+  "privacy.title": "Privacidade e atualizações",
+  "privacy.unavailable": "Disponível no aplicativo desktop.",
+  "privacy.version": "Versão {build}",
+  "privacy.devBuild": "build de desenvolvimento/teste",
+  "privacy.crash.label": "Enviar relatórios de falha anônimos",
+  "privacy.crash.hint":
+    "Desligado por padrão. Se você ligar, só são enviados a versão do app, seu sistema, onde a falha ocorreu e uma mensagem redigida. Nunca sua mídia, projetos, prompts ou chaves. Você pode desligar quando quiser.",
+  "privacy.crash.localOnly":
+    "Os relatórios ainda não são enviados a lugar nenhum (nenhum destino configurado); ficam só neste computador.",
+  "privacy.diag.generate": "Gerar diagnóstico…",
+  "privacy.diag.hint":
+    "Você vê exatamente o que entra antes de qualquer coisa ser salva ou compartilhada.",
+  "privacy.diag.willInclude": "Este pacote vai incluir:",
+  "privacy.diag.neverIncluded": "Ele nunca inclui:",
+  "privacy.diag.save": "Salvar pacote de diagnóstico",
+  "privacy.diag.saved": "Salvo: {path}",
+  "privacy.channel": "Canal de atualização",
+  "privacy.channel.stable": "Estável",
+  "privacy.channel.beta": "Beta",
+  "privacy.update.check": "Verificar atualizações",
+  "privacy.update.notConfigured": "As atualizações não estão configuradas nesta versão.",
+  "privacy.update.upToDate": "Você está atualizado ({version}).",
+  "privacy.update.available": "A versão {version} está disponível (assinatura verificada).",
+  "privacy.update.intermediate": "Instale antes a versão {version}.",
+  "privacy.update.rejected": "Atualização não aplicável: {reason}",
+  "privacy.update.invalid": "O manifesto de atualização foi rejeitado: {reason}",
+  "onboarding.title": "Boas-vindas ao CapIA",
+  "onboarding.tip1": "Crie ou abra um projeto para editar. Tudo funciona sem IA e sem internet.",
+  "onboarding.tip2":
+    "A IA é opcional e fica desligada até você adicionar um provedor nas configurações de IA.",
+  "onboarding.tip3":
+    "Seus projetos ficam no seu computador; atualizar ou desinstalar nunca os apaga.",
+  "onboarding.dismiss": "Entendi",
 };
