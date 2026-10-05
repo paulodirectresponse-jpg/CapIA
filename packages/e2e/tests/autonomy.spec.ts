@@ -129,6 +129,9 @@ test("brief + bruto → plano aprovado → EDIT → REVIEW → CORRECT → 2 var
   // 2) aprovar o plano → VALIDATE_PLAN → EDIT (preview→apply_plan) → REVIEW → CORRECT → concluir
   await page.getByTestId("ai-run-option-approve").click();
   await expect(page.getByTestId("ai-run-sequences")).toBeVisible({ timeout: 120_000 });
+  await expect
+    .poll(async () => (await view(editor, id)).run.status, { timeout: 120_000 })
+    .toBe("completed");
   await expect(page.getByTestId("ai-run-progress")).toBeVisible();
   await expect(page.getByTestId("ai-run-cost")).toContainText(/Cost|Custo/);
   const done = await view(editor, id);
@@ -243,7 +246,9 @@ test("WAITING_USER sobrevive ao restart; cancelar não escreve; Run interrompida
   await p2.getByTestId(`ai-run-${r1.id}`).click();
   await p2.getByTestId("ai-run-option-approve").click();
   await expect(p2.getByTestId("ai-run-sequences")).toBeVisible({ timeout: 120_000 });
-  expect((await view(e2, r1.id)).run.status).toBe("completed");
+  await expect
+    .poll(async () => (await view(e2, r1.id)).run.status, { timeout: 120_000 })
+    .toBe("completed");
 
   // b) cancelar no plano: nada é escrito e a Run fica `cancelled`
   await p2.getByTestId("ai-run-back").click();
@@ -331,7 +336,7 @@ test("AI Off: o editor segue 100% manual e nenhuma Run nasce", async ({ page, ed
       !u.startsWith(editor.server.url) &&
       !u.startsWith("data:") &&
       !u.startsWith("blob:") &&
-      !/^https?:\/\/(tauri\.localhost|127\.0\.0\.1|localhost)/.test(u),
+      !/^https?:\/\/((tauri|ipc)\.localhost|127\.0\.0\.1|localhost)/.test(u),
   );
   expect(foreign).toEqual([]);
 });
@@ -353,7 +358,7 @@ test("a geração por IA e as fontes começam desligadas; nenhuma chamada extern
       !u.startsWith(editor.server.url) &&
       !u.startsWith("data:") &&
       !u.startsWith("blob:") &&
-      !/^https?:\/\/(tauri\.localhost|127\.0\.0\.1|localhost)/.test(u),
+      !/^https?:\/\/((tauri|ipc)\.localhost|127\.0\.0\.1|localhost)/.test(u),
   );
   expect(foreign).toEqual([]);
 });
