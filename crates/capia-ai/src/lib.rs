@@ -14,6 +14,7 @@ pub mod cancel;
 pub mod capability;
 pub mod dispatcher;
 pub mod error;
+pub mod fetch;
 pub mod http;
 pub mod probe;
 pub mod prompt;

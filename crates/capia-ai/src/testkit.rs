@@ -52,6 +52,10 @@ pub enum MockResponse {
     /// Aceita e nunca responde.
     Hang,
     RetryAfter(u16, u64),
+    /// Bytes com `Content-Type` próprio (downloads do Asset Gateway).
+    Bytes(u16, String, Vec<u8>),
+    /// Corpo de `n` bytes com `Content-Type` próprio, **sem** `Content-Length` (teto durante o stream).
+    HugeTyped(String, usize),
 }
 
 type Handler = dyn Fn(&MockRequest) -> MockResponse + Send + Sync;
@@ -120,6 +124,28 @@ impl MockServer {
                             );
                             let _ = sock.write_all(head.as_bytes()).await;
                             let _ = sock.write_all(body.as_bytes()).await;
+                        }
+                        MockResponse::Bytes(status, ct, body) => {
+                            let head = format!(
+                                "HTTP/1.1 {status} X\r\nContent-Type: {ct}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                body.len()
+                            );
+                            let _ = sock.write_all(head.as_bytes()).await;
+                            let _ = sock.write_all(&body).await;
+                        }
+                        MockResponse::HugeTyped(ct, n) => {
+                            let head = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: {ct}\r\nConnection: close\r\n\r\n"
+                            );
+                            let _ = sock.write_all(head.as_bytes()).await;
+                            let chunk = vec![b'x'; 64 * 1024];
+                            let mut sent = 0;
+                            while sent < n {
+                                if sock.write_all(&chunk).await.is_err() {
+                                    return;
+                                }
+                                sent += chunk.len();
+                            }
                         }
                         MockResponse::RetryAfter(status, secs) => {
                             let body = "{\"error\":\"slow\"}";

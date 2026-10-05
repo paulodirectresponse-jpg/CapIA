@@ -340,6 +340,33 @@ impl Session {
         Ok(reply)
     }
 
+    /// Importa um arquivo **já em staging** pelo caminho do sistema de assets (hash + probe +
+    /// registro no documento e no catálogo na MESMA transação; ADR-046/087). Só o Asset Gateway
+    /// chama isto, depois de validar tamanho/tipo/licença; não é método de `call`/`begin`.
+    /// Devolve o ticket do import assíncrono.
+    pub fn agent_import_begin(&mut self, path: &Path) -> Result<String, ApiError> {
+        let o = self.open_mut()?;
+        let t = o.project.import_asset_async(path)?;
+        Ok(t.ticket_id)
+    }
+
+    /// Finaliza imports prontos (publica os eventos para a UI) e devolve o estado do ticket.
+    pub fn agent_import_poll(&mut self, ticket_id: &str) -> Result<Value, ApiError> {
+        self.pump_events()?;
+        let o = self.open_ref()?;
+        let row = o.project.ticket(ticket_id)?;
+        Ok(match row {
+            Some(r) => serde_json::to_value(r)?,
+            None => json!({"state": "unknown"}),
+        })
+    }
+
+    /// Cancela um import em staging (Gateway cancelado/abortado).
+    pub fn agent_import_cancel(&mut self, ticket_id: &str) -> Result<bool, ApiError> {
+        let o = self.open_mut()?;
+        Ok(o.project.cancel_ticket(ticket_id)?)
+    }
+
     /// Documento (somente leitura) — a IA enxerga a timeline por tools paginadas, nunca por aqui
     /// diretamente; hospedeiros Rust (capia-intelligence) usam isto para montar *digests*.
     pub fn document(&self) -> Result<&capia_model::Document, ApiError> {
@@ -702,6 +729,18 @@ impl Session {
 
     /// Aplica o que os workers prepararam (`pump`) e drena a fila de eventos.
     fn poll(&mut self) -> Result<Value, ApiError> {
+        self.pump_events()?;
+        let drained: Vec<Value> = self
+            .events
+            .lock()
+            .map(|mut q| q.drain(..).collect())
+            .unwrap_or_default();
+        Ok(json!({ "events": drained }))
+    }
+
+    /// Metade "pump" do poll: finaliza imports/relinks prontos e **enfileira** os eventos para a UI,
+    /// sem drená-los (quem drena é só o `events.poll` da UI).
+    fn pump_events(&mut self) -> Result<(), ApiError> {
         let actor = self.actor.clone();
         if let Some(o) = self.open.as_mut() {
             let evs = o.project.pump(&actor)?;
@@ -741,12 +780,7 @@ impl Session {
                 }
             }
         }
-        let drained: Vec<Value> = self
-            .events
-            .lock()
-            .map(|mut q| q.drain(..).collect())
-            .unwrap_or_default();
-        Ok(json!({ "events": drained }))
+        Ok(())
     }
 }
 

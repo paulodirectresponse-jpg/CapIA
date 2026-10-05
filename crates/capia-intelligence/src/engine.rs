@@ -28,6 +28,13 @@ pub trait Engine: Send + Sync + core::fmt::Debug {
     fn apply(&self, actor: &Actor, token: &str) -> IntelResult<Value>;
     fn project_path(&self) -> Option<PathBuf>;
     fn toolchain(&self) -> Option<MediaToolchain>;
+    /// Revisão atual do documento (para detectar *drift* durante uma Run).
+    fn revision(&self) -> IntelResult<u64>;
+    /// Início do import de um arquivo **já em staging** (só o Asset Gateway chama; ADR-087).
+    fn import_begin(&self, path: &std::path::Path) -> IntelResult<String>;
+    /// Estado do ticket de import (finaliza o que estiver pronto).
+    fn import_poll(&self, ticket_id: &str) -> IntelResult<Value>;
+    fn import_cancel(&self, ticket_id: &str) -> IntelResult<bool>;
 }
 
 /// Adaptador sobre a [`Session`] do editor (a mesma que a UI usa — um único documento).
@@ -90,5 +97,26 @@ impl Engine for SessionEngine {
 
     fn toolchain(&self) -> Option<MediaToolchain> {
         self.lock().media_toolchain().cloned()
+    }
+
+    fn revision(&self) -> IntelResult<u64> {
+        let doc_rev = self
+            .lock()
+            .document()
+            .map(|d| d.revision)
+            .map_err(api_err)?;
+        Ok(doc_rev)
+    }
+
+    fn import_begin(&self, path: &std::path::Path) -> IntelResult<String> {
+        self.lock().agent_import_begin(path).map_err(api_err)
+    }
+
+    fn import_poll(&self, ticket_id: &str) -> IntelResult<Value> {
+        self.lock().agent_import_poll(ticket_id).map_err(api_err)
+    }
+
+    fn import_cancel(&self, ticket_id: &str) -> IntelResult<bool> {
+        self.lock().agent_import_cancel(ticket_id).map_err(api_err)
     }
 }

@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 pub mod assistant;
+pub mod autonomy;
 pub mod captions;
 pub mod ctx;
 pub mod demand;
