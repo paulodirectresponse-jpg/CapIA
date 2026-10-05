@@ -415,6 +415,19 @@ test("undo after a long run of UI edits restores the exact original document", a
   await page.keyboard.press("Control+a");
   await page.keyboard.press("Delete");
 
+  // o último comando (apagar) é assíncrono: espera o histórico estabilizar antes de fotografar o estado
+  let last = -1;
+  await expect
+    .poll(
+      async () => {
+        const n = (await editor.api<{ entries: unknown[] }>("history.list")).entries.length;
+        const stable = n === last;
+        last = n;
+        return stable;
+      },
+      { intervals: [400], timeout: 15_000 },
+    )
+    .toBe(true);
   const changed = norm(await editor.clips());
   expect(changed).not.toBe(original);
   const count =

@@ -34,10 +34,7 @@ jobs:
       # FFmpeg explícito e reprodutível (ADR-051): a versão efetiva fica registrada no log do job.
       - name: Instalar FFmpeg
         shell: pwsh
-        run: |
-          choco install ffmpeg --no-progress -y
-          ffprobe -version | Select-Object -First 1
-          ffmpeg -version | Select-Object -First 1
+        run: ./tools/ci/install-ffmpeg-windows.ps1
       - run: pnpm install --frozen-lockfile
       # Núcleo da timeline em WASM (ADR-070): o front importa o .wasm gerado.
       - run: node tools/build-wasm.mjs
@@ -86,9 +83,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Instalar FFmpeg
         shell: pwsh
-        run: |
-          choco install ffmpeg --no-progress -y
-          ffprobe -version | Select-Object -First 1
+        run: ./tools/ci/install-ffmpeg-windows.ps1
       - run: pnpm install --frozen-lockfile
       - run: node tools/build-wasm.mjs
       - run: pnpm --filter @capia/desktop build
@@ -223,6 +218,9 @@ jobs:
         run: pnpm --filter @capia/e2e exec playwright install --with-deps chromium
       - name: E2E (17 fluxos, edição, crash, visual)
         run: pnpm --filter @capia/e2e e2e --grep-invert "targets with 5k clips"
+      # estabilidade provada, não presumida: o teste que já foi flaky repete 6x (causa raiz: snapshot antes do último commit)
+      - name: Estabilidade do undo/redo longo (6 repetições)
+        run: pnpm --filter @capia/e2e e2e --workers=1 --repeat-each=6 --grep "undo after a long run"
       # sozinho (1 worker): a medição não pode competir por CPU com outros testes
       - name: Desempenho da timeline (5k clips; smoke, sem competição por CPU)
         run: pnpm --filter @capia/e2e e2e --workers=1 --grep "targets with 5k clips"
