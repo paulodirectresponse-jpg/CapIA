@@ -8,6 +8,7 @@ uma recompila `capia-server` e o binário de teste; rode uma instância por vez)
 Saída: `target/mutation-phase6.json` com [id, nome, veredito, segundos]."""
 import json
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -155,7 +156,13 @@ M = [
 ]
 
 
+def _term(signum, frame):  # SIGTERM/SIGINT: levanta SystemExit para o `finally` restaurar o arquivo
+    raise SystemExit(128 + signum)
+
+
 def main() -> int:
+    signal.signal(signal.SIGTERM, _term)
+    signal.signal(signal.SIGINT, _term)
     want = {int(a) for a in sys.argv[1:]}
     dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     if dirty:
@@ -183,6 +190,9 @@ def main() -> int:
             r = subprocess.run(mu["cmd"], shell=True, cwd=ROOT, capture_output=True, text=True)
             out = r.stdout + r.stderr
             built = "could not compile" not in out
+            logs = ROOT / "target" / "mutation-phase6-logs"
+            logs.mkdir(parents=True, exist_ok=True)
+            (logs / f"{mu['id']}.txt").write_text("\n".join(out.splitlines()[-40:]))
             verdict = "DETECTED" if r.returncode != 0 and built else ("BROKE-BUILD" if not built else "SURVIVED")
         finally:
             path.write_text(original)
