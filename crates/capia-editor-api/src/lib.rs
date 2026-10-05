@@ -69,6 +69,9 @@ pub enum Reply {
 pub struct SessionConfig {
     pub media: MediaConfig,
     pub store: StoreOptions,
+    /// Ator das gravações internas da sessão (padrão: o usuário do editor). Hospedeiros headless
+    /// (capia-server) usam um ator `System` próprio: o import de mídia finaliza no `pump`.
+    pub actor: Option<Actor>,
 }
 
 pub(crate) type EventQueue = Arc<Mutex<VecDeque<Value>>>;
@@ -208,6 +211,7 @@ struct FolderParam {
 
 impl Session {
     pub fn new(cfg: SessionConfig) -> Self {
+        let actor = cfg.actor.clone().unwrap_or_else(|| Actor::user("editor"));
         Self {
             toolchain: MediaToolchain::locate(&cfg.media).ok(),
             cfg,
@@ -215,7 +219,7 @@ impl Session {
             services: None,
             events: Arc::new(Mutex::new(VecDeque::new())),
             exports: export::Exports::default(),
-            actor: Actor::user("editor"),
+            actor,
         }
     }
 
@@ -369,6 +373,11 @@ impl Session {
 
     /// Documento (somente leitura) — a IA enxerga a timeline por tools paginadas, nunca por aqui
     /// diretamente; hospedeiros Rust (capia-intelligence) usam isto para montar *digests*.
+    /// Revisão atual do documento aberto (`None` sem projeto).
+    pub fn revision(&self) -> Option<u64> {
+        self.open.as_ref().map(|o| o.project.engine().revision())
+    }
+
     pub fn document(&self) -> Result<&capia_model::Document, ApiError> {
         Ok(self.open_ref()?.project.document())
     }

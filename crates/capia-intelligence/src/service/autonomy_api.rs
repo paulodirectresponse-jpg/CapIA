@@ -310,7 +310,12 @@ impl IntelligenceService {
                 let option = p["option"]
                     .as_str()
                     .ok_or_else(|| bad("`option` is required"))?;
-                let r = o.decide(run_id(&p)?, decision, option, &p["payload"], "user")?;
+                // quem decidiu: a UI usa "user"; hospedeiros externos (capia-server) informam `api:<token>`
+                let by = p["decided_by"]
+                    .as_str()
+                    .filter(|s| !s.is_empty() && s.len() <= 80)
+                    .unwrap_or("user");
+                let r = o.decide(run_id(&p)?, decision, option, &p["payload"], by)?;
                 Ok(json!({"run": o.summary(&r)}))
             }
             "ai.run.review_decision" => {
