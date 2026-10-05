@@ -162,6 +162,10 @@ impl Core {
         // reabertura após queda: entregas em voo voltam a `retrying`; exports interrompidos falham
         let _ = db.deliveries_recover(now);
         let _ = db.exports_recover(now);
+        // chaves de idempotência "em andamento" de um processo que caiu: indeterminadas já, não
+        // só depois de `idempotency_stale`; e as concluídas velhas não crescem para sempre
+        let _ = db.idem_recover();
+        let _ = db.idem_purge_older_than(now.saturating_sub(24 * 3600 * 1000));
         let session = Arc::new(Mutex::new(Session::new(SessionConfig {
             actor: Some(Actor::new(
                 capia_commands::ActorKind::System,
@@ -337,7 +341,12 @@ impl Core {
         F: FnOnce(&Self, &'static OpDef, Value) -> ApiResult<Value>,
     {
         let started = now_ms();
-        let key = ctx.idempotency_key.clone().filter(|_| def.mutating);
+        // a chave do cliente nunca é gravada em claro (banco/auditoria): só um digest dela
+        let key = ctx
+            .idempotency_key
+            .as_deref()
+            .filter(|_| def.mutating)
+            .map(|k| format!("ik_{}", &sha256_hex(k.as_bytes())[..40]));
         let token_id = ctx.principal.as_ref().map(|p| p.token_id.clone());
         let mut audit = AuditRow {
             at_ms: started,

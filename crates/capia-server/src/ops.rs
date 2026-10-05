@@ -979,10 +979,23 @@ impl Core {
     }
 
     fn check_webhook_url(&self, url: &str) -> ApiResult<()> {
-        self.webhook_client
+        let parsed = self
+            .webhook_client
             .check_url(url)
-            .map(|_| ())
-            .map_err(|e| ApiErr::invalid(format!("webhook URL refused: {}", e.message)))
+            .map_err(|e| ApiErr::invalid(format!("webhook URL refused: {}", e.message)))?;
+        // o que fica guardado é o que o cliente HTTP vai discar: `https:///h`, `https:/h` ou
+        // `https:\\h` seriam "normalizados" pelo parser para outro host que o texto gravado
+        let canonical = format!("{}://", parsed.scheme());
+        let rest = url
+            .get(..canonical.len())
+            .filter(|p| p.eq_ignore_ascii_case(&canonical))
+            .map(|_| &url[canonical.len()..]);
+        if rest.is_none_or(|r| r.starts_with(['/', '\\']) || url.contains(char::is_whitespace)) {
+            return Err(ApiErr::invalid(
+                "webhook URL refused: write it as scheme://host[:port]/path",
+            ));
+        }
+        Ok(())
     }
 
     fn op_webhook_create(&self, p: &Value) -> ApiResult<Value> {

@@ -113,8 +113,14 @@ impl ServerConfig {
             return Err("max_json_bytes must be between 1 and 64 MiB".into());
         }
         for o in &self.cors_origins {
-            if o == "*" {
+            if o == "*" || o.contains('*') {
                 return Err("CORS origin `*` is not allowed: list explicit origins".into());
+            }
+            // `Origin: null` é o que páginas sandbox/file:// enviam: nunca é uma origem confiável
+            if o.eq_ignore_ascii_case("null") || o.is_empty() || o.ends_with('/') {
+                return Err(format!(
+                    "CORS origin `{o}` is not valid: use scheme://host[:port]"
+                ));
             }
         }
         Ok(())

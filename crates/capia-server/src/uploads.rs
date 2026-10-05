@@ -39,12 +39,28 @@ pub fn sanitize_filename(raw: &str) -> String {
         })
         .collect();
     out.truncate(120);
-    let out = out.trim().to_owned();
+    // Windows apara ponto/espaço finais (o nome gravado ≠ o nome pedido)
+    let out = out.trim().trim_end_matches(['.', ' ']).to_owned();
     if out.is_empty() || out.chars().all(|c| c == '.' || c == '_') {
         "file".to_owned()
+    } else if is_reserved_name(&out) {
+        let mut safe = format!("_{out}");
+        safe.truncate(120);
+        safe
     } else {
         out
     }
+}
+
+/// Nomes que o Windows trata como dispositivo (`CON`, `NUL.png`, `COM1`…) e os arquivos internos do
+/// staging (`meta.json[.tmp]`): nunca viram nome de blob (case-insensitive: NTFS/APFS).
+fn is_reserved_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let device = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.as_bytes()[3].is_ascii_digit());
+    device || name.eq_ignore_ascii_case("meta.json") || name.eq_ignore_ascii_case("meta.json.tmp")
 }
 
 fn ext(name: &str) -> String {
@@ -304,6 +320,13 @@ impl Core {
             return Err(io_err(&e));
         }
         drop(f);
+        // o cliente caiu no meio: menos bytes que o declarado NUNCA vira upload "completo"
+        if declared_len.is_some_and(|n| size != n) {
+            cleanup(&dir);
+            return Err(ApiErr::bad_request(
+                "the upload ended before the declared Content-Length (truncated)",
+            ));
+        }
         if size == 0 {
             cleanup(&dir);
             return Err(ApiErr::invalid("the upload is empty"));
@@ -433,6 +456,10 @@ mod tests {
         assert_eq!(sanitize_filename(".hidden"), "hidden");
         assert_eq!(sanitize_filename("a\0b<>|?.mp4"), "a_b____.mp4");
         assert_eq!(sanitize_filename(".."), "file");
+        assert_eq!(sanitize_filename("CON"), "_CON");
+        assert_eq!(sanitize_filename("nul.png"), "_nul.png");
+        assert_eq!(sanitize_filename("META.JSON"), "_META.JSON");
+        assert_eq!(sanitize_filename("a.png. ."), "a.png");
         assert_eq!(sanitize_filename(""), "file");
         assert!(sanitize_filename(&"x".repeat(500)).len() <= 120);
     }

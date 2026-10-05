@@ -90,6 +90,11 @@ impl UrlPolicy {
 
     /// Endereço permitido? (nunca link-local/metadata/não especificado/multicast; privado só nunca.)
     pub fn check_ip(&self, ip: IpAddr) -> Result<(), String> {
+        // `::ffff:127.0.0.1` e afins são o IPv4 embutido: vale a regra do IPv4 (anti-bypass de SSRF)
+        let ip = match ip {
+            IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
+            v4 => v4,
+        };
         if ip.is_loopback() {
             return if self.allow_loopback {
                 Ok(())
@@ -145,6 +150,29 @@ fn blocked_v4(ip: Ipv4Addr) -> bool {
 
 fn blocked_v6(ip: Ipv6Addr) -> bool {
     let s = ip.segments();
+    let embedded = |a: u16, b: u16| {
+        blocked_v4(Ipv4Addr::new(
+            (a >> 8) as u8,
+            a as u8,
+            (b >> 8) as u8,
+            b as u8,
+        ))
+    };
+    // IPv4-compatível (`::a.b.c.d`), NAT64 (`64:ff9b::/96`) e 6to4 (`2002::/16`) carregam um IPv4
+    // que pode ser metadata/privado/loopback: bloqueados (o `::1` é tratado antes como loopback)
+    if s[..6] == [0; 6] && ip != Ipv6Addr::LOCALHOST {
+        return true;
+    }
+    if s[0] == 0x64
+        && s[1] == 0xff9b
+        && s[2..6] == [0; 4]
+        && (embedded(s[6], s[7]) || s[6] >> 8 == 127)
+    {
+        return true;
+    }
+    if s[0] == 0x2002 && (embedded(s[1], s[2]) || s[1] >> 8 == 127) {
+        return true;
+    }
     ip.is_unspecified()
         || ip.is_multicast()
         || (s[0] & 0xffc0) == 0xfe80 // link-local

@@ -673,6 +673,15 @@ impl ServerDb {
         Ok(())
     }
 
+    /// Na abertura: tudo que ficou `pending` veio de um processo que morreu ⇒ vira "indeterminado"
+    /// (criado em 0 ⇒ passa do prazo de `stale` de imediato).
+    pub fn idem_recover(&self) -> StoreResult<u64> {
+        Ok(self
+            .conn()
+            .execute("UPDATE idempotency SET created_ms = 0 WHERE status = 0", [])?
+            as u64)
+    }
+
     pub fn idem_purge_older_than(&self, cutoff_ms: u64) -> StoreResult<u64> {
         Ok(self.conn().execute(
             "DELETE FROM idempotency WHERE created_ms < ?1 AND status <> 0",
