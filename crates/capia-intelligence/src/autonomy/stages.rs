@@ -1384,7 +1384,8 @@ impl Orchestrator {
             (f.sha256, f.bytes)
         };
         fp!("autonomy_acquire_after_download");
-        let asset = match self.import_staged(&staged, &ekey, flags).await {
+        let durable = self.make_durable(&staged, &sha);
+        let asset = match self.import_staged(&durable, &ekey, flags).await {
             Ok(a) => a,
             Err(e) if e.is_cancelled() => {
                 let _ = self.store.ledger_release(&run.id, &ekey, now_ms());
@@ -1454,13 +1455,32 @@ impl Orchestrator {
             &json!({"kind": "gateway", "unknown": c.price_micros.is_none(), "tokens": 0}),
             now_ms(),
         );
-        let _ = std::fs::remove_file(&staged);
         self.emit(
             &run.id,
             "asset_acquired",
             json!({"need": need.id, "asset": asset, "adapter": adapter.id(), "kind": kind}),
         );
         Ok(NeedResult::Resolved(asset))
+    }
+
+    /// Move o arquivo adquirido para a pasta de mídia **durável** do projeto (o catálogo guarda
+    /// o caminho; o cache é descartável, então o original não pode ficar nele). Idempotente.
+    fn make_durable(&self, from: &std::path::Path, sha: &str) -> PathBuf {
+        let _ = std::fs::create_dir_all(&self.media_dir);
+        let name = sha.trim_start_matches("sha256:");
+        let to = self.media_dir.join(format!("{name}.bin"));
+        if to.exists() {
+            let _ = std::fs::remove_file(from);
+            return to;
+        }
+        if std::fs::rename(from, &to).is_err() {
+            if std::fs::copy(from, &to).is_ok() {
+                let _ = std::fs::remove_file(from);
+            } else {
+                return from.to_path_buf();
+            }
+        }
+        to
     }
 
     /// Importa o arquivo em staging pelo sistema de assets (atômico) e devolve o `asset_id`.
@@ -1723,7 +1743,8 @@ impl Orchestrator {
             ));
         }
         let sha = gateway_sha(&produced).unwrap_or_default();
-        let asset = match self.import_staged(&produced, &key, flags).await {
+        let durable = self.make_durable(&produced, &sha);
+        let asset = match self.import_staged(&durable, &key, flags).await {
             Ok(a) => a,
             Err(e) if e.is_cancelled() => return Err(e),
             Err(e) => {
@@ -1784,7 +1805,6 @@ impl Orchestrator {
             &json!({"kind": "generation", "unknown": est.is_none(), "tokens": 0}),
             now_ms(),
         );
-        let _ = std::fs::remove_file(&produced);
         self.emit(
             &run.id,
             "asset_generated",
@@ -1945,7 +1965,7 @@ impl Orchestrator {
             // checkpoint durável antes do próximo lote (resume sabe o que já foi aplicado)
             self.save(run, None, &[("edit_applied".into(), json!({"unit": ukey}))])?;
         }
-        run.sequences = units
+        let fresh: Vec<ProducedSequence> = units
             .iter()
             .flat_map(|u| {
                 u.sequences.iter().map(|(d, s)| ProducedSequence {
@@ -1963,6 +1983,19 @@ impl Orchestrator {
                 })
             })
             .collect();
+        // replanejar depois de aplicar: as sequences anteriores ficam (editáveis) marcadas como
+        // substituídas — nunca são apagadas pela Run
+        let mut merged: Vec<ProducedSequence> = run
+            .sequences
+            .iter()
+            .filter(|old| !fresh.iter().any(|n| n.sequence_id == old.sequence_id))
+            .map(|old| ProducedSequence {
+                role: "superseded".into(),
+                ..old.clone()
+            })
+            .collect();
+        merged.extend(fresh);
+        run.sequences = merged;
         let mut r = StageResult::ok(Outcome::ApplyOk);
         r.events.push((
             "edit_applied".into(),

@@ -53,9 +53,30 @@ pub struct Script {
     /// Nº do review (0, 1, …).
     pub critic: Box<dyn Fn(u32) -> Value + Send + Sync>,
     pub counts: Mutex<std::collections::BTreeMap<String, u32>>,
+    /// Atraso (ms) entre os dois pedaços da resposta do Producer (para testar pausa/cancelamento).
+    pub producer_delay_ms: std::sync::atomic::AtomicU64,
+    /// Faz a primeira chamada do Producer falhar com 429 (retry/fallback).
+    pub rate_limit_first_producer: std::sync::atomic::AtomicBool,
 }
 
 impl Script {
+    pub fn new(
+        demand: impl Fn() -> Value + Send + Sync + 'static,
+        producer: impl Fn() -> Value + Send + Sync + 'static,
+        planner: impl Fn(&str, u32) -> Value + Send + Sync + 'static,
+        critic: impl Fn(u32) -> Value + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            demand: Box::new(demand),
+            producer: Box::new(producer),
+            planner: Box::new(planner),
+            critic: Box::new(critic),
+            counts: Mutex::new(Default::default()),
+            producer_delay_ms: Default::default(),
+            rate_limit_first_producer: Default::default(),
+        })
+    }
+
     pub fn bump(&self, k: &str) -> u32 {
         let mut c = self.counts.lock().unwrap();
         let e = c.entry(k.to_owned()).or_insert(0);
@@ -85,8 +106,29 @@ pub fn brain_for(script: Arc<Script>) -> Arc<ReplayProvider> {
         Box::new(move |req, _n| {
             let sys = system_of(req);
             if sys.starts_with("ROLE: producer") {
-                script.bump("producer");
-                chat_json(&(script.producer)())
+                let n = script.bump("producer");
+                if n == 0 && script.rate_limit_first_producer.load(Ordering::SeqCst) {
+                    return ReplayResponse::Error {
+                        code: capia_ai::ErrorCode::RateLimited,
+                        message: "slow down".into(),
+                        status: Some(429),
+                        retry_after_ms: Some(10),
+                        after_events: vec![],
+                    };
+                }
+                let v = (script.producer)().to_string();
+                let delay = script.producer_delay_ms.load(Ordering::SeqCst);
+                if delay > 0 {
+                    let (a, b) = v.split_at(v.len() / 2);
+                    return ReplayResponse::Chat {
+                        events: vec![
+                            ChatEvent::TextDelta { text: a.into() },
+                            ChatEvent::TextDelta { text: b.into() },
+                        ],
+                        chunk_delay_ms: delay,
+                    };
+                }
+                chat_json(&serde_json::from_str::<Value>(&v).unwrap())
             } else if sys.starts_with("ROLE: planner") {
                 let d = deliverable_of(&user_of(req));
                 let n = script.bump(&format!("planner:{d}"));
@@ -210,23 +252,59 @@ pub fn auto_policy() -> RunPolicy {
 }
 
 pub fn simple_script(asset: Arc<Mutex<String>>) -> Arc<Script> {
-    let a1 = asset.clone();
-    let a2 = asset;
-    Arc::new(Script {
-        demand: Box::new(|| demand_json(false)),
-        producer: Box::new(|| {
+    Script::new(
+        || demand_json(false),
+        || {
             producer_json(
                 json!([{"key": "main", "sequence_strategy": "standalone"}]),
                 json!([]),
             )
-        }),
-        planner: Box::new(move |_d, _n| edit_json(&a1.lock().unwrap(), json!([]))),
-        critic: Box::new(move |_n| {
-            let _ = &a2;
-            json!({"findings": []})
-        }),
-        counts: Mutex::new(Default::default()),
-    })
+        },
+        move |_d, _n| edit_json(&asset.lock().unwrap(), json!([])),
+        |_n| json!({"findings": []}),
+    )
+}
+
+/// Pequeno vídeo REAL (probe/import de verdade) usado como B-roll "baixado"/"gerado".
+pub fn broll_bytes(tc: &capia_media::MediaToolchain, dir: &Path, name: &str, secs: u32) -> Vec<u8> {
+    let out = dir.join(name);
+    let st = std::process::Command::new(tc.ffmpeg.as_ref().unwrap())
+        .args([
+            "-v",
+            "error",
+            "-y",
+            "-nostdin",
+            "-f",
+            "lavfi",
+            "-t",
+            &secs.to_string(),
+            "-i",
+            "smptebars=size=320x180:rate=30",
+        ])
+        .args([
+            "-f",
+            "lavfi",
+            "-t",
+            &secs.to_string(),
+            "-i",
+            "sine=frequency=500:sample_rate=16000",
+        ])
+        .args([
+            "-c:v",
+            "mpeg4",
+            "-q:v",
+            "4",
+            "-c:a",
+            "aac",
+            "-pix_fmt",
+            "yuv420p",
+            "-shortest",
+        ])
+        .arg(&out)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    std::fs::read(out).unwrap()
 }
 
 pub fn auto_world(
@@ -276,6 +354,22 @@ pub fn auto_world(
 }
 
 impl AutoWorld {
+    /// Simula reabrir o app: uma instância **nova** do Orchestrator sobre o mesmo projeto
+    /// (nenhum estado em memória é herdado; só o que está no `.capia`).
+    pub fn restart(&self) -> Arc<Orchestrator> {
+        let ev = self.events.clone();
+        let deps = Deps {
+            engine: self.spy.clone(),
+            ai: self.w.ctx.ai.clone(),
+            gateways: self.gateways.clone(),
+            generators: self.generators.clone(),
+            app_db: None,
+            sink: Arc::new(move |v| ev.lock().unwrap().push(v)),
+            rt: tokio::runtime::Handle::current(),
+        };
+        Orchestrator::open(deps, self.w.dir.join("p.capia")).unwrap()
+    }
+
     pub fn inputs(&self) -> RunInputs {
         RunInputs {
             brief_text: Some("Produto: Cafe Serra Azul.\n\nCTA: Compre agora.".into()),
@@ -311,11 +405,22 @@ impl AutoWorld {
             if pred(&r) && !self.orch.is_driving(id) {
                 return r;
             }
+            if t0.elapsed() >= std::time::Duration::from_secs(90) {
+                let r2 = self.orch.load(id).unwrap();
+                eprintln!("LAST_REVIEW {}", r2.checkpoint["last_review"]["findings"]);
+                for st in self.orch.store().list_stages(id).unwrap() {
+                    eprintln!("STAGE {} {} {} {}", st.seq, st.stage, st.status, st.json);
+                }
+            }
             assert!(
                 t0.elapsed() < std::time::Duration::from_secs(90),
-                "timeout waiting: {:?} {:?}",
+                "timeout waiting: {:?} {:?} pending={:?} error={:?} replan={:?} validation={:?}",
                 r.status,
-                r.stage
+                r.stage,
+                r.pending.as_ref().map(|p| (&p.kind, &p.question)),
+                r.error,
+                r.checkpoint["replan"],
+                r.validation.as_ref().map(|v| &v.errors)
             );
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }

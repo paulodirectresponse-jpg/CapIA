@@ -66,6 +66,7 @@ pub struct Orchestrator {
     pub(super) memory: MemoryManager,
     pub(super) project: PathBuf,
     pub(super) staging: PathBuf,
+    pub(super) media_dir: PathBuf,
     flags: Mutex<HashMap<String, Flags>>,
     drivers: Mutex<std::collections::HashSet<String>>,
     seq: std::sync::atomic::AtomicU64,
@@ -160,12 +161,16 @@ impl Orchestrator {
         let mut staging = project.clone().into_os_string();
         staging.push("-cache");
         let staging = PathBuf::from(staging).join("autonomy").join("staging");
+        let mut media_dir = project.clone().into_os_string();
+        media_dir.push("-media");
+        let media_dir = PathBuf::from(media_dir).join("ai");
         Ok(Arc::new(Self {
             deps,
             store,
             memory,
             project,
             staging,
+            media_dir,
             flags: Mutex::new(HashMap::new()),
             drivers: Mutex::new(std::collections::HashSet::new()),
             seq: std::sync::atomic::AtomicU64::new(1),

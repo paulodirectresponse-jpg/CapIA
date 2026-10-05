@@ -943,8 +943,14 @@ fn align_start(ms: i64, fps: u32) -> i64 {
     ((t + f / 2) / f) * f
 }
 
-pub fn sequence_id_for(run_id: &str, deliverable: &str) -> String {
-    format!("sq_{}_{}", slug(run_id), slug(deliverable))
+/// Id da sequence produzida. A versão do plano entra no id a partir da v2: replanejar depois de
+/// aplicar **nunca** colide com a sequence anterior (que continua no projeto, editável).
+pub fn sequence_id_for(run_id: &str, deliverable: &str, version: u32) -> String {
+    if version <= 1 {
+        format!("sq_{}_{}", slug(run_id), slug(deliverable))
+    } else {
+        format!("sq_{}_{}_v{version}", slug(run_id), slug(deliverable))
+    }
 }
 
 fn pos_y(position: Option<&str>, height: u32) -> f64 {
@@ -963,7 +969,7 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
     let sid = p
         .target_sequence
         .clone()
-        .unwrap_or_else(|| sequence_id_for(env.run_id, &p.deliverable_key));
+        .unwrap_or_else(|| sequence_id_for(env.run_id, &p.deliverable_key, p.version));
     let create = p.target_sequence.is_none();
     let fps = p.format.fps;
     let op = |kind: &str, i: usize| {
@@ -977,7 +983,14 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
         n += 1;
         cmds.push(v);
     };
-    let tid = |name: &str| format!("{sid}_{name}");
+    // sequence existente: tracks/clips levam o id da Run no nome (nunca colidem com os do usuário)
+    let tid = |name: &str| {
+        if create {
+            format!("{sid}_{name}")
+        } else {
+            format!("{sid}_{}_{name}", slug(env.run_id))
+        }
+    };
     if create {
         push(
             &mut cmds,
@@ -993,7 +1006,7 @@ pub fn compile_edit_plan(env: &CompileEnv<'_>, p: &EditPlan) -> Result<Compiled,
                             kind: &str,
                             role: &str,
                             label: &str| {
-        if create && tracks_made.insert(name) {
+        if tracks_made.insert(name) {
             push(
                 cmds,
                 "track",
@@ -1460,6 +1473,37 @@ mod tests {
     }
 
     #[test]
+    fn editing_an_existing_sequence_adds_run_scoped_tracks_without_creating_it() {
+        let inv = inv();
+        let res = BTreeMap::new();
+        let env = CompileEnv {
+            run_id: "run-1",
+            ns: "p1",
+            inventory: &inv,
+            resolutions: &res,
+        };
+        let mut ep = edit(beats());
+        ep.target_sequence = Some("seq_user".into());
+        let c = compile_edit_plan(&env, &ep).unwrap();
+        assert!(c.commands.iter().all(|x| x["type"] != "create_sequence"));
+        let tracks: Vec<&str> = c
+            .commands
+            .iter()
+            .filter(|x| x["type"] == "add_track")
+            .filter_map(|x| x["id"].as_str())
+            .collect();
+        assert!(
+            !tracks.is_empty() && tracks.iter().all(|t| t.starts_with("seq_user_run-1_")),
+            "{tracks:?}"
+        );
+        assert!(
+            c.commands
+                .iter()
+                .all(|x| x["sequence"].is_null() || x["sequence"] == "seq_user")
+        );
+    }
+
+    #[test]
     fn resolving_a_need_replaces_the_placeholder_with_media() {
         let mut inv = inv();
         inv.assets.insert(
@@ -1592,7 +1636,7 @@ mod tests {
             .collect();
         assert_eq!(nested.len(), 2);
         assert!(nested.iter().all(|c| c["follow_length"] == true));
-        let master_seq = sequence_id_for("run-1", "body_master");
+        let master_seq = sequence_id_for("run-1", "body_master", 1);
         assert!(nested.iter().all(|c| c["sequence"] == master_seq));
         // ids distintos por variante
         let seqs: BTreeSet<_> = units[0].sequences.iter().map(|s| s.1.clone()).collect();
