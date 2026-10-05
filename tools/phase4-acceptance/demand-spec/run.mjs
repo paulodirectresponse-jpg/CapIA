@@ -7,14 +7,7 @@
 //   expected.json: { "<arquivo>": { "product": "…", "audience": "…", … } }  (campos que o humano espera)
 // Sem execução real os números ficam `null` — nunca inventados.
 import { spawnSync } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
