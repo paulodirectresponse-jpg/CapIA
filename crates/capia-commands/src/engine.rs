@@ -9,8 +9,8 @@ use crate::exec::execute_command;
 use crate::hash::{canonical_json, constant_time_eq, hex, hmac_sha256, sha256_hex};
 use crate::journal::{Journal, JournalRecord};
 use capia_model::{
-    Document, EntityRef, ErrorCode, PrimitiveOp, validate_document, validate_nested_graph,
-    validate_sequence,
+    ClipId, Document, EntityKind, EntityRef, ErrorCode, PrimitiveOp, SequenceId, TrackId,
+    validate_document, validate_nested_graph, validate_sequence,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -620,6 +620,58 @@ impl Engine {
                         blocked_by: later.id,
                         blocked_by_actor: later.actor.clone(),
                         entities: shared,
+                    });
+                }
+            }
+        }
+        // dependência: o que o undo removeria do documento mas uma entrada posterior de terceiros
+        // ainda usa (ex.: faixa manual dentro de uma sequence criada pela IA) também é conflito.
+        let mut ops: Vec<PrimitiveOp> = Vec::new();
+        for e in selected.iter().rev() {
+            ops.extend(e.inverse_ops.iter().cloned());
+        }
+        let mut after = self.doc.clone();
+        if after.apply_ops(&ops).is_err() {
+            // as inversas já não aplicam limpas (algo posterior de terceiros depende delas)
+            for later in applied
+                .iter()
+                .filter(|l| l.id > selected[0].id && !selected.iter().any(|s| s.id == l.id))
+            {
+                conflicts.push(SelectiveUndoConflict {
+                    entry_id: selected[0].id,
+                    blocked_by: later.id,
+                    blocked_by_actor: later.actor.clone(),
+                    entities: later.affected.iter().cloned().collect(),
+                });
+            }
+        } else {
+            let exists = |d: &Document, r: &EntityRef| match r.kind {
+                EntityKind::Sequence => d.sequence(&SequenceId(r.id.clone())).is_some(),
+                EntityKind::Track => d.find_track(&TrackId(r.id.clone())).is_some(),
+                EntityKind::Clip => d.find_clip(&ClipId(r.id.clone())).is_some(),
+                _ => true,
+            };
+            for later in applied
+                .iter()
+                .filter(|l| l.id > selected[0].id && !selected.iter().any(|s| s.id == l.id))
+            {
+                let lost: Vec<EntityRef> = later
+                    .affected
+                    .iter()
+                    .filter(|r| exists(&self.doc, r) && !exists(&after, r))
+                    .cloned()
+                    .collect();
+                if !lost.is_empty() {
+                    let by = selected
+                        .iter()
+                        .rev()
+                        .find(|s| s.id < later.id)
+                        .map_or(selected[0].id, |s| s.id);
+                    conflicts.push(SelectiveUndoConflict {
+                        entry_id: by,
+                        blocked_by: later.id,
+                        blocked_by_actor: later.actor.clone(),
+                        entities: lost,
                     });
                 }
             }
