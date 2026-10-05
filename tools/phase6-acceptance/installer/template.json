@@ -1,0 +1,26 @@
+{
+  "template": true,
+  "schema": "capia.phase6.installer/1",
+  "release_candidate": "0.6.0-rc.1",
+  "built_at": "",
+  "attestation": { "performed_by": "", "results_are_real": false },
+  "artifacts": [
+    {
+      "file": "CapIA_0.6.0-rc.1_x64-setup.exe",
+      "kind": "nsis",
+      "sha256": "",
+      "size_bytes": 0,
+      "signed": false,
+      "authenticode_status": "NotSigned",
+      "signer_subject": "",
+      "thumbprint": "",
+      "timestamped": false,
+      "verified_with": ""
+    }
+  ],
+  "checksums": { "file": "SHA256SUMS", "verified": false },
+  "sbom": { "file": "", "format": "cyclonedx", "sha256": "" },
+  "license_report": { "file": "", "sha256": "" },
+  "ffmpeg": { "lgpl_build_verified": false, "license_notice_included": false },
+  "third_party_notices_included": false
+}

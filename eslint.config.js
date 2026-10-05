@@ -35,9 +35,9 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
     rules: { "react-hooks/rules-of-hooks": "off", "no-empty-pattern": "off" },
   },
-  // Scripts Node (ferramentas) e arquivos de configuração: sem type-check de projeto.
+  // Scripts Node (ferramentas, exemplos de integração) e arquivos de configuração: sem type-check de projeto.
   {
-    files: ["tools/**/*.mjs", "**/*.config.{js,ts}"],
+    files: ["tools/**/*.mjs", "examples/**/*.mjs", "**/*.config.{js,ts}"],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ...tseslint.configs.disableTypeChecked.languageOptions,

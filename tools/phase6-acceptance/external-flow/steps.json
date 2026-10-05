@@ -1,0 +1,77 @@
+{
+  "suite": "external-flow",
+  "description": "Fluxo canônico externo (copy + bruto + referência → Run → aprovações → variantes → export → webhook) por REST e MCP, paridade com a UI e documentação/exemplos em dia. Passos que dependem do capia-server real (outra frente) ficam `not_available` até o binário/testes existirem; a paridade com a UI é externa (humano + servidor real).",
+  "steps": [
+    {
+      "id": "catalog-docs-in-sync",
+      "title": "docs/api (REST, MCP, OpenAPI, scopes) em dia com o catálogo de operações",
+      "cmd": ["node", "tools/docs/gen-api-docs.mjs", "--check"]
+    },
+    {
+      "id": "examples-unit-tests",
+      "title": "Exemplos REST/MCP/webhook: testes contra servidores falsos",
+      "cmd": ["node", "--test", "examples/**/*.test.mjs"]
+    },
+    {
+      "id": "webhook-receiver-verification",
+      "title": "Receptor de exemplo: assinatura, replay, dedupe e forja (vetores independentes)",
+      "cmd": ["node", "--test", "examples/webhook-receiver/receiver.test.mjs"]
+    },
+    {
+      "id": "server-binary",
+      "title": "capia-server presente e responde --version (interface prevista)",
+      "requires": { "bin": ["capia-server"] },
+      "cmd": ["${bin:capia-server}", "--version"]
+    },
+    {
+      "id": "server-conformance-rest-mcp",
+      "title": "Suíte de conformidade REST × MCP do servidor (paridade de efeito, não de texto)",
+      "requires": {
+        "bin": ["cargo"],
+        "file": ["crates/capia-server/tests/conformance.rs"],
+        "env": ["CAPIA_P6_HEAVY"]
+      },
+      "cmd": ["cargo", "test", "-p", "capia-server", "--test", "conformance"],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "live-canonical-flow-rest",
+      "title": "Fluxo canônico por REST contra um servidor em execução (client.mjs)",
+      "requires": {
+        "env": ["CAPIA_PORT", "CAPIA_TOKEN", "CAPIA_FLOW_RAW", "CAPIA_FLOW_REF", "CAPIA_FLOW_BRIEF"]
+      },
+      "cmd": [
+        "node",
+        "examples/rest/client.mjs",
+        "--raw",
+        "${env:CAPIA_FLOW_RAW}",
+        "--reference",
+        "${env:CAPIA_FLOW_REF}",
+        "--brief",
+        "${env:CAPIA_FLOW_BRIEF}",
+        "--approve",
+        "${env:CAPIA_FLOW_APPROVE}"
+      ],
+      "timeoutSec": 3600
+    },
+    {
+      "id": "live-canonical-flow-mcp-smoke",
+      "title": "MCP stdio: initialize + tools/list + server_info (interface prevista)",
+      "requires": { "bin": ["capia-server"], "env": ["CAPIA_TOKEN", "CAPIA_DATA_DIR"] },
+      "cmd": ["node", "examples/mcp/stdio-client.mjs", "--data-dir", "${env:CAPIA_DATA_DIR}"]
+    },
+    {
+      "id": "ui-rest-mcp-parity",
+      "title": "Paridade UI × REST × MCP: mesma tarefa, mesmo estado autoritativo e webhook recebido",
+      "external": true,
+      "why": "exige um servidor real, a UI e um executor humano comparando revisão, sequences, clips, variantes, Run e sondagem do export",
+      "evidence": "target/phase6-acceptance/evidence/external-flow-parity-results.json",
+      "validate": [
+        "node",
+        "tools/phase6-acceptance/external-flow/validate-parity.mjs",
+        "--file",
+        "${evidence}"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "template": true,
+  "schema": "capia.phase6.beta-feedback/1",
+  "release_candidate": "0.6.0-rc.1",
+  "collected_at": "",
+  "attestation": {
+    "collected_by": "",
+    "results_are_real": false,
+    "no_fabrication": false
+  },
+  "participants": [
+    {
+      "id": "beta-01",
+      "kind": "external_beta_user",
+      "started_at": "",
+      "completed_canonical_workflow": false,
+      "rating": null
+    }
+  ],
+  "reports": [
+    {
+      "id": "FB-001",
+      "reporter": "beta-01",
+      "received_at": "",
+      "app_version": "0.6.0-rc.1",
+      "os": "Windows 11 23H2",
+      "workflow": "export",
+      "severity": "Major",
+      "reproducibility": "always",
+      "summary": "",
+      "steps_to_reproduce": "",
+      "logs": { "attached": false, "bundle_id": "", "unavailable_reason": "" },
+      "rating": null,
+      "status": "open"
+    }
+  ]
+}

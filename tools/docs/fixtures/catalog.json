@@ -1,0 +1,2045 @@
+{
+  "events": [
+    "run.started",
+    "run.waiting_user",
+    "run.completed",
+    "run.failed",
+    "run.cancelled",
+    "export.completed",
+    "export.failed",
+    "asset.imported",
+    "webhook.test"
+  ],
+  "operations": [
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "server.health",
+      "path": "/v1/health",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": null,
+      "status": 200,
+      "summary": "Liveness probe (public, minimal).",
+      "surface": "both",
+      "tool": "server_health"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "server.info",
+      "path": "/v1/server",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "Server, engine and limits information.",
+      "surface": "both",
+      "tool": "server_info"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "server.metrics",
+      "path": "/v1/metrics",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "Local counters: requests, errors, rate limits, in-flight work, uptime.",
+      "surface": "both",
+      "tool": "server_metrics"
+    },
+    {
+      "class": "admin",
+      "method": "POST",
+      "mutating": true,
+      "name": "tokens.create",
+      "path": "/v1/tokens",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_in_seconds": {
+            "maximum": 31536000,
+            "minimum": 60,
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 11,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "type": "object"
+      },
+      "scope": "admin:tokens",
+      "status": 201,
+      "summary": "Create a token (the secret is shown once).",
+      "surface": "both",
+      "tool": "tokens_create"
+    },
+    {
+      "class": "admin",
+      "method": "GET",
+      "mutating": false,
+      "name": "tokens.list",
+      "path": "/v1/tokens",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "admin:tokens",
+      "status": 200,
+      "summary": "List tokens (never the secrets).",
+      "surface": "both",
+      "tool": "tokens_list"
+    },
+    {
+      "class": "admin",
+      "method": "DELETE",
+      "mutating": true,
+      "name": "tokens.revoke",
+      "path": "/v1/tokens/{token_id}",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "token_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token_id"
+        ],
+        "type": "object"
+      },
+      "scope": "admin:tokens",
+      "status": 200,
+      "summary": "Revoke a token.",
+      "surface": "both",
+      "tool": "tokens_revoke"
+    },
+    {
+      "class": "admin",
+      "method": "POST",
+      "mutating": true,
+      "name": "tokens.rotate",
+      "path": "/v1/tokens/{token_id}/rotate",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "token_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token_id"
+        ],
+        "type": "object"
+      },
+      "scope": "admin:tokens",
+      "status": 201,
+      "summary": "Rotate a token: new secret (shown once), old one revoked.",
+      "surface": "both",
+      "tool": "tokens_rotate"
+    },
+    {
+      "class": "admin",
+      "method": "GET",
+      "mutating": false,
+      "name": "audit.list",
+      "path": "/v1/audit",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limit": {
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "scope": "admin:tokens",
+      "status": 200,
+      "summary": "Audit log of external calls.",
+      "surface": "both",
+      "tool": "audit_list"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "projects.create",
+      "path": "/v1/projects",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "scope": "project:write",
+      "status": 201,
+      "summary": "Create (and open) a project in the server's project store.",
+      "surface": "both",
+      "tool": "projects_create"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "projects.list",
+      "path": "/v1/projects",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "List the server's projects.",
+      "surface": "both",
+      "tool": "projects_list"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "projects.get",
+      "path": "/v1/projects/{project_id}",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "One project.",
+      "surface": "both",
+      "tool": "projects_get"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "projects.open",
+      "path": "/v1/projects/{project_id}/open",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:write",
+      "status": 200,
+      "summary": "Open a project (the engine hosts one at a time).",
+      "surface": "both",
+      "tool": "projects_open"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "projects.close",
+      "path": "/v1/projects/{project_id}/close",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:write",
+      "status": 200,
+      "summary": "Close the open project.",
+      "surface": "both",
+      "tool": "projects_close"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "projects.summary",
+      "path": "/v1/projects/{project_id}/summary",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "Revision, sequences, clips, assets and run counts.",
+      "surface": "both",
+      "tool": "projects_summary"
+    },
+    {
+      "class": "upload",
+      "method": "POST",
+      "mutating": true,
+      "name": "uploads.create",
+      "path": "/v1/uploads",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename"
+        ],
+        "type": "object"
+      },
+      "scope": "media:write",
+      "status": 201,
+      "summary": "Stream a file into staging (raw body; Content-Length required).",
+      "surface": "rest_only",
+      "tool": "uploads_create"
+    },
+    {
+      "class": "upload",
+      "method": "POST",
+      "mutating": true,
+      "name": "uploads.create_inline",
+      "path": "/v1/uploads/inline",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content_base64": {
+            "maxLength": 11534336,
+            "minLength": 1,
+            "type": "string"
+          },
+          "expected_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content_base64"
+        ],
+        "type": "object"
+      },
+      "scope": "media:write",
+      "status": 201,
+      "summary": "Stage a small file sent as base64 (8 MiB max).",
+      "surface": "both",
+      "tool": "uploads_create_inline"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "uploads.list",
+      "path": "/v1/uploads",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "scope": "media:read",
+      "status": 200,
+      "summary": "List staged uploads.",
+      "surface": "both",
+      "tool": "uploads_list"
+    },
+    {
+      "class": "write",
+      "method": "DELETE",
+      "mutating": true,
+      "name": "uploads.delete",
+      "path": "/v1/uploads/{upload_id}",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "upload_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id"
+        ],
+        "type": "object"
+      },
+      "scope": "media:write",
+      "status": 200,
+      "summary": "Delete a staged upload.",
+      "surface": "both",
+      "tool": "uploads_delete"
+    },
+    {
+      "class": "upload",
+      "method": "POST",
+      "mutating": true,
+      "name": "assets.import",
+      "path": "/v1/projects/{project_id}/assets",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "upload_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "upload_id"
+        ],
+        "type": "object"
+      },
+      "scope": "media:write",
+      "status": 202,
+      "summary": "Import a staged upload through the asset system (hash + probe + catalog).",
+      "surface": "both",
+      "tool": "assets_import"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "assets.list",
+      "path": "/v1/projects/{project_id}/assets",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "media:read",
+      "status": 200,
+      "summary": "List assets.",
+      "surface": "both",
+      "tool": "assets_list"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "assets.get",
+      "path": "/v1/projects/{project_id}/assets/{asset_id}",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "asset_id"
+        ],
+        "type": "object"
+      },
+      "scope": "media:read",
+      "status": 200,
+      "summary": "One asset.",
+      "surface": "both",
+      "tool": "assets_get"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "imports.get",
+      "path": "/v1/projects/{project_id}/imports/{ticket_id}",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "ticket_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "ticket_id"
+        ],
+        "type": "object"
+      },
+      "scope": "media:read",
+      "status": 200,
+      "summary": "State of an asynchronous import.",
+      "surface": "both",
+      "tool": "imports_get"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "sequences.list",
+      "path": "/v1/projects/{project_id}/sequences",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "List sequences.",
+      "surface": "both",
+      "tool": "sequences_list"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "sequences.get",
+      "path": "/v1/projects/{project_id}/sequences/{sequence_id}",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "sequence_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "sequence_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "One sequence (full content; use timeline.query for large ones).",
+      "surface": "both",
+      "tool": "sequences_get"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "timeline.query",
+      "path": "/v1/projects/{project_id}/sequences/{sequence_id}/timeline",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "from_ticks": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limit": {
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "sequence_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "to_ticks": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "track": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "sequence_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "Clips of a sequence by time range, paginated, with a content digest.",
+      "surface": "both",
+      "tool": "timeline_query"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "commands.preview",
+      "path": "/v1/projects/{project_id}/commands/preview",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "commands": {
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "type": "array"
+          },
+          "expected_revision": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "type": "string"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "commands"
+        ],
+        "type": "object"
+      },
+      "scope": "project:write",
+      "status": 200,
+      "summary": "Phase 1 of the write gate: validate a transaction and get a plan token (nothing is written).",
+      "surface": "both",
+      "tool": "commands_preview"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "commands.apply",
+      "path": "/v1/projects/{project_id}/commands/apply",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "plan_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "plan_token"
+        ],
+        "type": "object"
+      },
+      "scope": "project:write",
+      "status": 200,
+      "summary": "Phase 2 of the write gate: apply only the reviewed plan.",
+      "surface": "both",
+      "tool": "commands_apply"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "history.list",
+      "path": "/v1/projects/{project_id}/history",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limit": {
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "Document history entries.",
+      "surface": "both",
+      "tool": "history_list"
+    },
+    {
+      "class": "run_start",
+      "method": "POST",
+      "mutating": true,
+      "name": "runs.create",
+      "path": "/v1/projects/{project_id}/runs",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "assets": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "brief_text": {
+            "maxLength": 60000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "budget": {
+            "maxProperties": 12,
+            "type": "object"
+          },
+          "client_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "deliverables": {
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 24,
+            "type": "array"
+          },
+          "documents": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "note": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "policy": {
+            "maxProperties": 8,
+            "type": "object"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "references": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "start": {
+            "type": "boolean"
+          },
+          "variants": {
+            "maxProperties": 8,
+            "type": "object"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:start",
+      "status": 202,
+      "summary": "Start an AI Run from brief + raw footage + references.",
+      "surface": "both",
+      "tool": "runs_create"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "runs.list",
+      "path": "/v1/projects/{project_id}/runs",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "List runs.",
+      "surface": "both",
+      "tool": "runs_list"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "runs.get",
+      "path": "/v1/projects/{project_id}/runs/{run_id}",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "Run snapshot (stages, effects, provenance, pending decision).",
+      "surface": "both",
+      "tool": "runs_get"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "runs.pause",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/pause",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:start",
+      "status": 200,
+      "summary": "Pause a run.",
+      "surface": "both",
+      "tool": "runs_pause"
+    },
+    {
+      "class": "run_start",
+      "method": "POST",
+      "mutating": true,
+      "name": "runs.resume",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/resume",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:start",
+      "status": 202,
+      "summary": "Resume a paused run.",
+      "surface": "both",
+      "tool": "runs_resume"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "runs.cancel",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/cancel",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:start",
+      "status": 200,
+      "summary": "Cancel a run.",
+      "surface": "both",
+      "tool": "runs_cancel"
+    },
+    {
+      "class": "approve",
+      "method": "POST",
+      "mutating": true,
+      "name": "runs.approve",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/approvals",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "decision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "option": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "payload": {
+            "maxProperties": 32,
+            "type": "object"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id",
+          "decision_id",
+          "option"
+        ],
+        "type": "object"
+      },
+      "scope": "run:approve",
+      "status": 200,
+      "summary": "Answer the pending approval/decision of a run.",
+      "surface": "both",
+      "tool": "runs_approve"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "runs.plan",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/plan",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "Production plan, edit plans and validation of a run.",
+      "surface": "both",
+      "tool": "runs_plan"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "runs.review",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/review",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "Reviews (critic) of a run.",
+      "surface": "both",
+      "tool": "runs_review"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "runs.cost",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/cost",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "Usage and budget of a run.",
+      "surface": "both",
+      "tool": "runs_cost"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "runs.events",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/events",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "Run event log (paginated by seq).",
+      "surface": "both",
+      "tool": "runs_events"
+    },
+    {
+      "class": "run_start",
+      "method": "POST",
+      "mutating": true,
+      "name": "runs.variants",
+      "path": "/v1/projects/{project_id}/runs/{run_id}/variants",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "axis": {
+            "items": {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "count": {
+            "maximum": 20,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "run_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id",
+          "count"
+        ],
+        "type": "object"
+      },
+      "scope": "run:start",
+      "status": 202,
+      "summary": "Create variants from a completed run.",
+      "surface": "both",
+      "tool": "runs_variants"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "memory.list",
+      "path": "/v1/projects/{project_id}/memory",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "Project/client/user memory items (read-only: promotion is a UI action).",
+      "surface": "both",
+      "tool": "memory_list"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "gateway.status",
+      "path": "/v1/gateway",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "run:read",
+      "status": 200,
+      "summary": "Asset Gateway and generation status.",
+      "surface": "both",
+      "tool": "gateway_status"
+    },
+    {
+      "class": "export",
+      "method": "POST",
+      "mutating": true,
+      "name": "exports.start",
+      "path": "/v1/projects/{project_id}/exports",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "encoder": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9._:-]+$",
+                  "type": "string"
+                },
+                "height": {
+                  "maximum": 8192,
+                  "minimum": 16,
+                  "type": "integer"
+                },
+                "name": {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                "preset": {
+                  "enum": [
+                    "h264-mp4",
+                    "intermediate"
+                  ]
+                },
+                "sequence": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9._:-]+$",
+                  "type": "string"
+                },
+                "width": {
+                  "maximum": 8192,
+                  "minimum": 16,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "sequence"
+              ],
+              "type": "object"
+            },
+            "maxItems": 24,
+            "minItems": 1,
+            "type": "array"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "items"
+        ],
+        "type": "object"
+      },
+      "scope": "export:start",
+      "status": 202,
+      "summary": "Queue exports of sequences (server chooses the output location).",
+      "surface": "both",
+      "tool": "exports_start"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "exports.encoders",
+      "path": "/v1/exports/encoders",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "export:read",
+      "status": 200,
+      "summary": "Approved export encoders available on this machine (capability catalog).",
+      "surface": "both",
+      "tool": "exports_encoders"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "exports.list",
+      "path": "/v1/projects/{project_id}/exports",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "export:read",
+      "status": 200,
+      "summary": "List exports.",
+      "surface": "both",
+      "tool": "exports_list"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "exports.get",
+      "path": "/v1/projects/{project_id}/exports/{export_id}",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "export_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "export_id"
+        ],
+        "type": "object"
+      },
+      "scope": "export:read",
+      "status": 200,
+      "summary": "Export state, report and probe.",
+      "surface": "both",
+      "tool": "exports_get"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "exports.cancel",
+      "path": "/v1/projects/{project_id}/exports/{export_id}/cancel",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "export_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "export_id"
+        ],
+        "type": "object"
+      },
+      "scope": "export:start",
+      "status": 200,
+      "summary": "Cancel the batch of an export.",
+      "surface": "both",
+      "tool": "exports_cancel"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "deliverables.list",
+      "path": "/v1/projects/{project_id}/deliverables",
+      "project": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "scope": "export:read",
+      "status": 200,
+      "summary": "Completed exports (deliverables) of the project.",
+      "surface": "both",
+      "tool": "deliverables_list"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "webhooks.create",
+      "path": "/v1/webhooks",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "type": "array"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "events"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 201,
+      "summary": "Register a webhook (the signing secret is shown once).",
+      "surface": "both",
+      "tool": "webhooks_create"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "webhooks.list",
+      "path": "/v1/webhooks",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 200,
+      "summary": "List webhooks (never the secrets).",
+      "surface": "both",
+      "tool": "webhooks_list"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "webhooks.get",
+      "path": "/v1/webhooks/{webhook_id}",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "webhook_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_id"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 200,
+      "summary": "One webhook.",
+      "surface": "both",
+      "tool": "webhooks_get"
+    },
+    {
+      "class": "write",
+      "method": "PATCH",
+      "mutating": true,
+      "name": "webhooks.update",
+      "path": "/v1/webhooks/{webhook_id}",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "type": "array"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "webhook_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_id"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 200,
+      "summary": "Update url/events/enabled/description.",
+      "surface": "both",
+      "tool": "webhooks_update"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "webhooks.rotate_secret",
+      "path": "/v1/webhooks/{webhook_id}/rotate-secret",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "webhook_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_id"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 200,
+      "summary": "New signing secret (shown once).",
+      "surface": "both",
+      "tool": "webhooks_rotate_secret"
+    },
+    {
+      "class": "write",
+      "method": "DELETE",
+      "mutating": true,
+      "name": "webhooks.delete",
+      "path": "/v1/webhooks/{webhook_id}",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "webhook_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_id"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 200,
+      "summary": "Delete a webhook and its delivery log.",
+      "surface": "both",
+      "tool": "webhooks_delete"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "webhooks.test",
+      "path": "/v1/webhooks/{webhook_id}/test",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "webhook_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_id"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 202,
+      "summary": "Queue a synthetic `webhook.test` delivery.",
+      "surface": "both",
+      "tool": "webhooks_test"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "webhooks.deliveries",
+      "path": "/v1/webhooks/{webhook_id}/deliveries",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "webhook_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_id"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 200,
+      "summary": "Delivery log (attempt, status, latency, next retry, terminal state).",
+      "surface": "both",
+      "tool": "webhooks_deliveries"
+    },
+    {
+      "class": "write",
+      "method": "POST",
+      "mutating": true,
+      "name": "webhooks.redeliver",
+      "path": "/v1/webhooks/{webhook_id}/deliveries/{delivery_id}/redeliver",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "delivery_id": {
+            "maximum": 9223372036854775807,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "webhook_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "webhook_id",
+          "delivery_id"
+        ],
+        "type": "object"
+      },
+      "scope": "webhook:manage",
+      "status": 202,
+      "summary": "Re-deliver one delivery (dead letters included).",
+      "surface": "both",
+      "tool": "webhooks_redeliver"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "events.list",
+      "path": "/v1/events",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "maximum": 9223372036854775807,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limit": {
+            "maximum": 500,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "Server events after a cursor (polling; SSE at /v1/events/stream).",
+      "surface": "both",
+      "tool": "events_list"
+    }
+  ],
+  "scopes": [
+    "project:read",
+    "project:write",
+    "media:read",
+    "media:write",
+    "run:read",
+    "run:start",
+    "run:approve",
+    "export:read",
+    "export:start",
+    "webhook:manage",
+    "admin:tokens"
+  ],
+  "version": 1
+}

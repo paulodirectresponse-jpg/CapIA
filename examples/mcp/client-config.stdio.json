@@ -1,0 +1,10 @@
+{
+  "_comment": "INTERFACE PREVISTA — confirme os flags com `capia-server --help`. Substitua <DATA_DIR> pela pasta de dados do servidor. O token é um PLACEHOLDER: crie o seu com tokens.create (docs/api/auth-and-scopes.md) e injete por variável de ambiente, nunca em arquivo versionado.",
+  "mcpServers": {
+    "capia": {
+      "command": "capia-server",
+      "args": ["mcp-stdio", "--data-dir", "<DATA_DIR>", "--token-env", "CAPIA_TOKEN"],
+      "env": { "CAPIA_TOKEN": "capia_REDACTED" }
+    }
+  }
+}

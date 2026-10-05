@@ -1,0 +1,10 @@
+{
+  "_comment": "Inicie o servidor com `capia-server serve --data-dir <DATA_DIR> [--port N]` (somente 127.0.0.1 por padrão); o endpoint MCP HTTP é `POST /mcp`. O token é um PLACEHOLDER; nunca versione um token real.",
+  "mcpServers": {
+    "capia": {
+      "type": "http",
+      "url": "http://127.0.0.1:<PORT>/mcp",
+      "headers": { "Authorization": "Bearer capia_REDACTED" }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "template": true,
+  "schema": "capia.phase6.parity/1",
+  "performed_at": "",
+  "attestation": { "performed_by": "", "results_are_real": false },
+  "task": {
+    "description": "Briefing X + bruto + referência → AI Run com a mesma política → export h264-mp4 da primeira sequence",
+    "same_inputs_for_all_surfaces": false
+  },
+  "surfaces": {
+    "ui": {
+      "project_revision": 0,
+      "sequences": 0,
+      "clips": 0,
+      "variants": 0,
+      "run_status": "",
+      "export": { "codec": "", "width": 0, "height": 0, "duration_ticks": 0 }
+    },
+    "rest": {
+      "project_revision": 0,
+      "sequences": 0,
+      "clips": 0,
+      "variants": 0,
+      "run_status": "",
+      "export": { "codec": "", "width": 0, "height": 0, "duration_ticks": 0 }
+    },
+    "mcp": {
+      "project_revision": 0,
+      "sequences": 0,
+      "clips": 0,
+      "variants": 0,
+      "run_status": "",
+      "export": { "codec": "", "width": 0, "height": 0, "duration_ticks": 0 }
+    }
+  },
+  "webhook": { "received": false, "signature_verified": false },
+  "rest_and_mcp_used_same_token_scopes": false,
+  "equal": false
+}
