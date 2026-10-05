@@ -678,3 +678,100 @@
   height: 100%;
   min-height: 0;
 }
+
+/* ----------------------------------------------------------------------------- IA (Fase 4) */
+.ed-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ed-ai-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.ed-ai-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+}
+.ed-ai-msg {
+  padding: 6px 8px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ed-ai-user {
+  background: var(--accent-soft, rgba(80, 120, 255, 0.18));
+  align-self: flex-end;
+}
+.ed-ai-assistant {
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+}
+.ed-ai-tool,
+.ed-ai-system {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.ed-ai-input {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+.ed-ai-input textarea {
+  flex: 1;
+  resize: vertical;
+}
+.ed-ai-card {
+  padding: 8px;
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+}
+.ed-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ed-ai-jobs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ed-ai-jobs li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.ed-ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+.ed-ai-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ed-ai-providers,
+.ed-ai-models {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ed-ai-sources q {
+  display: block;
+  opacity: 0.85;
+}

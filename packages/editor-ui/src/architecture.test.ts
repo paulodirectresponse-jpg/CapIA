@@ -58,3 +58,61 @@ describe("UI → engine boundary", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/** Código sem comentários (as regras valem para o que executa, não para a documentação). */
+const stripComments = (src: string): string =>
+  src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+describe("IA na UI (Fase 4): sem segredos, sem provider, sem escrita direta", () => {
+  const aiFiles = prod.filter((f) => /\/ai[A-Z-]|\/Ai[A-Z]/.test(f.replaceAll("\\", "/")));
+
+  it("só `store/aiController.ts` fala com o `ai.*` do cliente; componentes usam o controlador", () => {
+    const offenders = prod
+      .filter((f) => rel(f) !== "store/aiController.ts")
+      .filter((f) => /\bclient\.ai\b|\bAiClient\b/.test(readFileSync(f, "utf8")))
+      // o controlador do editor só repassa o cliente ao AiController
+      .filter((f) => rel(f) !== "store/controller.ts")
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it("nenhuma chamada de rede ou URL de provider na UI (providers só existem no engine Rust)", () => {
+    const hostile =
+      /\bfetch\(|XMLHttpRequest|WebSocket\(|EventSource\(|api\.openai\.com|api\.anthropic\.com|generativelanguage\.googleapis|openrouter\.ai|api\.groq\.com/;
+    const offenders = prod
+      .filter((f) => rel(f) !== "store/controller.ts")
+      .filter((f) => hostile.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it("a chave de API nunca vai para localStorage/sessionStorage/prefs nem para o estado", () => {
+    expect(aiFiles.length).toBeGreaterThan(2);
+    for (const f of aiFiles) {
+      const src = stripComments(readFileSync(f, "utf8"));
+      expect(src, rel(f)).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/);
+    }
+    const ctrl = stripComments(readFileSync(join(SRC, "store/aiController.ts"), "utf8"));
+    // `apiKey` só aparece como parâmetro repassado ao cliente (nunca atribuído ao store)
+    const uses = [...ctrl.matchAll(/apiKey/g)].length;
+    expect(uses).toBeLessThanOrEqual(4);
+    expect(ctrl).not.toMatch(/store\.set\([^)]*apiKey/);
+    const prefs = readFileSync(join(SRC, "lib/prefs.ts"), "utf8");
+    expect(prefs).not.toMatch(/api[_-]?key|secret|credential|token/i);
+  });
+
+  it("o campo da chave é `type=password`, sem copiar e sem mostrar o valor salvo", () => {
+    const src = readFileSync(join(SRC, "components/AiSettingsDialog.tsx"), "utf8");
+    expect(src).toMatch(/type="password"/);
+    expect(src).not.toMatch(/clipboard|writeText|api_key\s*[:=]\s*p\./);
+  });
+
+  it("a UI não monta comandos do engine para a IA: planos voltam como `plan_token`", () => {
+    const comps = prod.filter((f) => /Ai(Panel|SettingsDialog)\.tsx$/.test(f));
+    for (const f of comps) {
+      expect(readFileSync(f, "utf8"), rel(f)).not.toMatch(
+        /"insert_clip"|"delete_clip"|"split_clip"|"add_track"|type:\s*"set_/,
+      );
+    }
+  });
+});

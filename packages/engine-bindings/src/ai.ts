@@ -65,7 +65,8 @@ export interface AiModelEndpoint {
   provider_id: string;
   model_id: string;
   display_name: string;
-  capabilities: Record<string, CapabilityState> | unknown;
+  /** `Capabilities` do engine: `{ entries: { <capability>: { supported, origin } } }`. */
+  capabilities: { entries?: Record<string, CapabilityState> };
   context_window: number;
   max_output_tokens: number;
   pricing?: unknown;
@@ -316,7 +317,11 @@ export class AiClient {
   planSilence(
     sequence: string,
     assetId: string,
-    opts: { clip?: string; params?: Record<string, unknown>; rippleScope?: "track" | "sequence" } = {},
+    opts: {
+      clip?: string;
+      params?: Record<string, unknown>;
+      rippleScope?: "track" | "sequence";
+    } = {},
   ) {
     return this.json<{ task_id: string }>("ai.silence.plan", {
       sequence,
@@ -341,7 +346,12 @@ export class AiClient {
       asset_id: assetId,
     });
   }
-  interpretDemand(input: { documents: string[]; assets: string[]; note?: string; force?: boolean }) {
+  interpretDemand(input: {
+    documents: string[];
+    assets: string[];
+    note?: string;
+    force?: boolean;
+  }) {
     return this.json<{ task_id: string }>("ai.demand.interpret", input);
   }
   getDemand() {

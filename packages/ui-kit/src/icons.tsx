@@ -47,6 +47,8 @@ const PATHS = {
   nested: "M2.5 3.5h8v6h-8zM5.5 6.5h8v6h-8z",
   keyframe: "M8 2.5L13.5 8 8 13.5 2.5 8z",
   grid: "M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z",
+  sparkle:
+    "M7.5 2l1.5 3.8L12.8 7.3 9 8.8 7.5 12.6 6 8.8 2.2 7.3 6 5.8zM12.5 10.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z",
   search: "M7 3.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM9.6 9.6L13 13",
   fullscreen: "M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3",
   skipBack: "M3.5 3.5v9M12.5 3.5L6 8l6.5 4.5zM9.5 3.5L4 8l5.5 4.5z",

@@ -13,6 +13,7 @@ import {
   fromSnapshot,
   withAssets,
   withSequenceModel,
+  type AiTaskEvent,
   type ApiErrorBody,
   type ChangeSet,
   type Clip,
@@ -70,6 +71,7 @@ import {
   addTrackCommand,
 } from "./edit";
 import { createStore, type Store } from "./createStore";
+import { AiController } from "./aiController";
 import { MediaVisuals } from "./visuals";
 import { PerfLog } from "./perf";
 import { noPlatform, type PlatformServices } from "../platform";
@@ -171,6 +173,8 @@ export class EditorController {
   private frameHeight = 1080;
   readonly visuals: MediaVisuals;
   readonly perf = new PerfLog();
+  /** IA (Fase 4): opcional; o editor não depende dela. */
+  readonly ai: AiController;
   readonly frames: FrameSource;
   private readonly audio: AudioMonitor;
 
@@ -185,6 +189,9 @@ export class EditorController {
     }, opts.audioContext ?? webAudioContext);
     this.visuals = new MediaVisuals(client, (ms) => {
       this.perf.record("thumb", ms);
+    });
+    this.ai = new AiController(client.ai, (tone, title, detail) => {
+      this.toast(tone, title, detail);
     });
     this.storage = opts.storage === undefined ? browserStorage() : opts.storage;
     const { prefs, recovered } = loadPrefs(this.storage);
@@ -289,6 +296,7 @@ export class EditorController {
 
   dispose(): void {
     this.disposed = true;
+    this.ai.dispose();
     this.stopPolling();
     this.pause();
     for (const h of this.toastTimers.values()) clearTimeout(h);
@@ -335,6 +343,9 @@ export class EditorController {
         this.queue = p.catch(() => null);
         break;
       }
+      case "ai_task":
+        this.ai.handleEvent(ev as unknown as AiTaskEvent);
+        break;
       case "revision_changed":
         // outro cliente (CLI, IA, outra janela) alterou o documento: ressincroniza se defasado
         void this.resyncIfBehind(ev.revision);

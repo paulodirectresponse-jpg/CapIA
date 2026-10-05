@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { EditorController, UiState } from "./store/controller";
 import { useStoreSelector } from "./store/createStore";
+import type { AiState } from "./store/aiController";
 
 const Ctx = createContext<EditorController | null>(null);
 
@@ -24,6 +25,12 @@ export function useController(): EditorController {
 export function useUi<S>(selector: (s: UiState) => S): S {
   const c = useController();
   return useStoreSelector(c.store, selector);
+}
+
+/** Fatia do estado da IA. */
+export function useAi<S>(selector: (s: AiState) => S): S {
+  const c = useController();
+  return useStoreSelector(c.ai.store, selector);
 }
 
 /** Sequence ativa (conteúdo) e seu resumo. */

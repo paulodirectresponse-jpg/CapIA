@@ -4,6 +4,8 @@
  * Tempo é sempre inteiro em Ticks (705.600.000/s); cabe num `number` (teto de 24 h < 2^53).
  */
 
+import { AiClient } from "./ai";
+
 export type Ticks = number;
 export const TICKS_PER_SECOND = 705_600_000;
 
@@ -313,7 +315,12 @@ function nextOperationId(): string {
 
 /** Cliente tipado: cada método devolve o que o engine devolveu (sem lógica de edição aqui). */
 export class EditorClient {
-  constructor(private readonly transport: EditorTransport) {}
+  /** Serviço de IA (`ai.*`): o editor funciona igual se ele nunca for usado. */
+  readonly ai: AiClient;
+
+  constructor(private readonly transport: EditorTransport) {
+    this.ai = new AiClient(transport);
+  }
 
   private json<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     return this.transport.call(method, params) as Promise<T>;

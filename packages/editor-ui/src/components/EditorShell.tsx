@@ -3,6 +3,8 @@ import { Button, Dialog, Icon, Splitter, Toasts, type IconName } from "@capia/ui
 import { useController, useUi } from "../context";
 import type { PerfKey, PerfSummary } from "../store/perf";
 import { useT, type MessageKey } from "../i18n";
+import { AiPanel } from "./AiPanel";
+import { AiSettingsDialog } from "./AiSettingsDialog";
 import { ExportDialog } from "./ExportDialog";
 import { HistoryPopover } from "./HistoryPopover";
 import { Inspector } from "./Inspector";
@@ -24,7 +26,7 @@ declare global {
   }
 }
 
-export type RailId = "project" | "media" | "audio" | "text" | "captions" | "transitions";
+export type RailId = "project" | "media" | "audio" | "text" | "captions" | "transitions" | "ai";
 
 const RAIL: { id: RailId; icon: IconName; label: MessageKey }[] = [
   { id: "project", icon: "folder", label: "rail.project" },
@@ -33,9 +35,10 @@ const RAIL: { id: RailId; icon: IconName; label: MessageKey }[] = [
   { id: "text", icon: "text", label: "rail.text" },
   { id: "captions", icon: "caption", label: "rail.captions" },
   { id: "transitions", icon: "transition", label: "rail.transitions" },
+  { id: "ai", icon: "sparkle", label: "rail.ai" },
 ];
 
-function RailContent({ id }: { id: RailId }) {
+function RailContent({ id, onOpenAiSettings }: { id: RailId; onOpenAiSettings: () => void }) {
   switch (id) {
     case "project":
       return <ProjectPanel />;
@@ -49,6 +52,8 @@ function RailContent({ id }: { id: RailId }) {
       return <CaptionsPanel />;
     case "transitions":
       return <TransitionsPanel />;
+    case "ai":
+      return <AiPanel onOpenSettings={onOpenAiSettings} />;
   }
 }
 
@@ -65,6 +70,7 @@ export function EditorShell() {
   const [rail, setRail] = useState<RailId>("project");
   const [exportOpen, setExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [diagOpen, setDiagOpen] = useState(false);
   // tamanhos "ao vivo" durante o arrasto (o prefs só grava ao soltar)
@@ -176,7 +182,12 @@ export function EditorShell() {
                 role="tabpanel"
                 data-testid="left-panel"
               >
-                <RailContent id={rail} />
+                <RailContent
+                  id={rail}
+                  onOpenAiSettings={() => {
+                    setAiSettingsOpen(true);
+                  }}
+                />
               </div>
               <Splitter
                 dir="col"
@@ -282,6 +293,12 @@ export function EditorShell() {
         open={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
+        }}
+      />
+      <AiSettingsDialog
+        open={aiSettingsOpen}
+        onClose={() => {
+          setAiSettingsOpen(false);
         }}
       />
       <Toasts
