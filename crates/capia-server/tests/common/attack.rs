@@ -271,6 +271,51 @@ pub fn upload(
     send(s, "POST", "/v1/uploads", Some(token), &hs, body)
 }
 
+/// Como `exchange`, mas fecha a metade de escrita depois de enviar (cliente que "morreu" no meio).
+pub fn exchange_half_close(addr: SocketAddr, bytes: &[u8], limit: Duration) -> Option<Vec<u8>> {
+    let mut s = TcpStream::connect(addr).ok()?;
+    s.set_read_timeout(Some(limit)).ok()?;
+    let _ = s.write_all(bytes);
+    let _ = s.shutdown(std::net::Shutdown::Write);
+    let mut out = Vec::new();
+    let _ = s.read_to_end(&mut out);
+    Some(out)
+}
+
+/// O processo de teste roda como root? (chmod não restringe root.)
+pub fn is_root() -> bool {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|t| {
+            t.lines()
+                .find(|l| l.starts_with("Uid:"))
+                .and_then(|l| l.split_whitespace().nth(1).map(|u| u == "0"))
+        })
+        .unwrap_or(false)
+}
+
+/// Espera `cond` ficar verdadeira (até `max`); devolve o valor final.
+pub fn wait_until(max: Duration, mut cond: impl FnMut() -> bool) -> bool {
+    let t0 = Instant::now();
+    while t0.elapsed() < max {
+        if cond() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    cond()
+}
+
+/// Nome de dispositivo reservado do Windows (com ou sem extensão) ou com ponto/espaço final.
+pub fn windows_unsafe_name(n: &str) -> bool {
+    let stem = n.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let dev = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.as_bytes()[3].is_ascii_digit());
+    dev || n.ends_with('.') || n.ends_with(' ')
+}
+
 pub fn pct(s: &str) -> String {
     let mut o = String::new();
     for b in s.bytes() {
