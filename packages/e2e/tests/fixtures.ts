@@ -51,12 +51,14 @@ function tauriBinary(): string {
 }
 
 /** Sobe outro devserver (testes de crash: matar o processo e reabrir o projeto noutro). */
-export async function launchDevserver(): Promise<{ url: string; child: ChildProcess }> {
+export async function launchDevserver(
+  env: Record<string, string> = {},
+): Promise<{ url: string; child: ChildProcess }> {
   const port = await freePort();
   const child = spawn(
     devserverBinary(),
     ["--port", String(port), "--static", join(ROOT, "apps/desktop/dist")],
-    { stdio: "ignore", cwd: ROOT },
+    { stdio: "ignore", cwd: ROOT, env: { ...process.env, ...env } },
   );
   const url = `http://127.0.0.1:${String(port)}`;
   for (let i = 0; i < 100; i++) {
