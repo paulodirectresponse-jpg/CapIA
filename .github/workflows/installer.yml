@@ -88,6 +88,9 @@ jobs:
             "SERVER_BIN=$PWD\target\release\capia-server.exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           } else { Write-Host 'crates/capia-server ausente nesta branch: placeholder documentado' }
 
+      - name: Núcleo da timeline em WASM (o front importa o .wasm gerado; ADR-070)
+        run: node tools/build-wasm.mjs
+
       - name: Front-end
         run: pnpm --filter @capia/desktop build
 
