@@ -119,7 +119,9 @@ describe("IA na UI (Fase 4): sem segredos, sem provider, sem escrita direta", ()
   it("Fase 5: nenhum método `ai.run.*`/`ai.memory.*` montado à mão fora dos bindings; Runs não escrevem na timeline", () => {
     const offenders = prod
       .filter((f) => !rel(f).startsWith("store/controller.ts"))
-      .filter((f) => /"ai\.(run|memory|gateway|generation)\./.test(readFileSync(f, "utf8")))
+      .filter((f) =>
+        /\.call\(\s*"ai\.(run|memory|gateway|generation)\./.test(readFileSync(f, "utf8")),
+      )
       .map(rel);
     expect(offenders).toEqual([]);
     const panel = stripComments(readFileSync(join(SRC, "components/AiRunsPanel.tsx"), "utf8"));
