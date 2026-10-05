@@ -54,6 +54,8 @@ pub struct Script {
     /// Nº do review (0, 1, …).
     pub critic: Box<dyn Fn(u32) -> Value + Send + Sync>,
     pub counts: Mutex<std::collections::BTreeMap<String, u32>>,
+    /// Todos os prompts enviados ao "modelo": `(sistema, usuário)`.
+    pub prompts: Mutex<Vec<(String, String)>>,
     /// Atraso (ms) entre os dois pedaços da resposta do Producer (para testar pausa/cancelamento).
     pub producer_delay_ms: std::sync::atomic::AtomicU64,
     /// Faz a primeira chamada do Producer falhar com 429 (retry/fallback).
@@ -73,6 +75,7 @@ impl Script {
             planner: Box::new(planner),
             critic: Box::new(critic),
             counts: Mutex::new(Default::default()),
+            prompts: Mutex::new(Vec::new()),
             producer_delay_ms: Default::default(),
             rate_limit_first_producer: Default::default(),
         })
@@ -106,6 +109,11 @@ pub fn brain_for(script: Arc<Script>) -> Arc<ReplayProvider> {
         "brain",
         Box::new(move |req, _n| {
             let sys = system_of(req);
+            script
+                .prompts
+                .lock()
+                .unwrap()
+                .push((sys.clone(), user_of(req)));
             if sys.starts_with("ROLE: producer") {
                 let n = script.bump("producer");
                 if n == 0 && script.rate_limit_first_producer.load(Ordering::SeqCst) {
