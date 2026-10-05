@@ -1,0 +1,40 @@
+[package]
+name = "capia-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Servidor local do CapIA (Fase 6): REST /v1, MCP e webhooks sobre a MESMA Engine API (capia-editor-api + capia-intelligence). Loopback por padrão, tokens com scopes, sem filesystem/shell arbitrário."
+
+[lints]
+workspace = true
+
+[lib]
+name = "capia_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "capia-server"
+path = "src/main.rs"
+
+[features]
+# cérebro Replay determinístico (E2E/CI) — NUNCA no build de produto (verificado por check-architecture)
+testkit = ["capia-intelligence/testkit"]
+
+[dependencies]
+capia-editor-api.workspace = true
+capia-intelligence.workspace = true
+capia-store.workspace = true
+capia-secrets.workspace = true
+capia-ai.workspace = true
+capia-commands.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+getrandom.workspace = true
+sha2 = "0.10"
+base64 = "0.22"
+jsonschema = { version = "0.30", default-features = false }
+tokio = { version = "1", default-features = false, features = ["rt", "time"] }
+
+[dev-dependencies]
+capia-server = { path = ".", features = ["testkit"] }

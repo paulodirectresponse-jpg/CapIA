@@ -806,7 +806,8 @@ impl ServerDb {
     // ---- eventos + entregas -----------------------------------------------------------------
 
     /// Registra um evento (idempotente por `event_id`) e enfileira, **na mesma transação**, uma
-    /// entrega por webhook habilitado que assina o tipo. Devolve `None` se o evento já existia.
+    /// entrega por webhook habilitado que assina o tipo (ou só para `only_webhook`, nos eventos de
+    /// teste). Devolve `None` se o evento já existia.
     #[allow(clippy::too_many_arguments)]
     pub fn event_append(
         &self,
@@ -817,6 +818,7 @@ impl ServerDb {
         run_id: Option<&str>,
         export_id: Option<&str>,
         data: &Value,
+        only_webhook: Option<&str>,
     ) -> StoreResult<Option<i64>> {
         let text = json_text(data)?;
         let mut conn = self.conn();
@@ -832,19 +834,19 @@ impl ServerDb {
         let seq = tx.last_insert_rowid();
         let hooks: Vec<WebhookRow> = {
             let mut st = tx.prepare(&format!(
-                "SELECT {WEBHOOK_COLS} FROM webhooks WHERE enabled = 1"
+                "SELECT {WEBHOOK_COLS} FROM webhooks WHERE enabled = 1 OR ?1 IS NOT NULL"
             ))?;
             let rows = st
-                .query_map([], webhook_of)?
+                .query_map(params![only_webhook], webhook_of)?
                 .collect::<Result<Vec<_>, _>>()?;
             rows.into_iter()
                 .map(finish_webhook)
                 .collect::<StoreResult<_>>()?
         };
-        for h in hooks
-            .iter()
-            .filter(|h| h.events.iter().any(|e| e == "*" || e == kind))
-        {
+        for h in hooks.iter().filter(|h| match only_webhook {
+            Some(w) => h.id == w,
+            None => h.events.iter().any(|e| e == "*" || e == kind),
+        }) {
             tx.execute(
                 "INSERT OR IGNORE INTO deliveries(webhook_id, event_seq, event_id, attempt, state, \
                  next_attempt_ms, created_ms, updated_ms) VALUES (?1,?2,?3,0,'pending',?4,?4,?4)",

@@ -140,14 +140,24 @@ fn an_event_enqueues_one_delivery_per_subscribed_webhook_and_is_idempotent() {
             Some("r"),
             None,
             &json!({"a":1}),
+            None,
         )
         .unwrap()
         .unwrap();
     // o mesmo event_id nunca vira evento novo
     assert!(
-        db.event_append("e1", "run.completed", 101, None, None, None, &json!({}))
-            .unwrap()
-            .is_none()
+        db.event_append(
+            "e1",
+            "run.completed",
+            101,
+            None,
+            None,
+            None,
+            &json!({}),
+            None
+        )
+        .unwrap()
+        .is_none()
     );
     let due = db.deliveries_claim_due(100, 10).unwrap();
     let mut hooks: Vec<_> = due.iter().map(|x| x.webhook_id.clone()).collect();
@@ -169,7 +179,7 @@ fn delivery_state_machine_persists_attempts_and_allows_redelivery() {
     let d = TempDir::new("serverdb");
     let db = open(d.path());
     db.webhook_insert(&hook("w", &["*"])).unwrap();
-    db.event_append("e", "run.failed", 5, None, None, None, &json!({}))
+    db.event_append("e", "run.failed", 5, None, None, None, &json!({}), None)
         .unwrap();
     let del = db.deliveries_claim_due(5, 1).unwrap().remove(0);
     db.delivery_finish(
@@ -309,4 +319,28 @@ fn child_writer_then_abort() {
     let db = ServerDb::open(std::path::Path::new(&p), Duration::from_secs(5)).unwrap();
     db.token_insert(&tok("t1", &hash('d'))).unwrap();
     std::process::abort();
+}
+
+#[test]
+fn a_test_event_is_delivered_only_to_the_target_webhook() {
+    let d = TempDir::new("serverdb-test-event");
+    let db = open(d.path());
+    db.webhook_insert(&hook("w1", &["*"])).unwrap();
+    let mut off = hook("w2", &["*"]);
+    off.enabled = false;
+    db.webhook_insert(&off).unwrap();
+    db.event_append(
+        "t1",
+        "webhook.test",
+        1,
+        None,
+        None,
+        None,
+        &json!({}),
+        Some("w2"),
+    )
+    .unwrap();
+    let due = db.deliveries_claim_due(10, 10).unwrap();
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].webhook_id, "w2");
 }

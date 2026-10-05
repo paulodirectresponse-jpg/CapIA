@@ -540,6 +540,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-server"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "capia-ai",
+ "capia-commands",
+ "capia-editor-api",
+ "capia-intelligence",
+ "capia-secrets",
+ "capia-server",
+ "capia-store",
+ "getrandom 0.4.3",
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "capia-store"
 version = "0.0.0"
 dependencies = [
