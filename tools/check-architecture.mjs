@@ -183,7 +183,8 @@ export const RUST_RULES = {
   },
   // Servidor HTTP local SÓ para desenvolvimento/E2E (não distribuído): adaptador fino da editor-api.
   "capia-devserver": {
-    workspace: ["capia-editor-api"],
+    // composition root: hospeda o serviço `ai.*` (cofre em memória; roteiros Replay só de E2E)
+    workspace: ["capia-editor-api", "capia-intelligence", "capia-secrets"],
     normal: ["serde_json"],
     build: [],
     dev: [],
@@ -205,7 +206,15 @@ export const RUST_RULES = {
     dev: [],
   },
   "capia-desktop": {
-    workspace: ["capia-project", "capia-editor-api", "capia-webview-surface"],
+    // composition root: hospeda `ai.*` (Credential Manager via capia-secrets); a IA nunca é
+    // dependência do editor — sem o serviço o shell funciona igual
+    workspace: [
+      "capia-project",
+      "capia-editor-api",
+      "capia-webview-surface",
+      "capia-intelligence",
+      "capia-secrets",
+    ],
     normal: ["tauri", "tauri-plugin-dialog", "serde_json"],
     build: ["tauri-build"],
     dev: [],

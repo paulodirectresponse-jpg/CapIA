@@ -15,4 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 capia-editor-api.workspace = true
+# Fase 4: roteia `ai.*` para o serviço de inteligência (roteiros Replay só aqui, no devserver de E2E)
+capia-intelligence = { workspace = true, features = ["testkit"] }
+capia-secrets.workspace = true
 serde_json.workspace = true

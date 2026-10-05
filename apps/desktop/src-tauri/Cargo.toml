@@ -26,5 +26,7 @@ tauri = { version = "2", features = [] }
 capia-project.workspace = true
 capia-editor-api.workspace = true
 capia-webview-surface.workspace = true
+capia-intelligence.workspace = true
+capia-secrets.workspace = true
 serde_json.workspace = true
 tauri-plugin-dialog = "2"

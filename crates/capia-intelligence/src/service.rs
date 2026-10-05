@@ -349,6 +349,39 @@ impl IntelligenceService {
         json!({ "task_id": id })
     }
 
+    /// Mesma entrada para os hospedeiros: erro vira `{code, message}` (já redigido).
+    pub fn call_json(&self, method: &str, params: Value) -> Result<Value, Value> {
+        self.call(method, params)
+            .map_err(|e| json!({"code": e.code, "message": e.message}))
+    }
+
+    /// Acrescenta os eventos de IA ao `events.poll` do editor: a UI mantém **um** laço de poll.
+    pub fn merge_events(&self, reply: &mut Value) {
+        let extra = self.poll_events();
+        if extra.is_empty() {
+            return;
+        }
+        if let Some(arr) = reply.get_mut("events").and_then(Value::as_array_mut) {
+            arr.extend(extra);
+        }
+    }
+
+    /// DEV/E2E: carrega roteiros Replay (`{"<provider_id>": [ReplayResponse…]}`) e os registra. O
+    /// produto não chama isto: sem roteiro, um provider `replay` falha com `NOT_CONFIGURED`.
+    #[cfg(feature = "testkit")]
+    pub fn load_replay_scripts(&self, scripts: &Value) -> IntelResult<usize> {
+        use capia_ai::providers::replay::{ReplayProvider, ReplayResponse};
+        let obj = scripts
+            .as_object()
+            .ok_or_else(|| bad("expected an object"))?;
+        for (id, v) in obj {
+            let script: Vec<ReplayResponse> = parse(v.clone())?;
+            self.ai
+                .register_replay(id, Arc::new(ReplayProvider::scripted(id.clone(), script)));
+        }
+        Ok(obj.len())
+    }
+
     /// Ponto único de entrada síncrono (retorna rápido; o trabalho pesado roda em segundo plano).
     pub fn call(&self, method: &str, p: Value) -> IntelResult<Value> {
         match method {

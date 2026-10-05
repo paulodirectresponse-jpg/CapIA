@@ -6,10 +6,13 @@
 //! método desconhecido devolve `UNKNOWN_METHOD`; não há `eval`, shell nem acesso amplo a arquivos.
 
 use capia_editor_api::{Outcome, Reply, Session, SessionConfig};
+use capia_intelligence::{IntelligenceService, ServiceConfig, SessionEngine};
 use capia_project::EngineInfo;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 
 /// Comando IPC legado do scaffold (contrato em `@capia/engine-bindings`).
 #[tauri::command]
@@ -36,6 +39,31 @@ type Held = ();
 #[cfg(windows)]
 fn held_region(h: &Held) -> &capia_webview_surface::FrameRegion {
     h.region()
+}
+
+/// Serviço `ai.*` da Fase 4. Opcional por desenho: o editor funciona igual sem ele.
+#[derive(Debug)]
+pub struct AiState {
+    svc: Arc<IntelligenceService>,
+}
+
+impl AiState {
+    /// Credenciais: Credential Manager do Windows; sem cofre seguro, memória (não persiste — o
+    /// usuário recadastra a chave; a UI mostra o backend em uso). Registry: AppDb do app.
+    pub fn new(session: Arc<Mutex<Session>>, appdb: Option<PathBuf>) -> Result<Self, String> {
+        let secrets: Arc<dyn capia_secrets::SecretStore> = capia_secrets::platform_store()
+            .unwrap_or_else(|_| Arc::new(capia_secrets::MemoryStore::new()));
+        let engine = Arc::new(SessionEngine::new(session));
+        let svc = IntelligenceService::new(
+            engine,
+            ServiceConfig {
+                appdb_path: appdb,
+                secrets,
+            },
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(Self { svc: Arc::new(svc) })
+    }
 }
 
 impl EditorState {
@@ -66,6 +94,31 @@ fn run_call(session: &Mutex<Session>, method: &str, params: Value) -> Result<Rep
         Outcome::Done(r) => Ok(r),
         Outcome::Later(job) => job.run().map_err(|e| e.to_json()),
     }
+}
+
+/// Como [`call_json`], roteando `ai.*` ao serviço de inteligência e acrescentando os eventos de IA
+/// ao `events.poll` (a UI mantém um único laço de poll). Sem serviço, `ai.*` é `UNKNOWN_METHOD`.
+pub fn call_json_ai(
+    session: &Mutex<Session>,
+    ai: Option<&IntelligenceService>,
+    method: &str,
+    params: Value,
+) -> Result<Value, Value> {
+    if IntelligenceService::handles(method) {
+        return match ai {
+            Some(svc) => svc.call_json(method, params),
+            None => {
+                Err(json!({"code": "UNKNOWN_METHOD", "message": "AI service is not available"}))
+            }
+        };
+    }
+    let mut v = call_json(session, method, params)?;
+    if method == "events.poll"
+        && let Some(svc) = ai
+    {
+        svc.merge_events(&mut v);
+    }
+    Ok(v)
 }
 
 /// Resposta JSON; um método que devolve bytes deve usar `editor_call_binary`.
@@ -110,12 +163,19 @@ pub fn call_binary(
 #[tauri::command]
 async fn editor_call(
     state: tauri::State<'_, EditorState>,
+    ai: tauri::State<'_, AiState>,
     method: String,
     params: Option<Value>,
 ) -> Result<Value, Value> {
     let session = Arc::clone(&state.session);
+    let svc = Arc::clone(&ai.svc);
     tauri::async_runtime::spawn_blocking(move || {
-        call_json(&session, &method, params.unwrap_or_else(|| json!({})))
+        call_json_ai(
+            &session,
+            Some(&svc),
+            &method,
+            params.unwrap_or_else(|| json!({})),
+        )
     })
     .await
     .map_err(|e| json!({"code": "JOIN", "message": e.to_string()}))?
@@ -236,6 +296,20 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(EditorState::default())
+        .setup(|app| {
+            // dados do app (registry/perfis; nunca segredos) ficam no diretório de dados do usuário
+            let appdb = app
+                .path()
+                .app_data_dir()
+                .ok()
+                .map(|d| d.join("capia-app.db"));
+            let session = Arc::clone(&app.state::<EditorState>().session);
+            let state = AiState::new(Arc::clone(&session), appdb)
+                .or_else(|_| AiState::new(session, None))
+                .map_err(|e| format!("could not start the AI service: {e}"))?;
+            app.manage(state);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_engine_info,
             editor_call,
@@ -267,6 +341,26 @@ mod tests {
         let v = call_json(&s, "engine.info", json!({})).unwrap();
         assert!(v.get("media_available").is_some());
         let e = call_json(&s, "shell.exec", json!({"cmd": "calc"})).unwrap_err();
+        assert_eq!(e["code"], "UNKNOWN_METHOD");
+    }
+
+    #[test]
+    fn ai_methods_are_routed_to_the_service_and_absent_without_it() {
+        let s = Arc::new(session());
+        // sem serviço: a IA não existe, o editor segue igual
+        let e = call_json_ai(&s, None, "ai.status", json!({})).unwrap_err();
+        assert_eq!(e["code"], "UNKNOWN_METHOD");
+        assert!(call_json_ai(&s, None, "engine.info", json!({})).is_ok());
+        // com serviço (cofre em memória): `ai.status` responde e nunca traz segredo
+        let ai = AiState::new(Arc::clone(&s), None).unwrap();
+        let st = call_json_ai(&s, Some(&ai.svc), "ai.status", json!({})).unwrap();
+        assert_eq!(st["any_usable_model"], false);
+        assert!(st["providers"].as_array().unwrap().is_empty());
+        // eventos de IA entram no `events.poll` do editor (um único laço)
+        let ev = call_json_ai(&s, Some(&ai.svc), "events.poll", json!({})).unwrap();
+        assert!(ev["events"].is_array());
+        // método inexistente do namespace ai.* é erro estruturado
+        let e = call_json_ai(&s, Some(&ai.svc), "ai.shell", json!({})).unwrap_err();
         assert_eq!(e["code"], "UNKNOWN_METHOD");
     }
 

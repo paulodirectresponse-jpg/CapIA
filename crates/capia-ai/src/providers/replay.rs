@@ -10,6 +10,7 @@ use crate::stt::{SttRequest, Transcript};
 use crate::types::{ChatEvent, ChatRequest, ChatStream, FinishReason, Usage};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -88,6 +89,48 @@ pub fn stt_digest(req: &SttRequest) -> String {
         "model": req.model, "audio_sha256": audio, "language": req.language, "words": req.word_timestamps,
     });
     crate::types::hex(&Sha256::digest(canon.to_string().as_bytes()))
+}
+
+/// Placeholder aceito em argumentos de tool de um roteiro: vira o `plan_token` mais recente que o
+/// modelo "viu" num resultado de tool (permite roteiros estáticos de `preview → apply_plan`).
+pub const PLACEHOLDER_PLAN_TOKEN: &str = "$LAST_PLAN_TOKEN";
+
+fn last_plan_token(req: &ChatRequest) -> Option<String> {
+    req.messages.iter().rev().find_map(|m| {
+        m.parts.iter().rev().find_map(|p| match p {
+            crate::types::Part::ToolResult { content, .. } => {
+                serde_json::from_str::<Value>(content)
+                    .ok()
+                    .and_then(|v| v["plan_token"].as_str().map(str::to_owned))
+            }
+            _ => None,
+        })
+    })
+}
+
+fn substitute_placeholders(resp: &mut ReplayResponse, req: &ChatRequest) {
+    let ReplayResponse::Chat { events, .. } = resp else {
+        return;
+    };
+    let token = last_plan_token(req);
+    for e in events {
+        if let ChatEvent::ToolCall { arguments, .. } = e {
+            substitute_in(arguments, token.as_deref());
+        }
+    }
+}
+
+fn substitute_in(v: &mut Value, token: Option<&str>) {
+    match v {
+        Value::String(s) if s == PLACEHOLDER_PLAN_TOKEN => {
+            if let Some(t) = token {
+                t.clone_into(s);
+            }
+        }
+        Value::Array(a) => a.iter_mut().for_each(|x| substitute_in(x, token)),
+        Value::Object(o) => o.values_mut().for_each(|x| substitute_in(x, token)),
+        _ => {}
+    }
 }
 
 /// Respondedor programático (testes): vê o pedido e o nº da chamada (0, 1, …).
@@ -265,7 +308,7 @@ impl ModelProvider for ReplayProvider {
         if let Ok(mut r) = self.requests.lock() {
             r.push(req.clone());
         }
-        let resp = if let Mode::Responder(f) = &self.mode {
+        let mut resp = if let Mode::Responder(f) = &self.mode {
             let n = {
                 let mut c = self.calls.lock().map_err(|_| {
                     ProviderError::new(ErrorCode::ProviderUnavailable, "replay poisoned")
@@ -278,6 +321,7 @@ impl ModelProvider for ReplayProvider {
         } else {
             self.next(&req.digest())?
         };
+        substitute_placeholders(&mut resp, req);
         match resp {
             ReplayResponse::Chat {
                 mut events,

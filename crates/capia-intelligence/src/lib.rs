@@ -25,3 +25,4 @@ pub mod transcript;
 pub use ctx::IntelCtx;
 pub use engine::{Engine, SessionEngine};
 pub use error::{IntelError, IntelResult};
+pub use service::{IntelligenceService, ServiceConfig};

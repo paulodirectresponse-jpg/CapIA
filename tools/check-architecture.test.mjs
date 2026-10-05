@@ -82,7 +82,12 @@ const base = () => [
     ["serde"],
     ["serde_json"],
   ]),
-  pkg("capia-devserver", [["capia-editor-api"], ["serde_json"]]),
+  pkg("capia-devserver", [
+    ["capia-editor-api"],
+    ["capia-intelligence"],
+    ["capia-secrets"],
+    ["serde_json"],
+  ]),
   pkg("capia-timeline-wasm", [
     ["capia-time"],
     ["capia-model"],
@@ -95,6 +100,8 @@ const base = () => [
     ["capia-project"],
     ["capia-editor-api"],
     ["capia-webview-surface"],
+    ["capia-intelligence"],
+    ["capia-secrets"],
     ["tauri"],
     ["tauri-plugin-dialog"],
     ["serde_json"],

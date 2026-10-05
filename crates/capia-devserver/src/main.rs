@@ -13,6 +13,7 @@
 //! Uso: `capia-devserver [--port 5199] [--static apps/desktop/dist]`.
 
 use capia_editor_api::{Outcome, Reply, Session, SessionConfig};
+use capia_intelligence::{IntelligenceService, SessionEngine};
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -187,7 +188,14 @@ fn static_path(root: &Path, url: &str) -> Option<PathBuf> {
     Some(out)
 }
 
-fn api(session: &Mutex<Session>, token: Option<&str>, method: &str, req: &Req) -> Resp {
+/// Estado do servidor: a sessão do editor e o serviço `ai.*` (ligados ao MESMO projeto).
+struct App {
+    session: Arc<Mutex<Session>>,
+    ai: IntelligenceService,
+}
+
+fn api(app: &App, token: Option<&str>, method: &str, req: &Req) -> Resp {
+    let session = &app.session;
     if let Some(t) = token
         && !req
             .headers
@@ -215,6 +223,13 @@ fn api(session: &Mutex<Session>, token: Option<&str>, method: &str, req: &Req) -
             }
         }
     };
+    // `ai.*` vai ao serviço de inteligência (credenciais write-only; nada de segredo na resposta)
+    if IntelligenceService::handles(method) {
+        return match app.ai.call_json(method, params) {
+            Ok(v) => Resp::json(200, &v),
+            Err(e) => Resp::json(422, &e),
+        };
+    }
     let t_start = Instant::now();
     // fase 1 sob o lock; o trabalho pesado (quadros) roda fora dele: comandos não esperam render
     let begun = match session.lock() {
@@ -235,7 +250,12 @@ fn api(session: &Mutex<Session>, token: Option<&str>, method: &str, req: &Req) -
     // `lock+begin` = tempo sob o lock da sessão; `total` inclui o trabalho fora dele (quadros)
     let timing = format!("lock+begin;dur={locked_ms:.2}, total;dur={total_ms:.2}");
     match result {
-        Ok(Reply::Json(v)) => Resp::json(200, &v).with("Server-Timing", &timing),
+        Ok(Reply::Json(mut v)) => {
+            if method == "events.poll" {
+                app.ai.merge_events(&mut v);
+            }
+            Resp::json(200, &v).with("Server-Timing", &timing)
+        }
         Ok(Reply::Binary { mime, bytes, meta }) => Resp::new(200, mime, bytes)
             .with("X-Capia-Meta", &meta.to_string())
             .with(
@@ -247,9 +267,9 @@ fn api(session: &Mutex<Session>, token: Option<&str>, method: &str, req: &Req) -
     }
 }
 
-fn route(session: &Mutex<Session>, root: &Path, token: Option<&str>, req: &Req) -> Resp {
+fn route(app: &App, root: &Path, token: Option<&str>, req: &Req) -> Resp {
     if let Some(method) = req.url.strip_prefix("/api/") {
-        return api(session, token, method, req);
+        return api(app, token, method, req);
     }
     if req.method != "GET" {
         return Resp::text(405, "method not allowed");
@@ -264,7 +284,7 @@ fn route(session: &Mutex<Session>, root: &Path, token: Option<&str>, req: &Req) 
     }
 }
 
-fn serve(stream: TcpStream, session: &Mutex<Session>, root: &Path, token: Option<&str>) {
+fn serve(stream: TcpStream, app: &App, root: &Path, token: Option<&str>) {
     let _ = stream.set_nodelay(true);
     let _ = stream.set_read_timeout(Some(Duration::from_secs(60)));
     let Ok(write_half) = stream.try_clone() else {
@@ -273,7 +293,7 @@ fn serve(stream: TcpStream, session: &Mutex<Session>, root: &Path, token: Option
     let mut write_half = write_half;
     let mut reader = BufReader::new(stream);
     while let Some(req) = read_req(&mut reader) {
-        let resp = route(session, root, token, &req);
+        let resp = route(app, root, token, &req);
         if write_response(&mut write_half, &resp, req.keep_alive).is_err() || !req.keep_alive {
             return;
         }
@@ -309,13 +329,34 @@ fn main() {
         root.display()
     );
     let session = Arc::new(Mutex::new(Session::new(SessionConfig::default())));
+    // devserver = dev/E2E: cofre em memória (nada vai ao Credential Manager) e registry sem AppDb
+    let ai = IntelligenceService::new(
+        Arc::new(SessionEngine::new(Arc::clone(&session))),
+        capia_intelligence::service::ServiceConfig {
+            appdb_path: std::env::var_os("CAPIA_AI_APPDB").map(PathBuf::from),
+            secrets: Arc::new(capia_secrets::MemoryStore::new()),
+        },
+    )
+    .expect("failed to start the intelligence service");
+    if let Some(p) = std::env::var_os("CAPIA_AI_REPLAY_SCRIPT") {
+        // roteiros Replay para E2E sem rede/credenciais (nunca no produto)
+        let scripts: Value = std::fs::read_to_string(&p)
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_else(|| {
+                eprintln!("CAPIA_AI_REPLAY_SCRIPT is not readable JSON");
+                std::process::exit(2);
+            });
+        ai.load_replay_scripts(&scripts).expect("replay scripts");
+    }
+    let app = Arc::new(App { session, ai });
     let root = Arc::new(root);
     let token = Arc::new(token);
     // uma thread por conexão (127.0.0.1, uso de dev/E2E): um quadro em render não bloqueia o resto
     for stream in listener.incoming().flatten() {
-        let (session, root, token) = (Arc::clone(&session), Arc::clone(&root), Arc::clone(&token));
+        let (app, root, token) = (Arc::clone(&app), Arc::clone(&root), Arc::clone(&token));
         std::thread::spawn(move || {
-            serve(stream, &session, &root, token.as_deref());
+            serve(stream, &app, &root, token.as_deref());
         });
     }
 }

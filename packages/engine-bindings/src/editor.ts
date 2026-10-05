@@ -240,6 +240,13 @@ export type CommandBody = { type: string } & Record<string, unknown>;
 
 export type EditorEvent =
   | { kind: "document_changed"; change: ChangeSet }
+  /** Evento de uma tarefa de IA (progresso, texto em streaming, aprovação, fim). */
+  | {
+      kind: "ai_task";
+      task_id: string;
+      phase: string;
+      data: Record<string, unknown>;
+    }
   /** O documento mudou por um comando (de qualquer cliente): quem estiver defasado ressincroniza. */
   | { kind: "revision_changed"; revision: number }
   | { kind: "assets_changed"; assets: AssetRow[] }

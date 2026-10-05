@@ -401,7 +401,9 @@ name = "capia-desktop"
 version = "0.0.0"
 dependencies = [
  "capia-editor-api",
+ "capia-intelligence",
  "capia-project",
+ "capia-secrets",
  "capia-webview-surface",
  "serde_json",
  "tauri",
@@ -414,6 +416,8 @@ name = "capia-devserver"
 version = "0.0.0"
 dependencies = [
  "capia-editor-api",
+ "capia-intelligence",
+ "capia-secrets",
  "serde_json",
 ]
 
