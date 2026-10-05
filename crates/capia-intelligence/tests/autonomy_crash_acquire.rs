@@ -56,7 +56,10 @@ async fn crash_then_finish(a: &AutoWorld, run_id: &str, point: &str) {
     failpoint::arm(point);
     a.orch.start(run_id).unwrap();
     let t0 = std::time::Instant::now();
-    while a.orch.is_driving(run_id) || a.orch.load(run_id).unwrap().status == RunStatus::Pending {
+    while a.orch.is_driving(run_id)
+        || failpoint::is_armed(point)
+        || a.orch.load(run_id).unwrap().status == RunStatus::Pending
+    {
         assert!(t0.elapsed().as_secs() < 90, "no crash at {point}");
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }

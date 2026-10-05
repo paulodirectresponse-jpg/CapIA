@@ -20,6 +20,11 @@ mod imp {
         }
     }
 
+    /// O ponto ainda está armado (não disparou).
+    pub fn is_armed(name: &str) -> bool {
+        ARMED.lock().is_ok_and(|a| a.contains(name))
+    }
+
     pub fn disarm_all() {
         if let Ok(mut a) = ARMED.lock() {
             a.clear();
@@ -51,7 +56,7 @@ mod imp {
 }
 
 #[cfg(feature = "failpoints")]
-pub use imp::{arm, disarm_all, hit};
+pub use imp::{arm, disarm_all, hit, is_armed};
 
 /// `fp!("nome")?` — devolve `Err(FAILPOINT)` se o ponto estiver armado em processo; aborta/estaciona
 /// se for o ponto do ambiente; no-op sem a feature.

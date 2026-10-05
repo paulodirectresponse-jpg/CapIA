@@ -194,6 +194,7 @@ pub struct SpyEngine {
     pub previews: AtomicU32,
     pub applies: AtomicU32,
     /// Gancho chamado ANTES de cada preview com o nº dele (simula edição manual no meio da Run).
+    #[allow(clippy::type_complexity)]
     pub on_preview: Mutex<Option<Box<dyn Fn(u32) + Send + Sync>>>,
 }
 

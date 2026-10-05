@@ -33,9 +33,9 @@ fn shape(a: &AutoWorld, seq: &str) -> Value {
     json!(clips)
 }
 
-async fn wait_stopped(a: &AutoWorld, id: &str) {
+async fn wait_stopped(a: &AutoWorld, id: &str, point: &str) {
     let t0 = std::time::Instant::now();
-    while a.orch.is_driving(id) {
+    while a.orch.is_driving(id) || failpoint::is_armed(point) {
         assert!(t0.elapsed().as_secs() < 60, "the driver never stopped");
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
@@ -71,7 +71,9 @@ async fn crash_loop(a: &AutoWorld, run_id: &str, point: &str, max_rounds: usize)
         let t0 = std::time::Instant::now();
         loop {
             let r = orch.load(run_id).unwrap();
-            let stopped = !orch.is_driving(run_id);
+            // parou = o ponto disparou (ou a Run chegou a um repouso) E nenhum driver está vivo
+            let at_rest = !matches!(r.status, RunStatus::Running | RunStatus::Pending);
+            let stopped = !orch.is_driving(run_id) && (!failpoint::is_armed(point) || at_rest);
             if stopped {
                 if r.status == RunStatus::Running {
                     crashes += 1; // o driver morreu no ponto: Run ainda "running" no disco
@@ -277,7 +279,7 @@ async fn repeated_recover_and_resume_calls_are_idempotent() {
     let run = a.create(a.inputs(), auto_policy());
     failpoint::arm("autonomy_edit_after_apply");
     a.orch.start(&run.id).unwrap();
-    wait_stopped(&a, &run.id).await;
+    wait_stopped(&a, &run.id, "autonomy_edit_after_apply").await;
     failpoint::disarm_all();
     let o2 = a.restart();
     // várias recuperações seguidas não mudam nada além da primeira
