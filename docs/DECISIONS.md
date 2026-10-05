@@ -647,7 +647,7 @@ Proposta: Windows 10 22H2+ e Windows 11, x64 (ARM64 depois); GPU com D3D12 (feat
 
 ---
 
-## Fase 5 — Autonomia (ADR-087 … ADR-101)
+## Fase 5 — Autonomia (ADR-087 … ADR-119)
 
 > Estado geral: engenharia em integração (ver `docs/STATUS.md`). Especificações-fonte em `docs/phase5/`. Nenhuma ADR abaixo declara aceitação humana, uso de provider real ou CI verde.
 
@@ -755,3 +755,293 @@ Proposta: Windows 10 22H2+ e Windows 11, x64 (ARM64 depois); GPU com D3D12 (feat
 **Alternativas:** feature padrão com env (arriscado: o binário de produto carregaria o cérebro); pular o teste no Windows (lacuna de cobertura real); expor um provider de teste via IPC (superfície de ataque).
 **Consequências:** o binário do E2E difere do de produto só por essa feature; bugs achados pelo E2E: `AppDb` reaberto depois de kill era recusado como "arquivo alheio" (cabeçalho defasado, dados só no `-wal`) — corrigido em `AppDb::open` com teste de regressão.
 **Evidência:** `packages/e2e/tests/autonomy.spec.ts`, `tools/check-architecture.test.mjs`, `capia-store/tests/intelligence_store.rs::an_app_db_left_by_a_killed_process_reopens_with_its_data`, `autonomy_service.rs::the_demo_brain_exercises_review_correct_and_two_variants_with_selective_undo`.
+
+## Fase 6 — Integração e finalização (ADR-102 … ADR-119)
+> Consolidado das trilhas A–E da Fase 6 (rascunhos originais em `docs/phase6/adr-drafts/`). Estado: **Accepted (Fase 6, engenharia)**; gates externos (certificado real, máquinas limpas físicas, beta humano, decisão jurídica de H.264/AAC, pentest independente) permanecem abertos.
+
+### ADR-102 — `capia-server` é um host headless da MESMA Engine API; catálogo único de operações
+**Estado:** Accepted (Fase 6).
+**Decisão.** O crate `capia-server` hospeda `capia-editor-api::Session` + `capia-intelligence` (os
+mesmos objetos que a UI usa). Toda operação externa é uma entrada do **catálogo**
+(`src/catalog.rs`): nome, scope, mutante?, classe de rate limit, rota REST, schema JSON. REST, MCP,
+OpenAPI, matriz de scopes e documentação derivam dele; um único pipeline (`Core::call`) executa
+autenticação → scope → schema → rate limit → gate de projeto/shutdown → idempotência → handler →
+auditoria. Não existe rota/tool fora do catálogo (testes de arquitetura do catálogo garantem: scope
+em tudo exceto `server.health`, rotas únicas, GET nunca muta, nenhum parâmetro de caminho/segredo,
+nenhum nome perigoso).
+
+**Alternativas.** (a) Rotas escritas à mão por transporte — rejeitado: divergência REST×MCP é o
+risco central; (b) framework HTTP (axum/hyper) — rejeitado por ora: superfície de dependência e
+controle fino de limites (HTTP/1.1 mínimo e endurecido em `std::net`, como o devserver).
+
+**Consequências.** Paridade UI↔REST↔MCP é por construção. Mudar uma operação = mudar o catálogo.
+
+### ADR-103 — Escrita externa só por `preview → apply_plan` com `Actor::Api` por token
+**Estado:** Accepted (Fase 6).
+`commands.preview`/`commands.apply` usam `Session::agent_preview/agent_apply` (só Rust) com
+`Actor::Api("token:<id>")`: o plan token HMAC do engine é preso ao ator, então outro token não
+aplica o plano de quem fez o preview. Concorrência otimista: `expected_revision` → 409
+`REVISION_CONFLICT`; plano velho → 409 `PLAN_STATE_CHANGED`. Gravações internas da sessão do
+servidor (import de mídia finalizado no `pump`) usam o ator `System("capia-server")`. **Fora do
+catálogo de propósito** (privilégio ≤ UI e regra "a IA só propõe"): undo/undo seletivo, aprovação de
+memória (User/Client), configuração de providers/credenciais/gateway/geração, qualquer caminho de
+arquivo do cliente. `ai.run.decide` aceita `decided_by` (`api:<token>`) para a trilha de auditoria
+das aprovações; a UI continua gravando `user`.
+
+### ADR-104 — Tokens, scopes, rotação
+**Estado:** Accepted (Fase 6).
+Token `capia_<64 hex>` (256 bits do SO), mostrado uma única vez; o banco guarda só o SHA-256
+(índice único). Revogação, expiração e rotação atômica (novo + revoga antigo na mesma transação).
+Sem escalada: um token só concede (create) ou rotaciona tokens cujos scopes ele possui.
+`Authorization` inválido/revogado/expirado → a mesma resposta 401 (sem oráculo). O segredo é
+registrado no redator global do processo (nunca sai em log/erro). Scopes: `project:read|write`,
+`media:read|write`, `run:read|start|approve`, `export:read|start`, `webhook:manage`,
+`admin:tokens`; `run:approve` é separado de `run:start` (menor privilégio).
+
+### ADR-105 — Idempotência e auditoria de toda escrita externa
+**Estado:** Accepted (Fase 6).
+`Idempotency-Key` (REST) / `idempotency_key` (MCP) por (token, chave): replay devolve o mesmo
+resultado semântico (cabeçalho `Idempotent-Replay`); mesma chave com pedido diferente → 422
+`IDEMPOTENCY_KEY_REUSED`; em andamento → 409; `pending` deixado por processo que caiu →
+`IDEMPOTENCY_INDETERMINATE` (o cliente verifica o estado e usa outra chave — nunca executa duas
+vezes). Respostas com segredo único (tokens/webhooks) nunca entram na tabela de idempotência: o
+replay vem sem o segredo (`secret_unavailable_on_replay`). Auditoria (`audit`): toda escrita e toda
+recusa/erro com token, superfície, operação, revisões antes/depois e chave; leituras bem-sucedidas
+não escrevem no banco; o log é aparado (100 mil entradas).
+
+### ADR-106 — Um projeto aberto por vez; troca exclui chamadas em voo
+**Estado:** Accepted (Fase 6).
+O engine hospeda um projeto por sessão. Rotas `/v1/projects/{id}/…` exigem esse projeto aberto
+(409 `PROJECT_NOT_OPEN`). `projects.create/open/close` só com Runs/exports ociosos (409
+`PROJECT_BUSY`) e sob um `RwLock`: uma chamada validada para P1 nunca roda contra P2 (sem TOCTOU).
+Projetos moram em `<data>/projects/<id>/project.capia`; **nenhum caminho do cliente** entra na API.
+
+### ADR-107 — Uploads: streaming para staging, sniff, mídia durável, nada de caminhos na resposta
+**Estado:** Accepted (Fase 6).
+`POST /v1/uploads` (Content-Length obrigatório; sem `Transfer-Encoding`): hash durante a escrita,
+teto por tipo/tamanho/cota/tempo/concorrência, *sniff* por bytes (nunca nome/MIME do cliente),
+`*.part` → `rename` atômico, idempotente por conteúdo (token+hash+nome). Importar move a mídia do
+staging para `<projeto>/media/<upload_id>/` (durável) e entra pelo sistema de assets (hash + probe +
+catálogo na mesma transação). Documentos de uma Run são resolvidos pelo servidor a partir do
+`upload_id`. Respostas nunca carregam caminhos do servidor (exceto o `path` de um export, que está
+sob a raiz de saída escolhida pelo servidor).
+
+### ADR-108 — Transporte: loopback, Host, CORS, limites, backpressure
+**Estado:** Accepted (Fase 6).
+Padrão loopback. Bind remoto exige `--allow-remote` **e** `--remote-tls-terminated-by-proxy` (nunca
+token em texto claro por padrão; sem TLS nativo — proxy reverso documentado). `Host` só do próprio
+servidor (421; anti DNS-rebinding). CORS fechado: qualquer `Origin` não listado → 403 (CSRF de
+navegador); `*` proibido. Limites: linha 8 KiB, cabeçalhos 32 KiB/64, JSON 1 MiB e profundidade 32,
+prazo de 10 s para o cabeçalho (slowloris), pool de workers fixo + fila finita (503 `OVERLOADED`,
+nunca thread por conexão), SSE com teto. Shutdown gracioso: recusa escrita (503), pausa Runs
+(retomáveis), espera o que está em voo, fecha o projeto.
+
+### ADR-109 — Segredos de webhook no cofre; sem cofre ⇒ memória
+**Estado:** Accepted (Fase 6).
+O segredo de assinatura de um webhook fica só no `SecretStore` (Credential Manager no Windows). Sem
+cofre do SO (Linux/CI) o armazenamento é em memória (nunca arquivo em claro): após reinício as
+entregas do webhook ficam `dead` com `SECRET_UNAVAILABLE` até `webhooks.rotate_secret`, que as
+reenfileira.
+
+### ADR-110 — MCP é um adaptador fino sobre `Core::call`
+**Estado:** Accepted (Fase 6).
+**Status:** proposto. **Contexto:** a Fase 6 precisa expor a Engine API a agentes externos (MCP) sem criar um segundo
+backend nem dar mais poder que a UI. **Decisão:** o MCP (`capia-server/src/mcp.rs`) só traduz JSON-RPC 2.0
+(revisão `2025-06-18`, tolerando `2025-03-26`/`2024-11-05`) para `Core::call` com `surface:"mcp"`. Tools = operações do
+catálogo com `surface == Both` (nome `runs_create`); `idempotency_key` é argumento extra só nas mutantes e vira
+`CallCtx.idempotency_key` (tabela de idempotência compartilhada com a REST); resources `capia://…` são leituras que
+passam pelas mesmas operações. Erro de operação = `isError:true` com envelope estruturado; erro JSON-RPC só para forma
+do pedido. Sem `Principal` não há resposta (nenhuma confiança implícita; stdio revalida o token a cada mensagem).
+Notificações nunca executam tools. **Alternativas rejeitadas:** (a) MCP com handlers próprios (divergência de
+escopo/idempotência/auditoria — viola "um pipeline"); (b) `tools/list` filtrada por escopo (esconde a superfície sem
+ganho de segurança e quebra paridade com o catálogo); (c) resources que abrem projetos (leitura com efeito colateral).
+**Consequências:** paridade por construção (testada: direto × REST × MCP), mesmo audit com `surface`, mesmas
+limitações de uploads (inline limitado pelo teto de JSON). Promoção de memória e undo seguem fora do catálogo.
+
+### ADR-111 — Webhooks: entrega at-least-once, HMAC v1, revalidação a cada tentativa
+**Estado:** Accepted (Fase 6).
+**Status:** proposto. **Decisão:** o despachante lê `events`/`deliveries` (preenchidas na mesma transação pela
+bomba), nunca é chamado pelo caminho de conclusão de Run/export e entrega em tarefas concorrentes (≤ 32 em voo).
+Assinatura `X-CapIA-Signature: v1=HMAC-SHA256(segredo, "<ts>.<corpo cru>")` com `X-CapIA-Timestamp`, janela de replay de
+300 s, `Event-Id`/`Delivery` estáveis entre tentativas e dedupe do lado do receptor. 2xx entrega; 3xx e 4xx
+(exceto 408/425/429) matam na hora; o resto tem backoff exponencial com jitter ±20% e dead-letter após
+`webhook_max_attempts`; `dead` é reabrível por endpoint. A URL é revalidada a cada tentativa (política + resolvedor
+filtrado), o corpo da resposta nunca é lido, o segredo só existe no `SecretStore` (indisponível ⇒ `dead
+SECRET_UNAVAILABLE`, reenfileirado pela rotação). **Alternativas rejeitadas:** exactly-once (impossível sem
+cooperação do receptor); seguir redirects (vazaria a assinatura/corpo a outro host); fila única sequencial (um endpoint
+lento atrasaria todos); guardar o segredo no banco. **Consequências:** receptores precisam deduplicar por `Event-Id`;
+reiniciar sem cofre do SO exige rotação do segredo; um 3xx é tratado como erro permanente de configuração.
+
+### ADR-112 — Fonte única da versão do app
+**Estado:** Accepted (Fase 6).
+**Contexto:** versão `0.0.0` espalhada (Cargo, 7 `package.json`, `tauri.conf.json`, fixture do contrato `engine_info`).
+**Decisão:** `[workspace.package] version` do `Cargo.toml` é a única fonte (`0.6.0-rc.1`). `tools/release/check-version.mjs` (`pnpm check:version`, no CI do instalador e no release) falha se `tauri.conf.json`, qualquer `package.json`, a fixture, as dependências de caminho do workspace ou um crate com versão fixa divergirem. Em runtime tudo deriva de `CARGO_PKG_VERSION` (`engine_info`, `BuildInfo`, `--version`, diagnóstico, servidor).
+**Alternativas:** gerar os JSON a partir do Cargo (rejeitada: esconde divergência e quebra o editor de texto); versão por pacote (rejeitada: sem sentido para um produto único).
+**Consequências:** todo bump toca ~15 arquivos (o verificador lista); pré-release `-rc.N` é válida no NSIS (WiX não aceitaria; não usamos).
+
+### ADR-113 — Instalador NSIS por usuário
+**Estado:** Accepted (Fase 6).
+**Decisão:** NSIS via Tauri, `installMode: currentUser` (sem UAC; `%LOCALAPPDATA%\Programs\CapIA`; atualização sem elevação, pré-requisito do updater silencioso). Config do instalador **gerada** (`stage-bundle.mjs`) e mesclada por `--config`; `tauri.conf.json` segue com `bundle.active=false`. WebView2: `embedBootstrapper` por padrão em release (offline opcional). FFmpeg LGPL e (quando houver) `capia-server` como recursos/sidecar sob `<instalação>\ffmpeg\` (onde `MediaToolchain` já procura). Desinstalador **nunca** apaga projetos: projetos nunca vivem no diretório de instalação, e o gancho copia qualquer `.capia` encontrado ali para Documentos antes da remoção. Dados do app só saem se o usuário pedir.
+**Alternativas:** instalação por máquina (rejeitada: UAC a cada update, projeto de usuário único); MSI/WiX (rejeitado: pré-release inválida, sem ganho).
+**Consequências:** sem política corporativa por máquina nesta fase; para ambientes gerenciados, um instalador `perMachine` pode ser gerado depois com a mesma config.
+
+### ADR-114 — Atualização assinada com máquina de estados persistida
+**Estado:** Accepted (Fase 6).
+**Decisão:** manifesto JSON assinado com Ed25519 sobre o JSON canônico sem `signature` (ordem de chaves, sem espaços), verificado sobre o JSON recebido; `Verifier` é um trait, implementação `ed25519-dalek` (puro Rust; BSD-3-Clause). Chaves públicas na build (`CAPIA_UPDATE_PUBKEYS`, múltiplas p/ rotação); sem chaves ⇒ `not_configured`. Política: canal exato, `stable` sem pré-release, sem downgrade silencioso (rollback só com manifesto marcado **e** pedido explícito), `min_version`, versões revertidas não voltam. Estados persistidos `Idle→Downloaded→Verified→Staged→Switched→Confirmed` com escrita atômica; `recover()` reconcilia estado × versão instalada × marcador de saúde; rollback automático por falha explícita de saúde ou >2 inicializações sem confirmar. Troca real atrás de `Switcher` (instalador silencioso), download atrás de `Downloader`, política de Runs atrás de `HostPolicy` (adiar/checkpoint). Hash/tamanho conferidos antes do staging e antes da troca.
+**Alternativas:** `minisign`/`signify` (rejeitado: formato extra sem ganho aqui); `ring` (rejeitado: não puro Rust); updater do Tauri (rejeitado: pouco controle da máquina de estados/rollback e da política de Runs).
+**Consequências:** 100% testável com falsos e injeção de falhas em todos os pontos; a troca real no Windows é o passo a validar; binário que não chega a `main()` precisa de rollback manual documentado.
+
+### ADR-115 — Crash report opt-in, local-first
+**Estado:** Accepted (Fase 6).
+**Decisão:** desligado por padrão; opt-in explícito persistido no `AppDb`; gancho de pânico sempre grava registro **local** redigido (versão, SO, arquivo:linha curto, mensagem redigida; sem backtrace, sem conteúdo de projeto/mídia/prompt); envio apenas na abertura seguinte, com opt-in **e** `CrashSink` configurado; `capia-support` não tem código de rede. O usuário pode desligar e apagar os registros.
+**Alternativas:** opt-out (rejeitada: política de privacidade do produto); envio dentro do gancho de pânico (rejeitada: frágil e perigoso em estado de pânico).
+**Consequências:** endpoint de upload é pendência externa; a UI informa honestamente que, sem destino, os relatórios ficam locais.
+
+### ADR-116 — Diagnóstico com preview e redação na saída
+**Estado:** Accepted (Fase 6).
+**Decisão:** o pacote de suporte é acionado pelo usuário, tem `preview()` com a lista exata de arquivos/tamanhos/descrições e a lista do que nunca entra; todo texto é redigido **na saída** (`redact_global` + remoção do diretório pessoal), mesmo que um segredo tenha sido escrito cru num log; só tipos conhecidos de arquivo entram (nada de `.capia`, mídia ou arbitrários); logs com rotação limitada (1 MiB×5), linhas truncadas.
+**Alternativas:** confiar só na redação de escrita (rejeitada: logs de terceiros/crashes); incluir projeto "para ajudar" (rejeitada: dado do usuário).
+**Consequências:** testes com canário no bundle/log/erro/crash são requisito de regressão.
+
+### ADR-117 — Fixture de projeto grande e política do gate de desempenho
+**Estado:** Accepted (Fase 6).
+Status: **proposta** (o integrador numera e move para `docs/DECISIONS.md`).
+
+## Contexto
+A Fase 6 exige medir o engine num projeto grande (≥ 30 sequences, ≥ 5.000 clips, nested, legendas, áudio,
+catálogo e histórico de Runs) preservando as metas da Fase 3, com um gate de regressão que não seja nem
+frouxo (aprovar em vazio) nem frágil (reprovar por ruído de runner).
+
+## Decisões
+1. **Fixture = crate dev-only `capia-fixtures`.** Constrói um `.capia` real **somente** por Command Engine,
+   `Catalog`/`AutonomyStore` públicos; é determinística por `seed` (`document_digest` estável). Entra na matriz
+   de arquitetura como crate de apoio: dependência **apenas** via `[dev-dependencies]`, ignorada no grafo de
+   ciclos (o ciclo project ⇄ fixtures é de teste). Sem SQL cru: se o produto não consegue gravar, a fixture não grava.
+2. **Catálogo grande sem arquivos.** Registros sintéticos com disponibilidade `offline` (o catálogo aceita
+   caminhos inexistentes); evita gerar milhares de arquivos e custa o mesmo para abrir/listar/`assets.list`.
+3. **Relatório com amostras brutas.** O benchmark grava p50/p95/máx **e** as amostras, mais a máquina
+   (CPU, núcleos, RAM, kernel, rustc, perfil). Números sem máquina não são comparáveis.
+4. **Gate = mediana de N=3 execuções** por estatística, comparada a `thresholds.json`. Metas documentadas
+   (`hard`: 30/50/100/16 ms, 2 s) **nunca** recebem tolerância; limites de regressão = ≈ 3× o p95 medido × fator
+   1,5 (substituível por `CAPIA_PERF_TOLERANCE`). Métrica ausente/NaN/sem limite/pulada sem motivo permitido
+   **reprova**. Afrouxar um limite `hard` exige novo ADR (há teste que trava os valores).
+5. **Asserções no benchmark só de sanidade**; metas finas ficam no gate (um p95 isolado é ruído).
+6. **Falha de disco**: "disco cheio" simulado por `RLIMIT_FSIZE` (`ulimit -f` + SIGXFSZ ignorado) num processo
+   filho — exercita o caminho de erro de escrita (`EFBIG`) sem root. ENOSPC real e falha de `fsync` ficam fora
+   (exigem mount/root) e são declarados como não cobertos.
+7. **Soak**: testes rápidos de vazamento (fd/threads/RSS via `/proc/self`; pulam com motivo fora do Linux);
+   soak longo (`soak.mjs --seconds`) manual/noturno, nunca no CI principal.
+8. **Migração**: matriz v1..atual com dados em todas as tabelas; rollback = backup `.vN.bak` pré-migração;
+   migração só para frente; schema novo é recusado por build antigo sem tocar o arquivo. Novo schema ⇒ estender a
+   matriz (teste falha de propósito se `MIGRATIONS.len()` mudar sem atualizar).
+
+## Alternativas rejeitadas
+* Limites fixos de ms para tudo sem mediana: instável em runner compartilhado.
+* Mediana + tolerância também nas metas documentadas: deixaria uma regressão material passar.
+* Gerar mídia real para o catálogo: lento, sem ganho de cobertura para abrir/listar.
+* Migração reversa: complexidade sem demanda; backup atômico basta.
+
+## Consequências
+Corrigido junto: `catalog::read_all` falhava em schema 2 (`validate_file`/`inspect` antes de migrar). Resíduos:
+commit com snapshot a cada commit ≈ 100 ms (pior caso sintético); retenção/verificação de backups e checagem de
+espaço livre pré-migração não existem (candidatos a trabalho futuro).
+
+### ADR-118 — Endurecimento de segurança do servidor REST (D2-1…D2-7)
+**Estado:** Accepted (Fase 6).
+> Rascunhos para consolidar em `docs/DECISIONS.md` (o integrador numera). Contexto: Fase 6,
+> `docs/phase6/PHASE6_PERFORMANCE_SECURITY.md` §9–28 e `docs/phase6/PENTEST_REPORT.md`.
+
+## D2-1 — Segredos **registrados** nunca entram no pipeline do servidor (redação na entrada)
+
+**Contexto.** O redator central (`capia-secrets`) já cobria erros, auditoria, diagnóstico e pânico,
+mas o **eco de sucesso** não: um token/chave colado num nome de projeto, descrição de webhook, nome
+de arquivo, brief ou `X-Request-Id` voltava na resposta e ficava gravado no `server.db`/projeto.
+
+**Decisão.** (1) `Core::call_def` aplica `redact_registered` (só valores exatos registrados e suas
+codificações; sem heurística, para não alterar texto legítimo) a **todas** as strings e chaves dos
+parâmetros **antes** de schema/auditoria/handler — vale igual para REST e MCP. (2) O mesmo para
+`X-Request-Id` e `X-Capia-Filename`. (3) `authenticate` registra o bearer reconhecido (tokens criados
+por outro processo/CLI passam a ser "conhecidos" assim que usados). (4) `ApiErr::body` redige também
+`details`. (5) A `Idempotency-Key` do cliente é um nonce, não um segredo: a **tabela de idempotência** só guarda
+um digest (`ik_<sha256[..40]>`) e a auditoria mostra a chave para correlação, redigida se ela
+coincidir com um segredo conhecido.
+
+**Alternativas.** Recusar (422) pedidos que contenham segredo conhecido — rejeitado: transforma um
+descuido do usuário em erro opaco e vaza a existência do segredo por oráculo; só redigir é mais
+simples e seguro. Redigir só na saída — rejeitado: o dado já teria ido para o disco.
+
+**Consequências.** Canário dos testes (`tests/secret_canary.rs`) cobre respostas, SSE, OpenAPI, banco
+(+WAL), nomes de arquivo, stdout/stderr de um processo real. Limite: só valores **registrados** no
+processo (tokens já apresentados/emitidos, chaves de provider carregadas, segredos de webhook).
+
+## D2-2 — Nomes de arquivo do cliente: reservados do Windows e arquivos internos são prefixados
+
+`sanitize_filename` agora aparta ponto/espaço finais e prefixa `_` em `CON/PRN/AUX/NUL/COM1-9/LPT1-9`
+(com ou sem extensão) e em `meta.json[.tmp]` (case-insensitive: NTFS/APFS). Antes, `NUL.png` no
+Windows abriria o dispositivo e `meta.json` era sobrescrito pelo próprio metadado do staging. O nome
+em disco nunca mais é "o que o cliente mandou": é sempre `[A-Za-z0-9._ -]{1,120}`, sem ponto inicial.
+
+## D2-3 — Upload só vale se chegar completo; staging órfão é varrido; chaves pendentes viram indeterminadas
+
+(a) `store_upload` compara bytes recebidos com o `Content-Length` declarado: menos ⇒ 400 e nada fica
+staged (antes, um cliente que caía no meio produzia um upload "completo" truncado quando o prefixo
+passava no sniff). (b) Na abertura, diretórios `uploads/upl_*` sem `meta.json` (queda no meio do
+streaming) são removidos. (c) Na abertura, `idempotency.status = 0` (processo morto) vira
+indeterminado imediatamente (`idem_recover`) em vez de `IDEMPOTENCY_IN_PROGRESS` por 5 min; linhas
+concluídas com mais de 24 h são aparadas (`idem_purge_older_than`).
+
+## D2-4 — Política de IP de saída (webhooks/providers) normaliza IPv6 que embute IPv4
+
+`UrlPolicy::check_ip` primeiro converte `::ffff:a.b.c.d` em IPv4 (o loopback mapeado passava quando
+`allow_loopback=false`), e `blocked_v6` bloqueia IPv4-compatível (`::/96`), NAT64 (`64:ff9b::/96`) e
+6to4 (`2002::/16`) com IPv4 bloqueado embutido. O registro de webhook exige URL **canônica**
+(`scheme://host…`, sem `///`, `:/`, `\`, espaço): o que é gravado é o que o cliente HTTP vai discar.
+
+## D2-5 — Cabeçalhos: espaço opcional é só SP/TAB; `Authorization` duplicado é 400; config CORS endurecida
+
+`http::read_request` apara OWS ASCII (nunca NBSP/Unicode) e recusa `Authorization` duplicado (como
+`Content-Length`/`Host`); `bearer()` idem. `ServerConfig::validate` recusa origens CORS `null`,
+vazias, com `/` final ou com `*` em qualquer posição.
+
+## D2-6 — Diretório de dados com permissão 0700 (Unix)
+
+`Core::open` ajusta `data_dir` para `0700`: outro usuário local não lê projetos/mídia/uploads/`server.db`.
+No Windows vale a herança de ACL do perfil do usuário (documentado como pré-requisito de instalação).
+
+## D2-7 — Suíte de segurança como gate
+
+`tools/phase6-acceptance/security-suite/run.mjs` roda pentest + canário + fuzz + queda + unitários +
+`pnpm check:arch` e, opcionalmente, `tools/mutation-phase6.py` (37 mutações; cada uma deve ser
+detectada). Mutante sobrevivente é achado e exige teste novo — nunca enfraquecer asserção.
+
+### ADR-119 — Documentação gerada do catálogo, evidência externa honesta e processo de release
+**Estado:** Accepted (Fase 6).
+> Rascunho para o integrador incorporar a `docs/DECISIONS.md` com o próximo número livre. Não editar `DECISIONS.md` nesta frente.
+
+## Contexto
+
+A Fase 6 precisa de documentação de API que não divirja do código, de um pacote de aceitação que **nunca fabrique** resultados externos (certificado real, máquinas Windows limpas, usuários de beta, provedores reais) e de um processo de release repetível.
+
+## Decisões
+
+1. **Documentação de API derivada do catálogo único (ADR-102).** `docs/api/rest-reference.md`, `mcp-tools.md`, `openapi.json` e a matriz de scopes são **gerados** por `tools/docs/gen-api-docs.mjs` a partir do JSON do catálogo (`capia-server catalog`, ou o fixture `tools/docs/fixtures/catalog.json` transcrito mecanicamente do Rust). O gerador **não** interpreta Rust. `--check` falha se a documentação estiver defasada. Textos escritos à mão (convenções, auth, webhooks) ficam fora dos blocos gerados; só a matriz de scopes é injetada entre marcadores em `auth-and-scopes.md`.
+2. **Vocabulário único de estado de aceitação:** `passed | failed | pending_external | not_available`. `not_available` = o passo não pôde rodar aqui (binário/teste de outra frente, variável, `CAPIA_P6_HEAVY`) e **nunca** conta como aprovado. O agregado é o **pior** estado; só “tudo `passed`” é `PHASE 6 COMPLETE`; suíte `not_available` impede declarar engenharia completa (`INCOMPLETE`).
+3. **Evidência externa só por arquivo real validado.** Validadores (`clean-machine`, `beta-feedback`, `update`, `installer`, paridade) respondem `pending_external` sem arquivo ou com modelo (`"template": true`), `rejected` para malformado/inconsistente/que registra falha, `partial` para evidência bem formada mas incompleta (ex.: só uma versão do Windows; artefato não assinado; update assinado não executado por falta de certificado) e `accepted` só com todas as regras. Exigem atestados explícitos do executor e checagens de plausibilidade (datas não futuras, builds do Windows coerentes, hashes, igualdade recalculada). Um resultado negativo honesto é evidência válida que reprova o gate.
+4. **Gate de beta:** “nenhum Blocker/Critical aberto para o RC”: aberto = `open`, `wontfix` ou `fixed` em versão posterior ao RC; `wontfix` nunca fecha Blocker/Critical. Mínimo de 5 usuários externos é **escolha de produto documentada**, parametrizável (`--min-users`); usuários internos não contam.
+5. **Passos pesados** (compilam Rust, build do desktop) só rodam com `CAPIA_P6_HEAVY=1`; `steps.json` é declarativo e aponta para nomes **esperados** de testes de outras frentes, tratados como `not_available` enquanto não existirem.
+6. **Exemplos não são produto:** vivem em `examples/`, sem dependência de crates/pacotes, com `.mjs` no lint/format; testados contra servidores falsos e com vetores HMAC independentes; passam a valer como integração real apenas quando executados no item `external-flow`.
+7. **Documentos de release** (`RELEASE.md`, `CHANGELOG.md`, `KNOWN_ISSUES.md`, `MIGRATION_COMPAT.md`) são verificados por `installer/check-release.mjs` (versão única nas três fontes; seções e checklist presentes).
+
+## Alternativas
+
+- Escrever a referência da API à mão (diverge do código); parsear Rust por regex (frágil); `pending` genérico sem distinguir “não pôde rodar” de “depende de humano” (esconde lacunas de integração); tratar evidência faltante como “skipped/ok” (viola a regra de não fabricar).
+
+## Consequências
+
+- Mudar o catálogo exige regenerar `docs/api` (CI pode rodar `pnpm check:docs`).
+- O estado final reportado pelo agregador é conservador por construção; fechar a Fase 6 exige as evidências externas listadas em `docs/phase6/IMPL_DOCS_ACCEPTANCE.md`.
+- Os nomes esperados de testes de outras frentes em `steps.json` precisam ser ajustados pelo integrador quando divergirem.
+
+## Evidência
+
+`tools/docs/gen-api-docs.test.mjs`, `tools/phase6-acceptance/**/*.test.mjs`, `examples/**/*.test.mjs`, `tools/sample-project/make-sample.test.mjs` (todos em `pnpm test:tools`).
