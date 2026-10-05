@@ -97,7 +97,12 @@ fn registration_validates_urls_events_and_never_leaks_the_secret() {
             "/v1/webhooks",
             Some(json!({"url": url, "events": ["*"]})),
         );
-        assert_eq!(r.status, 422, "{url} -> {}", String::from_utf8_lossy(&r.body));
+        assert_eq!(
+            r.status,
+            422,
+            "{url} -> {}",
+            String::from_utf8_lossy(&r.body)
+        );
         assert_eq!(r.code(), "INVALID_PARAMS", "{url}");
     }
     // cada recusa vale também para o PATCH
@@ -140,13 +145,8 @@ fn registration_validates_urls_events_and_never_leaks_the_secret() {
     let reader = s.token("reader", &["project:read", "run:read"]);
     assert_eq!(s.call_as(&reader, "GET", "/v1/webhooks", None).status, 403);
     assert_eq!(
-        s.call_as(
-            &reader,
-            "POST",
-            &format!("/v1/webhooks/{id}/test"),
-            None
-        )
-        .status,
+        s.call_as(&reader, "POST", &format!("/v1/webhooks/{id}/test"), None)
+            .status,
         403
     );
 }
@@ -178,7 +178,11 @@ fn delivery_is_signed_and_the_receiver_verifies_it_independently() {
     assert_eq!(r.method, "POST");
     assert_eq!(r.path, "/hook");
     assert_eq!(r.header("content-type"), Some("application/json"));
-    assert!(r.header("user-agent").unwrap().starts_with("CapIA-Webhook/"));
+    assert!(
+        r.header("user-agent")
+            .unwrap()
+            .starts_with("CapIA-Webhook/")
+    );
     assert!(r.header("x-capia-signature").unwrap().starts_with("v1="));
     assert!(r.timestamp().abs_diff(now_s()) < 10);
     assert_eq!(r.header("x-capia-attempt"), Some("1"));
@@ -193,12 +197,16 @@ fn delivery_is_signed_and_the_receiver_verifies_it_independently() {
     assert_eq!(b["type"], "webhook.test");
     assert_eq!(b["version"], 1);
     let at = b["occurred_at"].as_str().unwrap();
-    assert!(at.len() == 24 && at.ends_with('Z') && at.as_bytes()[10] == b'T', "{at}");
+    assert!(
+        at.len() == 24 && at.ends_with('Z') && at.as_bytes()[10] == b'T',
+        "{at}"
+    );
     assert!(b["occurred_ms"].as_u64().unwrap() > 1_600_000_000_000);
     assert!(b["project_id"].is_null() && b["run_id"].is_null() && b["export_id"].is_null());
     assert_eq!(b["data"]["webhook_id"], id);
     // log de entrega
-    assert!(wait_until(Duration::from_secs(5), || first_state(&s, &id) == "delivered"));
+    assert!(wait_until(Duration::from_secs(5), || first_state(&s, &id)
+        == "delivered"));
     let d = &deliveries(&s, &id)[0];
     for k in [
         "id",
@@ -223,7 +231,13 @@ fn delivery_is_signed_and_the_receiver_verifies_it_independently() {
     assert_eq!(r.header("x-capia-delivery").unwrap(), d["id"].to_string());
     assert_eq!(d["event_id"], event_id);
     // paginação do log
-    let page = s.call("GET", &format!("/v1/webhooks/{id}/deliveries?limit=1"), None).json();
+    let page = s
+        .call(
+            "GET",
+            &format!("/v1/webhooks/{id}/deliveries?limit=1"),
+            None,
+        )
+        .json();
     assert_eq!(page["deliveries"].as_array().unwrap().len(), 1);
 }
 
@@ -239,7 +253,8 @@ fn a_flaky_endpoint_is_retried_with_exponential_backoff_and_stable_ids() {
     let event_id = send_test(&s, &id);
     let got = rx.wait_for(3, Duration::from_secs(15));
     assert_eq!(got.len(), 3, "{got:?}");
-    assert!(wait_until(Duration::from_secs(5), || first_state(&s, &id) == "delivered"));
+    assert!(wait_until(Duration::from_secs(5), || first_state(&s, &id)
+        == "delivered"));
     // backoff: base*2^(n-1) com ±20% de jitter ⇒ ≥ 80 ms e ≥ 160 ms entre as tentativas
     let g1 = got[1].received_at - got[0].received_at;
     let g2 = got[2].received_at - got[1].received_at;
@@ -281,7 +296,9 @@ fn permanent_client_errors_die_immediately_but_throttling_is_retried() {
     rx2.script(|r| Action::status(if r.n == 0 { 429 } else { 200 }));
     let (id2, _) = hook(&s, &rx2.url(), &["webhook.test"]);
     send_test(&s, &id2);
-    assert!(wait_until(Duration::from_secs(10), || first_state(&s, &id2) == "delivered"));
+    assert!(wait_until(Duration::from_secs(10), || first_state(
+        &s, &id2
+    ) == "delivered"));
     assert_eq!(rx2.count(), 2);
 }
 
@@ -300,7 +317,10 @@ fn exhausted_retries_dead_letter_then_manual_redeliver() {
     assert_eq!(d["attempt"], 3);
     assert_eq!(d["last_status"], 503);
     assert!(
-        d["last_error"].as_str().unwrap().starts_with("gave up after 3 attempts"),
+        d["last_error"]
+            .as_str()
+            .unwrap()
+            .starts_with("gave up after 3 attempts"),
         "{d}"
     );
     // nada mais chega sozinho
@@ -309,22 +329,41 @@ fn exhausted_retries_dead_letter_then_manual_redeliver() {
     // reentrega manual com o endpoint saudável
     healthy.store(true, Ordering::SeqCst);
     let did = d["id"].as_i64().unwrap();
-    let r = s.call("POST", &format!("/v1/webhooks/{id}/deliveries/{did}/redeliver"), None);
+    let r = s.call(
+        "POST",
+        &format!("/v1/webhooks/{id}/deliveries/{did}/redeliver"),
+        None,
+    );
     assert_eq!(r.status, 202, "{}", String::from_utf8_lossy(&r.body));
-    assert!(wait_until(Duration::from_secs(10), || first_state(&s, &id) == "delivered"));
+    assert!(wait_until(Duration::from_secs(10), || first_state(&s, &id)
+        == "delivered"));
     let all = rx.requests();
     assert_eq!(all.len(), 4);
-    assert_eq!(all[3].header("x-capia-attempt"), Some("1"), "redeliver restarts the count");
+    assert_eq!(
+        all[3].header("x-capia-attempt"),
+        Some("1"),
+        "redeliver restarts the count"
+    );
     assert_eq!(all[3].event_id(), all[0].event_id());
     assert!(all[3].signature_ok_independent(&secret));
     // reentrega de entrega inexistente / de outro webhook
     assert_eq!(
-        s.call("POST", &format!("/v1/webhooks/{id}/deliveries/99999/redeliver"), None).status,
+        s.call(
+            "POST",
+            &format!("/v1/webhooks/{id}/deliveries/99999/redeliver"),
+            None
+        )
+        .status,
         404
     );
     let (other, _) = hook(&s, &rx.url(), &["webhook.test"]);
     assert_eq!(
-        s.call("POST", &format!("/v1/webhooks/{other}/deliveries/{did}/redeliver"), None).status,
+        s.call(
+            "POST",
+            &format!("/v1/webhooks/{other}/deliveries/{did}/redeliver"),
+            None
+        )
+        .status,
         404
     );
 }
@@ -354,13 +393,20 @@ fn a_slow_endpoint_does_not_delay_other_webhooks_and_times_out() {
         "fast endpoint waited {:?} behind the slow one",
         t0.elapsed()
     );
-    assert!(wait_until(Duration::from_secs(5), || first_state(&s, &fast_id) == "delivered"));
+    assert!(wait_until(Duration::from_secs(5), || first_state(
+        &s, &fast_id
+    ) == "delivered"));
     // o lento estoura o prazo: nova tentativa agendada, erro legível
     assert!(wait_until(Duration::from_secs(8), || {
-        deliveries(&s, &slow_id).iter().all(|d| d["state"] == "retrying")
+        deliveries(&s, &slow_id)
+            .iter()
+            .all(|d| d["state"] == "retrying")
     }));
     let d = &deliveries(&s, &slow_id)[0];
-    assert!(d["last_error"].as_str().unwrap().contains("timed out"), "{d}");
+    assert!(
+        d["last_error"].as_str().unwrap().contains("timed out"),
+        "{d}"
+    );
     assert!(d["next_attempt_ms"].as_u64().unwrap() > 1_600_000_000_000);
 }
 
@@ -376,7 +422,11 @@ fn redirects_are_never_followed() {
     assert!(wait_until(Duration::from_secs(10), || first_state(&s, &id) == "dead"));
     std::thread::sleep(Duration::from_millis(500));
     assert_eq!(rx.count(), 1);
-    assert_eq!(target.count(), 0, "the signed POST must never reach the redirect target");
+    assert_eq!(
+        target.count(),
+        0,
+        "the signed POST must never reach the redirect target"
+    );
     let d = &deliveries(&s, &id)[0];
     assert_eq!(d["last_status"], 302);
     assert!(d["last_error"].as_str().unwrap().contains("redirect"));
@@ -391,9 +441,23 @@ fn events_are_deduplicated_and_routed_by_subscription() {
     let (only_id, _) = hook(&s, &only.url(), &["run.completed"]);
     let core = s.core();
     for _ in 0..3 {
-        core.emit("dup.1", "run.completed", Some("prj_x"), Some("run_x"), None, &json!({"n": 1}));
+        core.emit(
+            "dup.1",
+            "run.completed",
+            Some("prj_x"),
+            Some("run_x"),
+            None,
+            &json!({"n": 1}),
+        );
     }
-    core.emit("dup.2", "run.failed", Some("prj_x"), Some("run_y"), None, &json!({"n": 2}));
+    core.emit(
+        "dup.2",
+        "run.failed",
+        Some("prj_x"),
+        Some("run_y"),
+        None,
+        &json!({"n": 2}),
+    );
     all.wait_for(2, Duration::from_secs(10));
     only.wait_for(1, Duration::from_secs(10));
     std::thread::sleep(Duration::from_millis(500));
@@ -414,10 +478,15 @@ fn a_disabled_webhook_is_dead_lettered_with_a_clear_reason() {
     let s = start("wh-disabled", |_| {});
     let rx = Receiver::start();
     let (id, _) = hook(&s, &rx.url(), &["webhook.test"]);
-    let r = s.call("PATCH", &format!("/v1/webhooks/{id}"), Some(json!({"enabled": false})));
+    let r = s.call(
+        "PATCH",
+        &format!("/v1/webhooks/{id}"),
+        Some(json!({"enabled": false})),
+    );
     assert_eq!(r.status, 200);
     // eventos normais nem enfileiram para um webhook desabilitado
-    s.core().emit("off.1", "webhook.test", None, None, None, &json!({}));
+    s.core()
+        .emit("off.1", "webhook.test", None, None, None, &json!({}));
     send_test(&s, &id);
     assert!(wait_until(Duration::from_secs(10), || first_state(&s, &id) == "dead"));
     let ds = deliveries(&s, &id);
@@ -425,9 +494,17 @@ fn a_disabled_webhook_is_dead_lettered_with_a_clear_reason() {
     assert_eq!(ds[0]["last_error"], "webhook disabled");
     assert_eq!(rx.count(), 0);
     // reabilitar + reentregar funciona
-    s.call("PATCH", &format!("/v1/webhooks/{id}"), Some(json!({"enabled": true})));
+    s.call(
+        "PATCH",
+        &format!("/v1/webhooks/{id}"),
+        Some(json!({"enabled": true})),
+    );
     let did = ds[0]["id"].as_i64().unwrap();
-    s.call("POST", &format!("/v1/webhooks/{id}/deliveries/{did}/redeliver"), None);
+    s.call(
+        "POST",
+        &format!("/v1/webhooks/{id}/deliveries/{did}/redeliver"),
+        None,
+    );
     assert_eq!(rx.wait_for(1, Duration::from_secs(10)).len(), 1);
 }
 
@@ -441,9 +518,17 @@ fn secret_unavailable_after_restart_dead_letters_then_rotation_requeues() {
     // novo processo, cofre vazio (como um host sem cofre do SO)
     let s2 = start_in(dir, |_| {});
     send_test(&s2, &id);
-    assert!(wait_until(Duration::from_secs(10), || first_state(&s2, &id) == "dead"));
+    assert!(wait_until(Duration::from_secs(10), || first_state(
+        &s2, &id
+    ) == "dead"));
     let d = &deliveries(&s2, &id)[0];
-    assert!(d["last_error"].as_str().unwrap().starts_with("SECRET_UNAVAILABLE"), "{d}");
+    assert!(
+        d["last_error"]
+            .as_str()
+            .unwrap()
+            .starts_with("SECRET_UNAVAILABLE"),
+        "{d}"
+    );
     assert_eq!(rx.count(), 0);
     assert_eq!(
         s2.call("GET", &format!("/v1/webhooks/{id}"), None).json()["webhook"]["secret_configured"],
@@ -460,7 +545,8 @@ fn secret_unavailable_after_restart_dead_letters_then_rotation_requeues() {
     assert_eq!(got.len(), 1);
     assert!(got[0].signature_ok_independent(&new_secret));
     assert!(!got[0].signature_ok_independent(&old_secret));
-    assert!(wait_until(Duration::from_secs(5), || first_state(&s2, &id) == "delivered"));
+    assert!(wait_until(Duration::from_secs(5), || first_state(&s2, &id)
+        == "delivered"));
 }
 
 #[test]
@@ -473,10 +559,22 @@ fn the_url_is_revalidated_on_every_delivery() {
     // a política mudou (loopback deixou de ser permitido): a URL gravada não vale mais
     let s2 = start_in(dir, |c| c.webhook.allow_loopback = false);
     send_test(&s2, &id);
-    assert!(wait_until(Duration::from_secs(10), || first_state(&s2, &id) == "dead"));
+    assert!(wait_until(Duration::from_secs(10), || first_state(
+        &s2, &id
+    ) == "dead"));
     let d = &deliveries(&s2, &id)[0];
-    assert!(d["last_error"].as_str().unwrap().starts_with("URL_REJECTED"), "{d}");
-    assert_eq!(rx.count(), 0, "nothing may be sent to a URL that no longer passes the policy");
+    assert!(
+        d["last_error"]
+            .as_str()
+            .unwrap()
+            .starts_with("URL_REJECTED"),
+        "{d}"
+    );
+    assert_eq!(
+        rx.count(),
+        0,
+        "nothing may be sent to a URL that no longer passes the policy"
+    );
 }
 
 #[test]
@@ -498,11 +596,19 @@ fn a_shutdown_mid_delivery_is_recovered_at_least_once() {
     s.shutdown();
     let dir = std::mem::replace(&mut s.dir, TempDir::new("unused"));
     let s2 = start_in(dir, move |c| c.secrets = store);
-    assert!(wait_until(Duration::from_secs(15), || first_state(&s2, &id) == "delivered"));
+    assert!(wait_until(Duration::from_secs(15), || first_state(
+        &s2, &id
+    ) == "delivered"));
     let got = rx.requests();
-    assert!(got.len() >= 2, "the in-flight delivery must be re-sent after the restart");
+    assert!(
+        got.len() >= 2,
+        "the in-flight delivery must be re-sent after the restart"
+    );
     assert_eq!(got[0].event_id(), got[1].event_id());
-    assert_eq!(got[0].header("x-capia-delivery"), got[1].header("x-capia-delivery"));
+    assert_eq!(
+        got[0].header("x-capia-delivery"),
+        got[1].header("x-capia-delivery")
+    );
     // o cofre sobreviveu ao reinício: a MESMA chave assina a reentrega
     assert!(got.last().unwrap().signature_ok_independent(&secret));
 }
@@ -522,20 +628,35 @@ fn receiver_side_forgery_replay_and_tampering_are_rejected() {
     // corpo adulterado
     let mut tampered = a.clone();
     tampered.body = a.json().to_string().replace("test", "tesT").into_bytes();
-    assert_eq!(tampered.verify(&secret, now), Err(VerifyError::SignatureMismatch));
+    assert_eq!(
+        tampered.verify(&secret, now),
+        Err(VerifyError::SignatureMismatch)
+    );
     // um byte a mais (espaço no fim)
     let mut padded = a.clone();
     padded.body.push(b' ');
-    assert_eq!(padded.verify(&secret, now), Err(VerifyError::SignatureMismatch));
+    assert_eq!(
+        padded.verify(&secret, now),
+        Err(VerifyError::SignatureMismatch)
+    );
     // forjado sem o segredo / segredo errado
-    assert_eq!(a.verify("whsec_guess", now), Err(VerifyError::SignatureMismatch));
+    assert_eq!(
+        a.verify("whsec_guess", now),
+        Err(VerifyError::SignatureMismatch)
+    );
     // assinatura de OUTRO evento no corpo deste
     let mut swapped = a.clone();
-    swapped.headers.retain(|(k, _)| !k.eq_ignore_ascii_case("x-capia-signature"));
     swapped
         .headers
-        .push(("X-CapIA-Signature".into(), b.header("x-capia-signature").unwrap().to_owned()));
-    assert_eq!(swapped.verify(&secret, now), Err(VerifyError::SignatureMismatch));
+        .retain(|(k, _)| !k.eq_ignore_ascii_case("x-capia-signature"));
+    swapped.headers.push((
+        "X-CapIA-Signature".into(),
+        b.header("x-capia-signature").unwrap().to_owned(),
+    ));
+    assert_eq!(
+        swapped.verify(&secret, now),
+        Err(VerifyError::SignatureMismatch)
+    );
     // timestamp trocado para "agora" com a assinatura antiga
     let mut retimed = a.clone();
     for (k, v) in &mut retimed.headers {
@@ -543,14 +664,31 @@ fn receiver_side_forgery_replay_and_tampering_are_rejected() {
             *v = (a.timestamp() + 1).to_string();
         }
     }
-    assert_eq!(retimed.verify(&secret, now), Err(VerifyError::SignatureMismatch));
+    assert_eq!(
+        retimed.verify(&secret, now),
+        Err(VerifyError::SignatureMismatch)
+    );
     // replay fora da janela de 300 s (nos dois sentidos)
-    assert_eq!(a.verify(&secret, now + 301), Err(VerifyError::TimestampOutsideTolerance));
-    assert_eq!(a.verify(&secret, now.saturating_sub(400)), Err(VerifyError::TimestampOutsideTolerance));
+    assert_eq!(
+        a.verify(&secret, now + 301),
+        Err(VerifyError::TimestampOutsideTolerance)
+    );
+    assert_eq!(
+        a.verify(&secret, now.saturating_sub(400)),
+        Err(VerifyError::TimestampOutsideTolerance)
+    );
     // cabeçalhos malformados / ausentes
-    for h in ["", "v1=", "v1=zz", "v2=abcd", "sha256=00", &format!("v1={}", "g".repeat(64))] {
+    for h in [
+        "",
+        "v1=",
+        "v1=zz",
+        "v2=abcd",
+        "sha256=00",
+        &format!("v1={}", "g".repeat(64)),
+    ] {
         let mut m = a.clone();
-        m.headers.retain(|(k, _)| !k.eq_ignore_ascii_case("x-capia-signature"));
+        m.headers
+            .retain(|(k, _)| !k.eq_ignore_ascii_case("x-capia-signature"));
         m.headers.push(("X-CapIA-Signature".into(), h.to_owned()));
         assert_eq!(m.verify(&secret, now), Err(VerifyError::Malformed), "{h:?}");
     }
@@ -558,6 +696,9 @@ fn receiver_side_forgery_replay_and_tampering_are_rejected() {
     let mut seen = std::collections::HashSet::new();
     assert!(seen.insert(a.event_id().to_owned()));
     assert_eq!(a.verify(&secret, now), Ok(()));
-    assert!(!seen.insert(a.event_id().to_owned()), "second delivery of the same id is a duplicate");
+    assert!(
+        !seen.insert(a.event_id().to_owned()),
+        "second delivery of the same id is a duplicate"
+    );
     assert_ne!(a.event_id(), b.event_id());
 }

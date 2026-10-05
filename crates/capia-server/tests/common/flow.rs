@@ -63,12 +63,29 @@ impl RestClient<'_> {
             extra.push(("Idempotency-Key", k));
         }
         let (body, path) = if def.method == "GET" || def.method == "DELETE" {
-            let q: Vec<String> = rest.iter().map(|(k, v)| format!("{k}={}", query_value(v))).collect();
-            (None, if q.is_empty() { path } else { format!("{path}?{}", q.join("&")) })
+            let q: Vec<String> = rest
+                .iter()
+                .map(|(k, v)| format!("{k}={}", query_value(v)))
+                .collect();
+            (
+                None,
+                if q.is_empty() {
+                    path
+                } else {
+                    format!("{path}?{}", q.join("&"))
+                },
+            )
         } else {
             (Some(Value::Object(rest).to_string().into_bytes()), path)
         };
-        let r = request(self.s.addr, def.method, &path, Some(&self.token), &extra, body.as_deref());
+        let r = request(
+            self.s.addr,
+            def.method,
+            &path,
+            Some(&self.token),
+            &extra,
+            body.as_deref(),
+        );
         let json: Value = serde_json::from_slice(&r.body).unwrap_or(Value::Null);
         if (200..300).contains(&r.status) {
             Ok(json)
@@ -101,12 +118,19 @@ impl Client for RestClient<'_> {
             "POST",
             "/v1/uploads",
             Some(&self.token),
-            &[("Content-Type", "application/octet-stream"), ("X-Capia-Filename", filename)],
+            &[
+                ("Content-Type", "application/octet-stream"),
+                ("X-Capia-Filename", filename),
+            ],
             Some(bytes),
         );
         assert_eq!(r.status, 201, "{}", String::from_utf8_lossy(&r.body));
         let j = r.json();
-        j["upload"]["upload_id"].as_str().or(j["upload_id"].as_str()).unwrap_or_else(|| panic!("upload response: {j}")).to_owned()
+        j["upload"]["upload_id"]
+            .as_str()
+            .or(j["upload_id"].as_str())
+            .unwrap_or_else(|| panic!("upload response: {j}"))
+            .to_owned()
     }
 }
 
@@ -142,7 +166,10 @@ impl McpClient<'_> {
         } else {
             Err(CallErr {
                 status: res["_meta"]["x-capia-status"].as_u64().unwrap_or(0) as u16,
-                code: res["structuredContent"]["code"].as_str().unwrap_or_default().to_owned(),
+                code: res["structuredContent"]["code"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
                 body: res["structuredContent"].clone(),
             })
         }
@@ -164,7 +191,13 @@ impl Client for McpClient<'_> {
 
     fn upload(&self, filename: &str, bytes: &[u8]) -> String {
         let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-        let v = self.go("uploads.create_inline", &json!({"filename": filename, "content_base64": b64}), None).unwrap();
+        let v = self
+            .go(
+                "uploads.create_inline",
+                &json!({"filename": filename, "content_base64": b64}),
+                None,
+            )
+            .unwrap();
         v["upload"]["upload_id"].as_str().unwrap().to_owned()
     }
 }
@@ -172,7 +205,9 @@ impl Client for McpClient<'_> {
 // ---- utilidades ---------------------------------------------------------------------------------
 
 pub fn fixture(name: &str) -> Vec<u8> {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/media").join(name);
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/media")
+        .join(name);
     std::fs::read(&p).unwrap_or_else(|e| panic!("fixture {}: {e}", p.display()))
 }
 
@@ -210,43 +245,53 @@ pub fn poll<T>(what: &str, timeout: Duration, mut f: impl FnMut() -> Option<T>) 
 /// Leva a Run a `completed` aprovando cada decisão pedida; devolve os tipos de decisão atendidos.
 pub fn drive_run(c: &dyn Client, pid: &str, run_id: &str) -> (Value, Vec<String>) {
     let mut kinds: Vec<String> = Vec::new();
-    let v = poll(&format!("run {run_id} to complete"), Duration::from_secs(180), || {
-        let v = c.ok("runs.get", json!({"project_id": pid, "run_id": run_id}));
-        match v["run"]["status"].as_str().unwrap_or_default() {
-            "completed" => Some(v),
-            "failed" | "cancelled" => panic!("[{}] run ended badly: {v}", c.label()),
-            "waiting_user" => {
-                let p = &v["run"]["pending"];
-                if let (Some(id), Some(kind)) = (p["id"].as_str(), p["kind"].as_str()) {
-                    c.ok(
+    let v = poll(
+        &format!("run {run_id} to complete"),
+        Duration::from_secs(180),
+        || {
+            let v = c.ok("runs.get", json!({"project_id": pid, "run_id": run_id}));
+            match v["run"]["status"].as_str().unwrap_or_default() {
+                "completed" => Some(v),
+                "failed" | "cancelled" => panic!("[{}] run ended badly: {v}", c.label()),
+                "waiting_user" => {
+                    let p = &v["run"]["pending"];
+                    if let (Some(id), Some(kind)) = (p["id"].as_str(), p["kind"].as_str()) {
+                        c.ok(
                         "runs.approve",
                         json!({"project_id": pid, "run_id": run_id, "decision_id": id, "option": "approve"}),
                     );
-                    kinds.push(kind.to_owned());
+                        kinds.push(kind.to_owned());
+                    }
+                    None
                 }
-                None
+                _ => None,
             }
-            _ => None,
-        }
-    });
+        },
+    );
     (v, kinds)
 }
 
 /// Encoders aprovados e disponíveis de H.264 (decide se o export h264-mp4 pode rodar).
 pub fn approved_h264_available(core: &capia_server::Core) -> bool {
     let caps = core.session_call("export.encoders", json!({})).unwrap();
-    caps.as_array().into_iter().flatten().any(|e| {
-        e["codec"] == "h264" && e["available"] == true && e["policy"] == "approved"
-    })
+    caps.as_array()
+        .into_iter()
+        .flatten()
+        .any(|e| e["codec"] == "h264" && e["available"] == true && e["policy"] == "approved")
 }
 
 /// Forma de uma sequence independente de ids aleatórios: trilhas, clips (tipo/tempo/texto).
 pub fn sequence_shape(seq: &Value, run_id: &str) -> Value {
-    let sid = seq["sequence"]["id"].as_str().or(seq["sequence"]["header"]["id"].as_str()).unwrap_or_default().to_owned();
+    let sid = seq["sequence"]["id"]
+        .as_str()
+        .or(seq["sequence"]["header"]["id"].as_str())
+        .unwrap_or_default()
+        .to_owned();
     let strip = |s: &str| -> String {
         let s = s.replace(run_id, "RUN");
-        let s = s.strip_prefix(&sid.replace(run_id, "RUN")).unwrap_or(&s).to_owned();
-        s
+        s.strip_prefix(&sid.replace(run_id, "RUN"))
+            .unwrap_or(&s)
+            .to_owned()
     };
     let body = &seq["sequence"];
     let mut clips: Vec<Value> = body["clips"]
@@ -268,10 +313,16 @@ pub fn sequence_shape(seq: &Value, run_id: &str) -> Value {
     clips.sort_by_key(Value::to_string);
     let mut tracks: Vec<Value> = body["tracks"]
         .as_object()
-        .map(|m| m.iter().map(|(id, t)| json!([strip(id), t["kind"]])).collect())
+        .map(|m| {
+            m.iter()
+                .map(|(id, t)| json!([strip(id), t["kind"]]))
+                .collect()
+        })
         .or_else(|| {
             body["tracks"].as_array().map(|a| {
-                a.iter().map(|t| json!([t["id"].as_str().map(strip), t["kind"]])).collect()
+                a.iter()
+                    .map(|t| json!([t["id"].as_str().map(strip), t["kind"]]))
+                    .collect()
             })
         })
         .unwrap_or_default();
@@ -305,13 +356,27 @@ pub fn quick_run(c: &dyn Client, hook_url: Option<(&str, &[&str])>) -> (String, 
     if let Some((url, events)) = hook_url {
         c.ok("webhooks.create", json!({"url": url, "events": events}));
     }
-    let pid = c.ok("projects.create", json!({"name": "quick"}))["project"]["id"].as_str().unwrap().to_owned();
+    let pid = c.ok("projects.create", json!({"name": "quick"}))["project"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let up = c.upload("raw.mp4", &fixture("video_audio.mp4"));
-    let t = c.ok("assets.import", json!({"project_id": pid, "upload_id": up}))["ticket_id"].as_str().unwrap().to_owned();
+    let t = c.ok("assets.import", json!({"project_id": pid, "upload_id": up}))["ticket_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     poll("import", Duration::from_secs(60), || {
-        (c.ok("imports.get", json!({"project_id": pid, "ticket_id": t}))["import"]["state"] == "finalized").then_some(())
+        (c.ok("imports.get", json!({"project_id": pid, "ticket_id": t}))["import"]["state"]
+            == "finalized")
+            .then_some(())
     });
-    let run = c.ok("runs.create", json!({"project_id": pid, "brief_text": "Produto: Demo. CTA: Compre agora."}))["run"]["id"].as_str().unwrap().to_owned();
+    let run = c.ok(
+        "runs.create",
+        json!({"project_id": pid, "brief_text": "Produto: Demo. CTA: Compre agora."}),
+    )["run"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     drive_run(c, &pid, &run);
     (pid, run)
 }
@@ -328,14 +393,20 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
         wh["webhook"]["id"].as_str().unwrap().to_owned(),
         wh["secret"].as_str().unwrap().to_owned(),
     );
-    let pid = c.ok("projects.create", json!({"name": format!("flow-{}", c.label())}))["project"]["id"]
+    let pid = c.ok(
+        "projects.create",
+        json!({"name": format!("flow-{}", c.label())}),
+    )["project"]["id"]
         .as_str()
         .unwrap()
         .to_owned();
     let raw_up = c.upload("raw.mp4", &fixture("video_audio.mp4"));
     let ref_up = c.upload("reference.mp4", &fixture("video_only.mp4"));
     let brief_text = "Produto: Demo. CTA: Compre agora. [demo:needs-correction]";
-    let doc_up = c.upload("brief.txt", format!("Briefing\n{brief_text}\nTom: direto.\n").as_bytes());
+    let doc_up = c.upload(
+        "brief.txt",
+        format!("Briefing\n{brief_text}\nTom: direto.\n").as_bytes(),
+    );
     // o upload do mesmo conteúdo duas vezes não duplica o asset
     let mut tickets = Vec::new();
     for up in [&raw_up, &ref_up] {
@@ -381,7 +452,10 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
         .iter()
         .map(|r| r["id"].as_str().unwrap().to_owned())
         .collect();
-    c.ok("runs.variants", json!({"project_id": pid, "run_id": master, "count": 2}));
+    c.ok(
+        "runs.variants",
+        json!({"project_id": pid, "run_id": master, "count": 2}),
+    );
     let child = poll("variant run", Duration::from_secs(30), || {
         c.ok("runs.list", json!({"project_id": pid}))["runs"]
             .as_array()
@@ -398,7 +472,10 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
     let mut sequences = Vec::new();
     for sq in list["sequences"].as_array().unwrap() {
         let id = sq["id"].as_str().unwrap().to_owned();
-        let body = c.ok("sequences.get", json!({"project_id": pid, "sequence_id": id}));
+        let body = c.ok(
+            "sequences.get",
+            json!({"project_id": pid, "sequence_id": id}),
+        );
         sequences.push((id, body));
     }
     let live = |view: &Value| -> Vec<Value> {
@@ -413,7 +490,11 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
     let master_seqs = live(&master_view);
     let child_seqs = live(&child_view);
     let shape_of = |run: &str, sid: &str| -> Value {
-        let body = &sequences.iter().find(|(id, _)| id == sid).unwrap_or_else(|| panic!("sequence {sid} not listed")).1;
+        let body = &sequences
+            .iter()
+            .find(|(id, _)| id == sid)
+            .unwrap_or_else(|| panic!("sequence {sid} not listed"))
+            .1;
         sequence_shape(body, run)
     };
     let mut seq_summary: Vec<Value> = master_seqs
@@ -435,7 +516,13 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
         .as_array()
         .unwrap()
         .iter()
-        .map(|e| format!("{}:{}", e["actor"]["kind"].as_str().unwrap_or("?"), e["label"].as_str().unwrap_or("")))
+        .map(|e| {
+            format!(
+                "{}:{}",
+                e["actor"]["kind"].as_str().unwrap_or("?"),
+                e["label"].as_str().unwrap_or("")
+            )
+        })
         .map(|x| x.replace(&master, "MASTER").replace(&child, "CHILD"))
         .collect();
     history.sort();
@@ -455,7 +542,10 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
     );
     let export_id = started["exports"][0]["id"].as_str().unwrap().to_owned();
     let export = poll("export", Duration::from_secs(240), || {
-        let v = c.ok("exports.get", json!({"project_id": pid, "export_id": export_id}));
+        let v = c.ok(
+            "exports.get",
+            json!({"project_id": pid, "export_id": export_id}),
+        );
         match v["export"]["state"].as_str().unwrap_or_default() {
             "completed" => Some(v["export"].clone()),
             "failed" | "cancelled" => panic!("export ended badly: {v}"),
@@ -467,11 +557,21 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
     // webhooks: run.completed (master + variantes) e export.completed
     let want = 3;
     let got = rx.wait_for(want, Duration::from_secs(30));
-    let mut types: Vec<String> = got.iter().map(|r| r.json()["type"].as_str().unwrap().to_owned()).collect();
+    let mut types: Vec<String> = got
+        .iter()
+        .map(|r| r.json()["type"].as_str().unwrap().to_owned())
+        .collect();
     types.sort();
     let report = &export["report"];
     // sonda independente do arquivo entregue (ffprobe direto, fora do servidor)
-    let out_path = s.core().db.export_get(&export_id).unwrap().unwrap().path.unwrap();
+    let out_path = s
+        .core()
+        .db
+        .export_get(&export_id)
+        .unwrap()
+        .unwrap()
+        .path
+        .unwrap();
     let probe = if std::path::Path::new(&out_path).is_dir() {
         // preset `intermediate`: pasta de quadros (sem contêiner de vídeo para sondar)
         json!({"codec": "intermediate-frames", "width": report["width"], "height": report["height"]})
@@ -481,7 +581,11 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
     if h264 {
         assert_eq!(probe["codec"], "h264", "{probe}");
     }
-    assert_eq!((probe["width"].as_u64(), probe["height"].as_u64()), (Some(540), Some(960)), "{probe}");
+    assert_eq!(
+        (probe["width"].as_u64(), probe["height"].as_u64()),
+        (Some(540), Some(960)),
+        "{probe}"
+    );
     let summary = json!({
         "assets": n_assets,
         "approvals": {"master": sorted(&master_kinds), "variants": sorted(&child_kinds)},
@@ -503,7 +607,10 @@ pub fn run_flow(c: &dyn Client, s: &TestServer, rx: &Receiver) -> FlowResult {
     });
     let normalise = |v: Value| -> Value {
         let mut t = v.to_string();
-        t = t.replace(&master, "MASTER").replace(&child, "CHILD").replace(&pid, "PROJECT");
+        t = t
+            .replace(&master, "MASTER")
+            .replace(&child, "CHILD")
+            .replace(&pid, "PROJECT");
         for (i, a) in asset_ids.iter().enumerate() {
             t = t.replace(a.as_str(), &format!("ASSET{i}"));
         }
@@ -532,10 +639,25 @@ fn sorted(v: &[String]) -> Vec<String> {
 /// Codec/largura/altura do primeiro stream de vídeo, por ffprobe direto.
 pub fn probe_video(path: &str) -> Value {
     let out = std::process::Command::new("ffprobe")
-        .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,width,height", "-of", "json", path])
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name,width,height",
+            "-of",
+            "json",
+            path,
+        ])
         .output()
         .expect("ffprobe");
-    assert!(out.status.success(), "ffprobe failed on {path} (exists: {}): {}", std::path::Path::new(path).exists(), String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "ffprobe failed on {path} (exists: {}): {}",
+        std::path::Path::new(path).exists(),
+        String::from_utf8_lossy(&out.stderr)
+    );
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
     let st = &v["streams"][0];
     json!({"codec": st["codec_name"], "width": st["width"], "height": st["height"]})
