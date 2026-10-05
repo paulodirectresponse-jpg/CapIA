@@ -232,6 +232,20 @@ pub fn leak_in(text: &str, data_dir: &Path) -> Option<String> {
         .map(|m| format!("marker `{m}`"))
 }
 
+/// Como `leak_in`, mas um fragmento que o PRÓPRIO pedido continha (eco da entrada do chamador) não
+/// conta: ecoar `../../etc/passwd` que o cliente mandou não revela nada do servidor.
+pub fn leak_in_unless_echo(text: &str, data_dir: &Path, request: &[u8]) -> Option<String> {
+    let dd = data_dir.to_string_lossy();
+    if text.contains(dd.as_ref()) {
+        return Some(format!("data dir `{dd}`"));
+    }
+    let req = String::from_utf8_lossy(request);
+    LEAK_MARKERS
+        .iter()
+        .find(|m| text.contains(*m) && !req.contains(*m))
+        .map(|m| format!("marker `{m}`"))
+}
+
 /// Corpo + cabeçalhos de uma resposta como texto único (para varredura).
 pub fn whole(r: &Resp) -> String {
     let mut t = String::new();

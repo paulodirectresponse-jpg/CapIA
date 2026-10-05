@@ -246,10 +246,11 @@ fn gen_request(rng: &mut Prng, port: u16, admin: &str, pid: &str) -> Vec<u8> {
             _ => String::new(),
         };
     }
-    let version = *rng.pick(&[
-        "HTTP/1.1", "HTTP/1.1", "HTTP/1.1", "HTTP/1.0", "HTTP/2.0", "HTTP/0.9", "HTTP/1.",
-        "http/1.1", "",
-    ]);
+    let version = if rng.chance(12) {
+        *rng.pick(&["HTTP/1.0", "HTTP/2.0", "HTTP/0.9", "HTTP/1.", "http/1.1", ""])
+    } else {
+        "HTTP/1.1"
+    };
     let mut body: Vec<u8> = match rng.below(6) {
         0 => Vec::new(),
         1 => json_object(rng, 0).into_bytes(),
@@ -377,7 +378,7 @@ fn run_case(s: &TestServer, bytes: &[u8], bound: Duration) -> Result<Verdict, St
     }
     // 2xx pode legitimamente carregar o segredo único de um token recém-criado
     if r.status >= 400
-        && let Some(why) = leak_in(&whole(&r), s.dir.path())
+        && let Some(why) = leak_in_unless_echo(&whole(&r), s.dir.path(), bytes)
     {
         return Err(format!("leak ({why}) in: {}", whole(&r)));
     }
