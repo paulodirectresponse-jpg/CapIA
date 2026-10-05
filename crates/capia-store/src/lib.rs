@@ -10,6 +10,7 @@
 
 mod ai;
 mod appdb;
+mod autonomy;
 mod catalog;
 mod error;
 mod failpoints;
@@ -20,6 +21,10 @@ mod store;
 
 pub use ai::{AiStore, MAX_RECORD_JSON, RecordRow, UsageRow, UsageSummary};
 pub use appdb::{APP_APPLICATION_ID, APP_MIGRATIONS, APP_SCHEMA_VERSION, AppDb};
+pub use autonomy::{
+    AutonomyStore, Claim, EffectRow, EventRow, LedgerRow, MAX_AUTONOMY_JSON, MemoryLogRow,
+    MemoryRow, ProvenanceRow, RunRow, RunUpdate, StageRow,
+};
 pub use catalog::{Catalog, CatalogEvent, CatalogEventKind, CatalogOp, PendingCatalog};
 pub use error::{StoreError, StoreErrorCode, StoreResult};
 pub use jobs::{JobStore, Recovery, TicketRow, TicketState};

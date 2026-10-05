@@ -146,6 +146,18 @@ impl Project {
         self.engine.redo(actor, now_ms())
     }
 
+    /// Undo seletivo (Fase 5): desfaz entradas escolhidas sem reescrever o histórico.
+    pub fn selective_undo(
+        &mut self,
+        actor: &Actor,
+        entries: &[u64],
+        mode: capia_commands::SelectiveUndoMode,
+        label: &str,
+    ) -> Result<CommitResult, CommandError> {
+        self.engine
+            .selective_undo(actor, entries, mode, label, now_ms())
+    }
+
     /// Resumo do arquivo (somente leitura, não modifica nada).
     pub fn inspect(path: &Path) -> Result<ProjectInfo, StoreError> {
         ProjectStore::inspect(path)

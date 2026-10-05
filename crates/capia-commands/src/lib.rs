@@ -32,7 +32,8 @@ pub use command::{
 pub use ctx::CommandOutput;
 pub use engine::{
     Actor, ActorKind, AppliedOperation, AuditEvent, AuditKind, CommandSummary, CommitResult,
-    Engine, EngineConfig, EngineState, HistoryEntry, PreviewResult,
+    Engine, EngineConfig, EngineState, HistoryEntry, PreviewResult, SelectiveUndoConflict,
+    SelectiveUndoMode, SelectiveUndoReport,
 };
 pub use error::{CommandError, Result};
 pub use group_move::{GroupMove, GroupMoveRequest, GroupSnap, resolve_group_move};

@@ -25,17 +25,28 @@ fn project(dir: &TempDir) -> std::path::PathBuf {
 }
 
 #[test]
-fn an_old_project_migrates_to_schema_4_with_empty_ai_tables() {
+fn an_old_project_migrates_to_the_current_schema_with_empty_ai_tables() {
     let dir = TempDir::new("ai-mig");
     let path = dir.file("old.capia");
     let (store, _s) = ProjectStore::create_at_schema(&path, &fast(), 3).unwrap();
     assert_eq!(store.schema_version(), 3);
     store.close().unwrap();
     let (store, _) = ProjectStore::open(&path, &fast()).unwrap();
-    assert_eq!(store.schema_version(), 4);
+    assert_eq!(store.schema_version(), 5);
     store.close().unwrap();
     let c = Connection::open(&path).unwrap();
-    for t in ["ai_records", "ai_usage"] {
+    for t in [
+        "ai_records",
+        "ai_usage",
+        "ai_runs",
+        "ai_run_stages",
+        "ai_run_events",
+        "ai_side_effects",
+        "ai_provenance",
+        "ai_memory",
+        "ai_memory_log",
+        "ai_budget_ledger",
+    ] {
         let n: i64 = c
             .query_row(&format!("SELECT COUNT(*) FROM {t}"), [], |r| r.get(0))
             .unwrap();

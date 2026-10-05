@@ -150,6 +150,19 @@ fn default_thumb() -> u32 {
 }
 
 #[derive(Deserialize)]
+struct SelectiveUndoParams {
+    #[serde(default)]
+    entries: Option<Vec<u64>>,
+    /// Todas as entradas aplicadas deste ator (por exemplo `run:<id>`).
+    #[serde(default)]
+    actor_id: Option<String>,
+    #[serde(default)]
+    mode: Option<capia_commands::SelectiveUndoMode>,
+    #[serde(default)]
+    label: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct AudioParams {
     sequence: SequenceId,
     from: i64,
@@ -489,6 +502,41 @@ impl Session {
                 Ok(Reply::Json(reply))
             }
             "history.list" => Ok(Reply::Json(model::history(&self.open_ref()?.project))),
+            "history.undo_report" | "history.undo_selective" => {
+                let q: SelectiveUndoParams = params(p)?;
+                let actor = self.actor.clone();
+                let o = self.open_mut()?;
+                let ids: Vec<u64> = match (&q.entries, &q.actor_id) {
+                    (Some(e), None) => e.clone(),
+                    (None, Some(a)) => o
+                        .project
+                        .engine()
+                        .applied_history()
+                        .iter()
+                        .filter(|h| h.actor.id == *a)
+                        .map(|h| h.id)
+                        .collect(),
+                    _ => {
+                        return Err(ApiError::invalid(
+                            "provide exactly one of `entries` or `actor_id`",
+                        ));
+                    }
+                };
+                if method == "history.undo_report" {
+                    let rep = o.project.engine().selective_undo_report(&ids)?;
+                    return Ok(Reply::Json(serde_json::to_value(rep)?));
+                }
+                let label = q.label.unwrap_or_else(|| "Selective undo".to_owned());
+                let r = o.project.selective_undo(
+                    &actor,
+                    &ids,
+                    q.mode.unwrap_or(capia_commands::SelectiveUndoMode::Safe),
+                    &label,
+                )?;
+                let reply = Self::commit_reply(o, r.entry_id, false, json!({"undone": ids}));
+                Self::announce_revision(&self.events, &reply);
+                Ok(Reply::Json(reply))
+            }
             "assets.list" => {
                 let o = self.open_ref()?;
                 Ok(Reply::Json(model::asset_rows(&o.project.assets()?)))

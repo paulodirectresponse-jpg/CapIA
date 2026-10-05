@@ -8,7 +8,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
 
 /// Versão de schema que este software escreve e entende.
-pub const CURRENT_SCHEMA_VERSION: u32 = 4;
+pub const CURRENT_SCHEMA_VERSION: u32 = 5;
 
 /// `PRAGMA application_id` de todo `.capia` ("CAPI").
 pub const APPLICATION_ID: i64 = 0x4341_5049;
@@ -51,6 +51,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 4,
         name: "intelligence records and AI usage",
         up: m004_intelligence,
+    },
+    Migration {
+        version: 5,
+        name: "autonomy (runs, stages, events, side effects, provenance, memory, budget ledger)",
+        up: m005_autonomy,
     },
 ];
 
@@ -97,6 +102,110 @@ CREATE TABLE ai_usage (
 ) STRICT;
 CREATE INDEX ai_usage_task ON ai_usage(task_id);
 ";
+
+/// Schema 5 (ADR-087): autonomia. Run persistente com cursor atômico (CAS por `revision`), registro de
+/// cada execução de stage (auditoria + retomada), eventos duráveis, **livro de efeitos colaterais**
+/// (idempotência de downloads/gerações/aplicações), proveniência por asset, memória de **projeto** e
+/// livro-razão de orçamento (reserva/liquidação/liberação). Aditiva (projetos v1..v4 ganham tabelas
+/// vazias). Nada daqui entra no documento nem no undo; nenhum segredo é gravado.
+const AUTONOMY_SQL: &str = "
+CREATE TABLE ai_runs (
+    run_id         TEXT    PRIMARY KEY NOT NULL CHECK (length(run_id) BETWEEN 1 AND 128),
+    status         TEXT    NOT NULL CHECK (status IN ('pending','running','waiting_user','paused','failed','cancelled','completed')),
+    stage          TEXT    NOT NULL CHECK (length(stage) BETWEEN 1 AND 32),
+    revision       INTEGER NOT NULL CHECK (revision >= 0),
+    parent_run_id  TEXT    CHECK (parent_run_id IS NULL OR length(parent_run_id) <= 128),
+    variant_group  TEXT    CHECK (variant_group IS NULL OR length(variant_group) <= 128),
+    created_ms     INTEGER NOT NULL CHECK (created_ms >= 0),
+    updated_ms     INTEGER NOT NULL CHECK (updated_ms >= 0),
+    json           TEXT    NOT NULL CHECK (json_valid(json))
+) STRICT;
+CREATE INDEX ai_runs_status ON ai_runs(status);
+CREATE INDEX ai_runs_group ON ai_runs(variant_group);
+
+CREATE TABLE ai_run_stages (
+    run_id        TEXT    NOT NULL,
+    seq           INTEGER NOT NULL CHECK (seq >= 1),
+    stage         TEXT    NOT NULL CHECK (length(stage) BETWEEN 1 AND 32),
+    attempt       INTEGER NOT NULL CHECK (attempt >= 0),
+    idem_key      TEXT    NOT NULL CHECK (length(idem_key) BETWEEN 1 AND 256),
+    input_digest  TEXT    NOT NULL,
+    output_digest TEXT,
+    status        TEXT    NOT NULL CHECK (status IN ('started','completed','failed','cancelled','interrupted')),
+    started_ms    INTEGER NOT NULL CHECK (started_ms >= 0),
+    ended_ms      INTEGER CHECK (ended_ms IS NULL OR ended_ms >= 0),
+    json          TEXT    NOT NULL CHECK (json_valid(json)),
+    PRIMARY KEY (run_id, seq),
+    UNIQUE (idem_key)
+) STRICT;
+
+CREATE TABLE ai_run_events (
+    run_id TEXT    NOT NULL,
+    seq    INTEGER NOT NULL CHECK (seq >= 1),
+    kind   TEXT    NOT NULL CHECK (length(kind) BETWEEN 1 AND 48),
+    ts_ms  INTEGER NOT NULL CHECK (ts_ms >= 0),
+    json   TEXT    NOT NULL CHECK (json_valid(json)),
+    PRIMARY KEY (run_id, seq)
+) STRICT;
+
+CREATE TABLE ai_side_effects (
+    effect_key  TEXT    PRIMARY KEY NOT NULL CHECK (length(effect_key) BETWEEN 1 AND 256),
+    run_id      TEXT    NOT NULL,
+    kind        TEXT    NOT NULL CHECK (length(kind) BETWEEN 1 AND 48),
+    state       TEXT    NOT NULL CHECK (state IN ('intent','submitted','done','failed')),
+    external_id TEXT,
+    created_ms  INTEGER NOT NULL CHECK (created_ms >= 0),
+    updated_ms  INTEGER NOT NULL CHECK (updated_ms >= 0),
+    json        TEXT    NOT NULL CHECK (json_valid(json))
+) STRICT;
+CREATE INDEX ai_side_effects_run ON ai_side_effects(run_id);
+
+CREATE TABLE ai_provenance (
+    asset_id     TEXT    PRIMARY KEY NOT NULL CHECK (length(asset_id) BETWEEN 1 AND 192),
+    run_id       TEXT,
+    kind         TEXT    NOT NULL CHECK (length(kind) BETWEEN 1 AND 32),
+    content_hash TEXT    NOT NULL,
+    created_ms   INTEGER NOT NULL CHECK (created_ms >= 0),
+    json         TEXT    NOT NULL CHECK (json_valid(json))
+) STRICT;
+CREATE INDEX ai_provenance_run ON ai_provenance(run_id);
+
+CREATE TABLE ai_memory (
+    id         TEXT    PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 128),
+    scope      TEXT    NOT NULL CHECK (scope IN ('project')),
+    status     TEXT    NOT NULL CHECK (status IN ('proposed','active','rejected','archived')),
+    created_ms INTEGER NOT NULL CHECK (created_ms >= 0),
+    updated_ms INTEGER NOT NULL CHECK (updated_ms >= 0),
+    json       TEXT    NOT NULL CHECK (json_valid(json))
+) STRICT;
+CREATE INDEX ai_memory_status ON ai_memory(status);
+
+CREATE TABLE ai_memory_log (
+    seq       INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    memory_id TEXT    NOT NULL,
+    event     TEXT    NOT NULL CHECK (length(event) BETWEEN 1 AND 48),
+    actor     TEXT    NOT NULL,
+    run_id    TEXT,
+    ts_ms     INTEGER NOT NULL CHECK (ts_ms >= 0),
+    json      TEXT    NOT NULL CHECK (json_valid(json))
+) STRICT;
+CREATE INDEX ai_memory_log_item ON ai_memory_log(memory_id);
+
+CREATE TABLE ai_budget_ledger (
+    seq            INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_id         TEXT    NOT NULL,
+    reservation_id TEXT    NOT NULL,
+    kind           TEXT    NOT NULL CHECK (kind IN ('reserve','settle','release')),
+    micros         INTEGER NOT NULL CHECK (micros >= 0),
+    ts_ms          INTEGER NOT NULL CHECK (ts_ms >= 0),
+    json           TEXT    NOT NULL CHECK (json_valid(json))
+) STRICT;
+CREATE INDEX ai_budget_ledger_run ON ai_budget_ledger(run_id);
+";
+
+fn m005_autonomy(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    tx.execute_batch(AUTONOMY_SQL)
+}
 
 fn m004_intelligence(tx: &Transaction<'_>) -> rusqlite::Result<()> {
     tx.execute_batch(INTELLIGENCE_SQL)

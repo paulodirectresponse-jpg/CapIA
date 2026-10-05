@@ -94,6 +94,32 @@ pub struct AppliedOperation {
     pub actor: Actor,
 }
 
+/// Como tratar entradas em conflito num undo seletivo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SelectiveUndoMode {
+    /// Tudo ou nada: qualquer conflito vira `CONFLICT`.
+    Safe,
+    /// Pula as entradas em conflito e desfaz as demais (se o resultado ficar válido).
+    Partial,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SelectiveUndoConflict {
+    /// Entrada selecionada que não pode ser desfeita com segurança.
+    pub entry_id: u64,
+    /// Entrada posterior (não selecionada) que toca as mesmas entidades.
+    pub blocked_by: u64,
+    pub blocked_by_actor: Actor,
+    pub entities: Vec<EntityRef>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SelectiveUndoReport {
+    pub entries: Vec<u64>,
+    pub conflicts: Vec<SelectiveUndoConflict>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CommitResult {
     pub entry_id: u64,
@@ -555,6 +581,186 @@ impl Engine {
         let entry = self.history[self.cursor].clone();
         let result = self.replay_ops(&entry, &entry.ops, actor, now_ms, AuditKind::Redo)?;
         self.cursor += 1;
+        Ok(result)
+    }
+
+    // ---- undo seletivo (Fase 5; docs/COMMAND_SYSTEM.md §undo por ator) ------------------------
+
+    /// Relatório de um undo seletivo **sem aplicar nada**: quais entradas seriam desfeitas e quais
+    /// entradas posteriores (de outros) tocam as mesmas entidades.
+    pub fn selective_undo_report(&self, entry_ids: &[u64]) -> Result<SelectiveUndoReport> {
+        let applied = self.applied_history();
+        let mut selected: Vec<&HistoryEntry> = Vec::new();
+        for id in entry_ids {
+            let e = applied.iter().find(|e| e.id == *id).ok_or_else(|| {
+                CommandError::new(
+                    ErrorCode::NotFound,
+                    format!("history entry {id} is not applied (already undone or unknown)"),
+                )
+            })?;
+            if !selected.iter().any(|s| s.id == e.id) {
+                selected.push(e);
+            }
+        }
+        if selected.is_empty() {
+            return Err(CommandError::invalid("no history entries selected"));
+        }
+        selected.sort_by_key(|e| e.id);
+        let mut conflicts = Vec::new();
+        for e in &selected {
+            for later in applied.iter().filter(|l| l.id > e.id) {
+                if selected.iter().any(|s| s.id == later.id) {
+                    continue;
+                }
+                let shared: Vec<EntityRef> =
+                    e.affected.intersection(&later.affected).cloned().collect();
+                if !shared.is_empty() {
+                    conflicts.push(SelectiveUndoConflict {
+                        entry_id: e.id,
+                        blocked_by: later.id,
+                        blocked_by_actor: later.actor.clone(),
+                        entities: shared,
+                    });
+                }
+            }
+        }
+        Ok(SelectiveUndoReport {
+            entries: selected.iter().map(|e| e.id).collect(),
+            conflicts,
+        })
+    }
+
+    /// Desfaz entradas **escolhidas** (por exemplo, todas as de uma AI Run) sem apagar nem reescrever
+    /// o histórico: as inversas viram uma **nova entrada** (`ator` = quem pediu), ela mesma
+    /// desfazível. `Safe` falha com `CONFLICT` se alguma entrada posterior de terceiros tocar as
+    /// mesmas entidades; `Partial` pula as entradas em conflito (e só prossegue se o resultado
+    /// continuar válido). Edições manuais incompatíveis **nunca** são sobrescritas em silêncio.
+    pub fn selective_undo(
+        &mut self,
+        actor: &Actor,
+        entry_ids: &[u64],
+        mode: SelectiveUndoMode,
+        label: &str,
+        now_ms: u64,
+    ) -> Result<CommitResult> {
+        if actor.requires_preview() {
+            return Err(CommandError::new(
+                ErrorCode::PreviewRequired,
+                "selective undo is a user action",
+            ));
+        }
+        let report = self.selective_undo_report(entry_ids)?;
+        let blocked: BTreeSet<u64> = report.conflicts.iter().map(|c| c.entry_id).collect();
+        if !blocked.is_empty() && mode == SelectiveUndoMode::Safe {
+            return Err(CommandError::new(
+                ErrorCode::Conflict,
+                "later changes touch the same entities: use partial undo or resolve manually",
+            )
+            .with_hint(json!({ "conflicts": report.conflicts })));
+        }
+        let chosen: Vec<&HistoryEntry> = report
+            .entries
+            .iter()
+            .filter(|id| !blocked.contains(id))
+            .filter_map(|id| self.history.iter().find(|e| e.id == *id))
+            .collect();
+        if chosen.is_empty() {
+            return Err(CommandError::new(
+                ErrorCode::Conflict,
+                "every selected entry conflicts with later changes",
+            )
+            .with_hint(json!({ "conflicts": report.conflicts })));
+        }
+        // inversas na ordem cronológica inversa (a mais nova primeiro)
+        let mut ops: Vec<PrimitiveOp> = Vec::new();
+        let mut affected: BTreeSet<EntityRef> = BTreeSet::new();
+        for e in chosen.iter().rev() {
+            ops.extend(e.inverse_ops.iter().cloned());
+            affected.extend(e.affected.iter().cloned());
+        }
+        let mut doc = self.doc.clone();
+        doc.apply_ops(&ops).map_err(|e| {
+            CommandError::new(
+                ErrorCode::Conflict,
+                format!(
+                    "the selected changes can no longer be undone cleanly ({})",
+                    e.code
+                ),
+            )
+        })?;
+        self.validate_touched(&doc, &ops).map_err(|e| {
+            CommandError::new(
+                ErrorCode::Conflict,
+                format!(
+                    "undoing the selected changes would break the document ({})",
+                    e.code
+                ),
+            )
+        })?;
+        let revision_before = self.doc.revision;
+        doc.revision = next_revision(revision_before)?;
+        let id = self.next_entry;
+        let inverse_ops: Vec<PrimitiveOp> = ops.iter().rev().map(PrimitiveOp::inverse).collect();
+        let entry = HistoryEntry {
+            id,
+            revision_before,
+            revision_after: doc.revision,
+            label: label.to_owned(),
+            actor: actor.clone(),
+            transaction_id: Some(format!("selective_undo:{id}")),
+            plan_id: None,
+            commands: vec![CommandSummary {
+                operation_id: format!("selective_undo:{id}"),
+                command_type: "selective_undo".into(),
+                label: format!(
+                    "undo entries {}",
+                    chosen
+                        .iter()
+                        .map(|e| e.id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ),
+            }],
+            ops,
+            inverse_ops,
+            affected: affected.clone(),
+            timestamp_ms: now_ms,
+        };
+        let event = AuditEvent {
+            kind: AuditKind::Commit,
+            entry_id: id,
+            revision: doc.revision,
+            timestamp_ms: now_ms,
+            actor: actor.clone(),
+        };
+        let result = CommitResult {
+            entry_id: id,
+            revision_before,
+            revision: doc.revision,
+            replayed: false,
+            refs: BTreeMap::new(),
+            results: Vec::new(),
+            affected: affected.iter().cloned().collect(),
+        };
+        self.append_journal(
+            &JournalRecord::Commit {
+                entry: &entry,
+                result: &result,
+                applied: &[],
+                event: &event,
+            },
+            &doc,
+        )?;
+        self.next_entry = self.next_entry.checked_add(1).ok_or_else(|| {
+            CommandError::new(ErrorCode::LimitExceeded, "history entry id space exhausted")
+        })?;
+        self.history.truncate(self.cursor);
+        self.history.push(entry);
+        self.cursor = self.history.len();
+        self.doc = doc;
+        self.change_log.push((result.revision, affected));
+        self.audit.push(event);
+        self.commit_results.insert(id, result.clone());
         Ok(result)
     }
 

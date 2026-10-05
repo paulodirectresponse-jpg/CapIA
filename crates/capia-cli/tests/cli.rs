@@ -111,7 +111,7 @@ fn create_and_inspect_a_project() {
     let r = capia(&["create", s(&p)]);
     assert_eq!(r.code, 0, "{}", r.stderr);
     assert!(
-        r.stdout.contains("created") && r.stdout.contains("schema:    4"),
+        r.stdout.contains("created") && r.stdout.contains("schema:    5"),
         "{}",
         r.stdout
     );
@@ -120,7 +120,7 @@ fn create_and_inspect_a_project() {
     let r = capia(&["inspect", s(&p), "--json"]);
     assert_eq!(r.code, 0);
     let v: Value = serde_json::from_str(&r.stdout).unwrap();
-    assert_eq!(v["schema_version"], 4);
+    assert_eq!(v["schema_version"], 5);
     assert_eq!(v["revision"], 0);
     assert_eq!(v["stats"]["operations"], 0);
     assert!(v["project_id"].as_str().unwrap().starts_with("prj_"));
