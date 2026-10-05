@@ -192,7 +192,7 @@ pub fn world_full(
     make: Option<fn(&MediaToolchain, &Path) -> PathBuf>,
     stt_script: Vec<ReplayResponse>,
     with_stt: bool,
-    brain_script: Option<Vec<ReplayResponse>>,
+    brain: Option<Arc<ReplayProvider>>,
 ) -> Option<World> {
     let tc = if make.is_some() {
         Some(ffmpeg()?)
@@ -251,7 +251,7 @@ pub fn world_full(
     }
     let mut brain_replay = None;
     let mut brain_id = "stt:m".to_owned();
-    if let Some(script) = brain_script {
+    if let Some(b) = brain {
         let mut p = ProviderConfig::new("brain", ProviderKind::Replay, "brain");
         p.enabled = true;
         reg.providers.insert("brain".into(), p);
@@ -265,7 +265,7 @@ pub fn world_full(
         m.context_window = 200_000;
         m.enabled = true;
         reg.models.insert(m.id.clone(), m);
-        brain_replay = Some(Arc::new(ReplayProvider::scripted("brain", script)));
+        brain_replay = Some(b);
         "brain:m".clone_into(&mut brain_id);
     }
     let prof = BrainProfile::new("pf", "pf", brain_id);
@@ -301,4 +301,8 @@ pub fn transcript_response() -> ReplayResponse {
     ReplayResponse::Transcript {
         transcript: scripted_transcript(),
     }
+}
+
+pub fn scripted_brain(script: Vec<ReplayResponse>) -> Arc<ReplayProvider> {
+    Arc::new(ReplayProvider::scripted("brain", script))
 }

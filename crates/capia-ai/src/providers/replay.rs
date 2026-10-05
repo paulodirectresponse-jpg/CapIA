@@ -90,9 +90,13 @@ pub fn stt_digest(req: &SttRequest) -> String {
     crate::types::hex(&Sha256::digest(canon.to_string().as_bytes()))
 }
 
+/// Respondedor programático (testes): vê o pedido e o nº da chamada (0, 1, …).
+pub type Responder = Box<dyn Fn(&ChatRequest, u32) -> ReplayResponse + Send + Sync>;
+
 enum Mode {
     ByDigest(BTreeMap<String, ReplayResponse>),
     Script(Mutex<VecDeque<ReplayResponse>>),
+    Responder(Responder),
 }
 
 pub struct ReplayProvider {
@@ -128,6 +132,11 @@ impl ReplayProvider {
     /// Respostas em ordem, ignorando o digest (retry/fallback/erros).
     pub fn scripted(id: impl Into<String>, script: Vec<ReplayResponse>) -> Self {
         Self::build(id, Mode::Script(Mutex::new(script.into())))
+    }
+
+    /// Respostas calculadas a partir do pedido (ex.: devolver o `plan_token` que veio da tool).
+    pub fn responder(id: impl Into<String>, f: Responder) -> Self {
+        Self::build(id, Mode::Responder(f))
     }
 
     fn build(id: impl Into<String>, mode: Mode) -> Self {
@@ -168,6 +177,10 @@ impl ReplayProvider {
                     format!("no replay fixture for request digest {digest}"),
                 )
             }),
+            Mode::Responder(_) => Err(ProviderError::new(
+                ErrorCode::InvalidRequest,
+                "responder replay is only used for chat",
+            )),
             Mode::Script(q) => q
                 .lock()
                 .map_err(|_| ProviderError::new(ErrorCode::ProviderUnavailable, "replay poisoned"))?
@@ -252,7 +265,20 @@ impl ModelProvider for ReplayProvider {
         if let Ok(mut r) = self.requests.lock() {
             r.push(req.clone());
         }
-        match self.next(&req.digest())? {
+        let resp = if let Mode::Responder(f) = &self.mode {
+            let n = {
+                let mut c = self.calls.lock().map_err(|_| {
+                    ProviderError::new(ErrorCode::ProviderUnavailable, "replay poisoned")
+                })?;
+                let n = *c;
+                *c += 1;
+                n
+            };
+            f(req, n)
+        } else {
+            self.next(&req.digest())?
+        };
+        match resp {
             ReplayResponse::Chat {
                 mut events,
                 chunk_delay_ms,

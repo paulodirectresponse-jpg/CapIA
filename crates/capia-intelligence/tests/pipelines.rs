@@ -141,6 +141,7 @@ fn silence_removal_cuts_only_silence_and_keeps_speech() {
         &p,
         "track",
         "task-sil",
+        None,
         &CancelToken::new(),
     )
     .unwrap();

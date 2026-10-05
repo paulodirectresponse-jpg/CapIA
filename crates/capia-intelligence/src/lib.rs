@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod assistant;
 pub mod captions;
 pub mod ctx;
 pub mod demand;
@@ -17,6 +18,7 @@ pub mod records;
 pub mod reference;
 pub mod scenes;
 pub mod silence;
+pub mod tools_exec;
 pub mod transcript;
 
 pub use ctx::IntelCtx;

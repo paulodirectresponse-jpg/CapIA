@@ -257,6 +257,7 @@ pub fn plan_silence_cut(
     p: &SilenceParams,
     ripple_scope: &str,
     task_id: &str,
+    only_clip: Option<&str>,
     cancel: &CancelToken,
 ) -> IntelResult<SilencePlan> {
     let seq = ctx
@@ -269,7 +270,10 @@ pub fn plan_silence_cut(
             "the sequence has no frame rate",
         ));
     }
-    let clips = crate::captions::clips_of_asset(&seq, asset_id);
+    let mut clips = crate::captions::clips_of_asset(&seq, asset_id);
+    if let Some(only) = only_clip {
+        clips.retain(|c| c.clip_id == only);
+    }
     if clips.is_empty() {
         return Err(IntelError::new(
             "NO_CLIPS",

@@ -75,7 +75,7 @@ async fn demand_spec_from_docx_pdf_and_video_carries_verified_sources() {
         Some(make_speech_clip),
         vec![transcript_response()],
         true,
-        Some(vec![brain_json(&reply)]),
+        Some(scripted_brain(vec![brain_json(&reply)])),
     ) else {
         return;
     };
@@ -191,7 +191,13 @@ async fn model_that_fabricates_sources_cannot_pass_them_off_as_explicit() {
         "must_include": [], "must_avoid": [], "constraints": [], "assets_mentioned": [],
         "open_questions": []
     });
-    let Some(w) = world_full("fab", None, vec![], false, Some(vec![brain_json(&reply)])) else {
+    let Some(w) = world_full(
+        "fab",
+        None,
+        vec![],
+        false,
+        Some(scripted_brain(vec![brain_json(&reply)])),
+    ) else {
         return;
     };
     let d = docs::extract_file(&write(&w.dir, "b.docx", &docx)).unwrap();
@@ -220,7 +226,13 @@ async fn invalid_model_output_is_repaired_once_then_fails_with_a_structured_erro
         }],
         chunk_delay_ms: 0,
     };
-    let Some(w) = world_full("bad", None, vec![], false, Some(vec![bad.clone(), bad])) else {
+    let Some(w) = world_full(
+        "bad",
+        None,
+        vec![],
+        false,
+        Some(scripted_brain(vec![bad.clone(), bad])),
+    ) else {
         return;
     };
     let d = docs::extract_file(&write(&w.dir, "b.docx", &docx)).unwrap();
