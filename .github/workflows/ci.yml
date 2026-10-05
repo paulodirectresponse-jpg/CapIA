@@ -173,6 +173,13 @@ jobs:
         run: cargo test --release -p capia-project --test perf_assets -- --ignored --nocapture --test-threads=1
       - name: Metas de desempenho do núcleo (release)
         run: cargo test --release -p capia-commands --test perf -- --ignored --nocapture
+      - name: Fase 6 — gate de desempenho do projeto grande (≥30 sequences, ≥5.000 clips; mediana de 3)
+        run: node tools/phase6-acceptance/performance/run.mjs
+        env:
+          CAPIA_REQUIRE_FFMPEG: "1"
+      - name: Fase 6 — relatório de desempenho
+        if: always()
+        run: cat target/phase6-acceptance/performance.json || true
       - name: Núcleo sem IO (e o compositor puro) compila para WASM (ADR-016)
         run: cargo check --target wasm32-unknown-unknown -p capia-time -p capia-model -p capia-commands -p capia-render
       - uses: actions/setup-node@v4
