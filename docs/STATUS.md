@@ -21,14 +21,17 @@
 | Multi-cliente | ✅ `revision_changed`: a UI ressincroniza quando outro cliente altera o documento (ADR-072) |
 | Desempenho | ✅ instrumentação (`PerfLog`, amostras de pintura/gesto) + `perf.spec` com 5.000 clips; resultados em "Metas de UX medidas" |
 
+### CI verde (evidência)
+Run 72 do CI, commit `72a0600` (branch `claude/phase3-editor`): **todos os 6 jobs verdes** — Núcleo Rust (Linux), Rust + desktop (Windows: fmt, clippy, testes do workspace, detecção de encoders, aceitação da Fase 2, build Tauri), TypeScript, arquitetura/licenças/segredos, **E2E Linux** (17 testes + perf de 5.000 clips) e **E2E Windows do app real** (WebView2/CDP; `CAPIA_REQUIRE_SHARED_BUFFER=1` e `CAPIA_REQUIRE_H264=1` impostos pelo teste ⇒ transporte `shared-buffer` e export H.264 aprovado verificados pelo `ffprobe`). **Ressalvas honestas:** no alvo Windows 3 testes são *skipped* por desenho (os dois `kill -9` e o de vazamentos, que dependem de Chromium/flags do Playwright e já rodam no Linux); o runner Windows é software (sem GPU real, sem NVENC/QSV/AMF) — o residual de GPU continua pendente.
+
 ### Metas de `TIMELINE_UX.md` §6 — medidas (5.000 clips, Chromium headless **sem GPU** + engine release, Linux)
 | Meta | Medido (p95 salvo nota) | Estado |
 |---|---|---|
 | Scroll/zoom 60 fps | pintura ≈ 11–13 ms (p95), 1.765 clips visíveis no *fit* | ✅ (CPU raster; GPU só melhora) |
 | Arrasto < 16 ms | ≈ 3–4 ms por `pointermove` (ghost local, sem IPC) | ✅ |
-| Commit < 30 ms | engine ≈ 8–15 ms; percebido na UI ≈ 30–45 ms em `move_clips` (headless, 4 núcleos compartilhados com o Chromium) | ⚠️ engine ✅; **percebido na UI na margem** — reavaliar em hardware de referência |
-| Undo/redo < 50 ms | engine ≈ 8–16 ms; UI ≈ 15–60 ms (sem o artefato de Nagle: antes ≈ 55 ms fixos) | ✅/⚠️ medir no benchmark local |
-| Scrub do preview < 100 ms | ≈ 23–36 ms (5.000 clips sólidos, 404×720) | ✅ |
+| Commit < 30 ms | engine p50 4,3 ms / p95 10,8 ms; percebido na UI p50 31 ms / **p95 34,9 ms** (run 72, headless, núcleos compartilhados com o Chromium) | ⚠️ engine ✅; **percebido na UI NÃO atinge a meta neste ambiente** (`targets` do relatório: `false`) — reavaliar em hardware de referência |
+| Undo/redo < 50 ms | engine p95 8,2 ms; UI p50 20,6 ms / p95 23 ms (run 72) | ✅ |
+| Scrub do preview < 100 ms | p50 26 ms / p95 37,8 ms / máx 113,8 ms (run 72; 5.000 clips sólidos, 404×720, 0 quadros descartados) | ✅ (p95) |
 | Miniaturas < 200 ms | 1ª busca fria medida em `thumbnailLatencyMs` (imagens/vídeos de teste) | ✅ (sem estresse de mídia real) |
 | Waveform sem recálculo no zoom | pirâmide `CWFM` (Fase 2) | ✅ |
 Relatório bruto: `target/perf/phase3-ui-perf.json` (artefato do CI). **Honestidade:** são números de CI/sandbox sem GPU real; o benchmark estrito é `CAPIA_PERF_STRICT=1` localmente.
@@ -38,7 +41,7 @@ Relatório bruto: `target/perf/phase3-ui-perf.json` (artefato do CI). **Honestid
 - Rotação não-múltipla de 90° não é renderizada (limite herdado da Fase 2); o inspector aceita o valor e o render avisa.
 - "Proxy" no preview = resolução reduzida (modo de desempenho), **não** decodifica o proxy de mídia (ADR-063).
 - Reverso de clip: exibido, sem comando de edição.
-- Perf: commit/undo percebidos na UI ficam na margem das metas neste ambiente (ver tabela).
+- Perf: o commit percebido na UI (p95 34,9 ms) **não** atinge a meta de 30 ms neste ambiente (engine sozinho ✅); undo/redo ✅ (ver tabela).
 - Lacunas de teste: E2E do app nativo só roda no CI Windows; o residual de GPU e os 3 usuários dependem de pessoas/hardware.
 
 ### Aceitação humana / hardware (pendente — pacote pronto)

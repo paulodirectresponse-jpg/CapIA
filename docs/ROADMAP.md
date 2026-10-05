@@ -30,7 +30,7 @@ Spikes da Fase 1 (relatórios em `docs/spikes/`): S1 preview surface · S2 decod
 **Critérios de conclusão:**
 - [x] Decisões bloqueantes da **Fase 2** fechadas (OD-2, OD-3). **OD-1** é gate da **Fase 3** (ADR-037); **OUTPUT-H264** é gate de saída da Fase 3.
 - [x] Relatórios dos spikes S2–S7; pacote do S1 pronto para execução em Windows (S1 medido = gate da Fase 3).
-- [ ] CI verde em Windows para o workspace (build, lint, testes, secret scan) — *workflow pronto; aguardando a primeira execução real.*
+- [x] CI verde em Windows para o workspace (build, lint, testes, secret scan) — *verde na Fase 2 e novamente na Fase 3 (run 72, commit `72a0600`).*
 - [x] Workspace compila, testa, passa lint/format; fronteiras e licenças verificadas por ferramenta.
 - [x] Nenhum ADR "Proposed" bloqueando a Fase 2 (ADR-016 aceito na M03).
 
