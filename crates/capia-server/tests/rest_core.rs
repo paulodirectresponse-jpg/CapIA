@@ -700,3 +700,17 @@ fn a_full_queue_answers_503_instead_of_spawning_unbounded_work() {
     drop(queued.try_clone());
     let _ = std::io::Write::write_all(&mut queued, b"\r\n");
 }
+
+#[test]
+fn local_metrics_count_requests_errors_and_rate_limits_without_labels_of_secrets() {
+    let s = start("metrics", |_| {});
+    let t = s.token("m", &["project:read"]);
+    s.call_as(&t, "GET", "/v1/server", None);
+    s.call_as(&t, "POST", "/v1/projects", Some(json!({"name": "x"}))); // 403
+    let mr = s.call("GET", "/v1/metrics", None);
+    let m = mr.json();
+    assert!(m["requests"].as_u64().unwrap() >= 2, "{m}");
+    assert!(m["errors_4xx"].as_u64().unwrap() >= 1, "{m}");
+    assert_eq!(m["webhook_deliveries_pending"], 0);
+    assert!(!m.to_string().contains("capia_"));
+}

@@ -17,7 +17,7 @@ use capia_intelligence::{IntelligenceService, SessionEngine};
 use capia_store::{AuditRow, IdemBegin, ServerDb};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 use std::time::{Duration, Instant};
 
@@ -98,6 +98,17 @@ impl Wake {
     }
 }
 
+/// Contadores locais (sem rótulos de alta cardinalidade; nada de token/projeto).
+#[derive(Debug, Default)]
+pub struct Metrics {
+    pub requests: AtomicU64,
+    pub writes: AtomicU64,
+    pub errors_4xx: AtomicU64,
+    pub errors_5xx: AtomicU64,
+    pub rate_limited: AtomicU64,
+    pub replays: AtomicU64,
+}
+
 pub struct Core {
     pub cfg: ServerConfig,
     pub db: Arc<ServerDb>,
@@ -115,6 +126,7 @@ pub struct Core {
     pub inflight: AtomicUsize,
     pub uploads_active: AtomicUsize,
     pub sse_active: AtomicUsize,
+    pub metrics: Metrics,
     validators: HashMap<&'static str, jsonschema::Validator>,
 }
 
@@ -196,6 +208,7 @@ impl Core {
             inflight: AtomicUsize::new(0),
             uploads_active: AtomicUsize::new(0),
             sse_active: AtomicUsize::new(0),
+            metrics: Metrics::default(),
             validators,
         }))
     }
@@ -350,11 +363,23 @@ impl Core {
                 run,
             ),
         };
+        self.metrics.requests.fetch_add(1, Ordering::Relaxed);
+        if def.mutating {
+            self.metrics.writes.fetch_add(1, Ordering::Relaxed);
+        }
         match &result {
             Ok(r) => {
+                if r.replayed {
+                    self.metrics.replays.fetch_add(1, Ordering::Relaxed);
+                }
                 audit.outcome = if r.replayed { "replayed" } else { "ok" }.to_owned();
             }
             Err(e) => {
+                match e.status {
+                    429 => self.metrics.rate_limited.fetch_add(1, Ordering::Relaxed),
+                    400..=499 => self.metrics.errors_4xx.fetch_add(1, Ordering::Relaxed),
+                    _ => self.metrics.errors_5xx.fetch_add(1, Ordering::Relaxed),
+                };
                 audit.outcome = "error".to_owned();
                 audit.code = Some(e.code.clone());
             }

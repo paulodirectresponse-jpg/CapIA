@@ -169,6 +169,17 @@ fn build() -> Vec<OpDef> {
             200,
             obj(&[], &[]),
         ),
+        op(
+            "server.metrics",
+            "Local counters: requests, errors, rate limits, in-flight work, uptime.",
+            Some(ProjectRead),
+            false,
+            Read,
+            "GET",
+            "/v1/metrics",
+            200,
+            obj(&[], &[]),
+        ),
         // ---- tokens -----------------------------------------------------------------------
         op(
             "tokens.create",

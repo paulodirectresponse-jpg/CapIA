@@ -107,6 +107,19 @@ impl Core {
                 "uptime_ms": u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
             })),
             "server.info" => self.op_info(),
+            "server.metrics" => {
+                use std::sync::atomic::Ordering::Relaxed;
+                let m = &self.metrics;
+                Ok(json!({
+                    "uptime_ms": u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    "requests": m.requests.load(Relaxed), "writes": m.writes.load(Relaxed),
+                    "errors_4xx": m.errors_4xx.load(Relaxed), "errors_5xx": m.errors_5xx.load(Relaxed),
+                    "rate_limited": m.rate_limited.load(Relaxed), "idempotent_replays": m.replays.load(Relaxed),
+                    "inflight": self.inflight.load(Relaxed), "uploads_active": self.uploads_active.load(Relaxed),
+                    "sse_streams": self.sse_active.load(Relaxed),
+                    "webhook_deliveries_pending": self.db.deliveries_pending_count().unwrap_or(0),
+                }))
+            }
             // ---- tokens ---------------------------------------------------------------------
             "tokens.create" => self.op_token_create(ctx, &p),
             "tokens.list" => Ok(json!({"tokens": self.db.token_list()?.iter().map(public_view).collect::<Vec<_>>()})),

@@ -989,6 +989,14 @@ impl ServerDb {
         Ok(())
     }
 
+    pub fn deliveries_pending_count(&self) -> StoreResult<u64> {
+        Ok(u(self.conn().query_row(
+            "SELECT COUNT(*) FROM deliveries WHERE state IN ('pending','retrying','delivering')",
+            [],
+            |r| r.get(0),
+        )?))
+    }
+
     pub fn delivery_get(&self, id: i64) -> StoreResult<Option<DeliveryRow>> {
         Ok(self
             .conn()
