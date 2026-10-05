@@ -1,0 +1,24 @@
+{
+  "_instructions": "Preencha UMA entrada por demanda REAL (≥ 10). `ratings` é a nota humana 1–5 do resultado editável de cada Run (nunca preencha sem ter rodado e assistido o resultado). Deixe null o que não foi avaliado.",
+  "scale": {
+    "1": "inutilizável",
+    "2": "ruim, refazer à mão",
+    "3": "aproveitável com muito ajuste",
+    "4": "bom, ajustes pequenos",
+    "5": "pronto para publicar"
+  },
+  "provider": null,
+  "model": null,
+  "evaluated_at": null,
+  "rater": null,
+  "demands": [
+    {
+      "id": "demand-01",
+      "run_id": null,
+      "brief_file": null,
+      "rating": null,
+      "minutes_to_final": null,
+      "notes": null
+    }
+  ]
+}
