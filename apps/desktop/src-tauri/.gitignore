@@ -1,0 +1,4 @@
+# Gerados por tools/release/stage-bundle.mjs (instalador); nunca versionados
+/bundle-staging/
+/binaries/
+/tauri.installer.generated.json
