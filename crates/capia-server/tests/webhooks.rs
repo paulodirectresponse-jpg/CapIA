@@ -260,7 +260,8 @@ fn a_flaky_endpoint_is_retried_with_exponential_backoff_and_stable_ids() {
     let g2 = got[2].received_at - got[1].received_at;
     assert!(g1 >= Duration::from_millis(70), "{g1:?}");
     assert!(g2 >= Duration::from_millis(150), "{g2:?}");
-    assert!(g2 > g1, "{g1:?} {g2:?}");
+    // a ordem g2 > g1 não é garantida (o despachante acorda em ticks de 200 ms): vale a soma dos mínimos
+    assert!(g1 + g2 >= Duration::from_millis(230), "{g1:?} {g2:?}");
     assert!(g2 < Duration::from_millis(2500));
     // ids estáveis entre tentativas; tentativa e assinatura variam
     let delivery = got[0].header("x-capia-delivery").unwrap();
