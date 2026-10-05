@@ -1884,9 +1884,9 @@ fn malformed_request_heads_are_refused_without_hanging_or_crashing() {
     ];
     for (label, bytes, ok) in cases {
         let st = raw_status(&s, &bytes);
-        match st {
-            Some(st) => assert!(ok.contains(&st), "{label}: answered {st}, expected {ok:?}"),
-            None => {} // fechou sem resposta: aceitável (nunca pendurou: `exchange` tem prazo)
+        // `None`: fechou sem resposta — aceitável (nunca pendurou: `exchange` tem prazo)
+        if let Some(st) = st {
+            assert!(ok.contains(&st), "{label}: answered {st}, expected {ok:?}");
         }
     }
     // lixo binário e pipelining: a primeira requisição boa é respondida; o lixo vira 400 e fecha

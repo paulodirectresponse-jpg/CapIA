@@ -247,7 +247,9 @@ fn gen_request(rng: &mut Prng, port: u16, admin: &str, pid: &str) -> Vec<u8> {
         };
     }
     let version = if rng.chance(12) {
-        *rng.pick(&["HTTP/1.0", "HTTP/2.0", "HTTP/0.9", "HTTP/1.", "http/1.1", ""])
+        *rng.pick(&[
+            "HTTP/1.0", "HTTP/2.0", "HTTP/0.9", "HTTP/1.", "http/1.1", "",
+        ])
     } else {
         "HTTP/1.1"
     };
