@@ -193,6 +193,8 @@ pub struct SpyEngine {
     pub log: Mutex<Vec<(String, u64)>>,
     pub previews: AtomicU32,
     pub applies: AtomicU32,
+    /// Gancho chamado ANTES de cada preview com o nº dele (simula edição manual no meio da Run).
+    pub on_preview: Mutex<Option<Box<dyn Fn(u32) + Send + Sync>>>,
 }
 
 impl core::fmt::Debug for SpyEngine {
@@ -213,7 +215,10 @@ impl Engine for SpyEngine {
         self.inner.read(m, p)
     }
     fn preview(&self, a: &capia_commands::Actor, l: &str, c: Value) -> IntelResult<Value> {
-        self.previews.fetch_add(1, Ordering::SeqCst);
+        let n = self.previews.fetch_add(1, Ordering::SeqCst);
+        if let Some(h) = self.on_preview.lock().unwrap().as_ref() {
+            h(n);
+        }
         self.log.lock().unwrap().push(("preview".into(), ms()));
         self.inner.preview(a, l, c)
     }
@@ -345,6 +350,7 @@ pub fn auto_world_at(
         log: Mutex::new(Vec::new()),
         previews: AtomicU32::new(0),
         applies: AtomicU32::new(0),
+        on_preview: Mutex::new(None),
     });
     let events: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
     let ev2 = events.clone();

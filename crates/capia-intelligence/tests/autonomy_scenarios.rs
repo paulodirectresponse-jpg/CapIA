@@ -940,3 +940,62 @@ async fn pause_stops_between_steps_and_resume_finishes_the_run() {
     let done = a.wait(&run.id, |r| r.status == RunStatus::Completed).await;
     assert_eq!(done.status, RunStatus::Completed, "{:?}", done.error);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_manual_edit_between_validation_and_apply_is_caught_by_the_diff_digest() {
+    let Some(a) = auto_world("sc-drift2", |asset| {
+        Script::new(
+            || demand_json(false),
+            || {
+                producer_json(
+                    json!([{"key": "main", "sequence_strategy": "standalone"}]),
+                    json!([]),
+                )
+            },
+            move |_d, _n| {
+                let mut v = edit_json(&asset.lock().unwrap(), json!([]));
+                v["target_sequence"] = json!("s");
+                v
+            },
+            |_n| json!({"findings": []}),
+        )
+    }) else {
+        return;
+    };
+    // sem espera humana: o plano é validado e aplicado em sequência. O usuário mexe na sequence
+    // exatamente entre o preview da validação (0) e o preview do EDIT (1).
+    let session = a.w.session.clone();
+    *a.spy.on_preview.lock().unwrap() = Some(Box::new(move |n| {
+        if n == 1 {
+            call(
+                &session,
+                "command.execute",
+                json!({"label": "manual", "commands": [{"operation_id": "manual-drift", "type": "add_track", "sequence": "s", "id": "user_track2", "kind": "visual"}]}),
+            );
+        }
+    }));
+    let run = a.create(a.inputs(), auto_policy());
+    let done = a.run_to_rest(&run.id).await;
+    assert_eq!(done.status, RunStatus::Completed, "{:?}", done.error);
+    assert!(
+        a.stages_visited(&run.id)
+            .iter()
+            .filter(|s| *s == "validate_plan")
+            .count()
+            >= 2,
+        "the drift sent the run back to validation: {:?}",
+        a.stages_visited(&run.id)
+    );
+    let seq =
+        a.w.ctx
+            .engine
+            .read("sequence.get", json!({"sequence": "s"}))
+            .unwrap();
+    assert!(
+        seq["tracks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t["id"] == "user_track2")
+    );
+}

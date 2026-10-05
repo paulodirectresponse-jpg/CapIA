@@ -130,6 +130,15 @@ jobs:
         run: cargo clippy -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli -p capia-secrets -p capia-ai -p capia-intelligence --all-targets -- -D warnings
       - name: Testes (núcleo, nested/compose, jobs, mídia, assets, migrations, crash, concorrência, CLI)
         run: cargo test -p capia-time -p capia-model -p capia-commands -p capia-jobs -p capia-render -p capia-media -p capia-decode -p capia-preview -p capia-assets -p capia-store -p capia-project -p capia-cli -p capia-secrets -p capia-ai -p capia-intelligence
+      - name: "Autonomia (Fase 5): Run, cenários, crash/kill real, segurança, memória, orçamento, variantes, serviço"
+        run: |
+          cargo test -p capia-intelligence --test autonomy_run --test autonomy_scenarios --test autonomy_crash --test autonomy_crash_acquire --test autonomy_kill --test autonomy_security --test autonomy_memory --test autonomy_budget --test autonomy_variants --test autonomy_service --test autonomy_properties
+        env:
+          CAPIA_REQUIRE_FFMPEG: "1"
+      - name: "Autonomia: propriedades ampliadas (release)"
+        run: CAPIA_AUTONOMY_PROP_CASES=2000 cargo test --release -p capia-intelligence --test autonomy_properties
+      - name: "Pacote de aceitação da Fase 5: demandas reais (sem resultados humanos = pendência externa, nunca aprovado)"
+        run: node tools/phase5-acceptance/real-demands/validate.mjs
       - name: "Propriedades com IO ampliadas (release) — salvar/reabrir e assets"
         run: |
           cargo test --release -p capia-store --test properties -- --nocapture
