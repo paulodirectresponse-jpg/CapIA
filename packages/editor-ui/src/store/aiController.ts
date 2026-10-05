@@ -96,6 +96,8 @@ export class AiController {
   private msgId = 0;
   private disposed = false;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** Depois de uma ação do usuário o engine pode demorar a assumir: continua olhando por um tempo. */
+  private hotUntil = 0;
 
   constructor(
     private readonly client: AiClient,
@@ -159,6 +161,7 @@ export class AiController {
 
   /** Cria (e inicia) uma Run. A UI só descreve o pedido; plano/edição são do engine. */
   async createRun(input: RunCreateInput): Promise<string | null> {
+    this.hotUntil = Date.now() + 30_000;
     const r = await this.wrap(() => this.client.runCreate(input, true));
     if (!r) return null;
     this.store.set({ selectedRun: r.run.id, runDetail: null });
@@ -175,8 +178,8 @@ export class AiController {
   startRunPolling(intervalMs = 1000): void {
     if (this.pollTimer || this.disposed) return;
     this.pollTimer = setInterval(() => {
-      if (this.state.runs.some((r) => r.status === "running" || r.status === "pending"))
-        void this.refreshRuns();
+      const busy = this.state.runs.some((r) => r.status === "running" || r.status === "pending");
+      if (busy || Date.now() < this.hotUntil) void this.refreshRuns();
     }, intervalMs);
   }
 
@@ -186,6 +189,7 @@ export class AiController {
   }
 
   async decide(optionId: string, payload?: unknown): Promise<void> {
+    this.hotUntil = Date.now() + 30_000;
     const run = this.state.runDetail?.run;
     const pending = run?.pending;
     if (!run || !pending) return;
@@ -200,6 +204,7 @@ export class AiController {
   }
 
   async resumeRun(id: string): Promise<void> {
+    this.hotUntil = Date.now() + 30_000;
     await this.wrap(() => this.client.runResume(id));
     await this.refreshRuns();
   }
@@ -210,12 +215,14 @@ export class AiController {
   }
 
   async rerun(id: string): Promise<void> {
+    this.hotUntil = Date.now() + 30_000;
     const r = await this.wrap(() => this.client.runRerun(id));
     if (r) await this.selectRun(r.run.id);
     await this.refreshRuns();
   }
 
   async makeVariants(id: string, count: number, axis: string[]): Promise<void> {
+    this.hotUntil = Date.now() + 30_000;
     const r = await this.wrap(() => this.client.runVariants(id, count, axis));
     if (r) await this.selectRun(r.run.id);
     await this.refreshRuns();

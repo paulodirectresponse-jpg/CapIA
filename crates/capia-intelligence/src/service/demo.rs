@@ -59,12 +59,13 @@ fn producer() -> Value {
 }
 
 fn edit(asset: &str) -> Value {
-    json!({"format": {"width": 1080, "height": 1920, "fps": 30}, "estimated_duration_ms": 4000,
+    // trechos curtos: cabem em qualquer fonte de ≥ 1 s (a fixture de E2E tem 1 s)
+    json!({"format": {"width": 1080, "height": 1920, "fps": 30}, "estimated_duration_ms": 800,
            "beats": [
-             {"id": "hook", "role": "hook", "duration_ms": 2000, "asset": {"asset_id": asset, "source_in_ms": 0},
-              "overlays": [{"text": "Veja isso", "start_offset_ms": 0, "duration_ms": 1500}]},
-             {"id": "cta", "role": "cta", "duration_ms": 2000, "asset": {"asset_id": asset, "source_in_ms": 2000},
-              "overlays": [{"text": "Compre agora", "start_offset_ms": 0, "duration_ms": 2000}]}],
+             {"id": "hook", "role": "hook", "duration_ms": 400, "asset": {"asset_id": asset, "source_in_ms": 0},
+              "overlays": [{"text": "Veja isso", "start_offset_ms": 0, "duration_ms": 300}]},
+             {"id": "cta", "role": "cta", "duration_ms": 400, "asset": {"asset_id": asset, "source_in_ms": 400},
+              "overlays": [{"text": "Compre agora", "start_offset_ms": 0, "duration_ms": 400}]}],
            "global": {}, "constraints_checked": []})
 }
 
