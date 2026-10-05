@@ -2,13 +2,13 @@
 
 > **Gerado** por `node tools/docs/gen-api-docs.mjs` a partir do catálogo único de operações (`crates/capia-server/src/catalog.rs`, ADR-102). **Não edite à mão** — mude o catálogo e regenere. Convenções gerais (envelope de erro, idempotência, paginação, assíncrono) estão em [README.md](README.md); scopes em [auth-and-scopes.md](auth-and-scopes.md).
 
-O catálogo tem **56 operações** (55 também como tools MCP). Toda rota, exceto `server.health`, exige `Authorization: Bearer <token>`.
+O catálogo tem **58 operações** (57 também como tools MCP). Toda rota, exceto `server.health`, exige `Authorization: Bearer <token>`.
 
 Os exemplos usam `$CAPIA_PORT` e `$CAPIA_TOKEN` (placeholders; nunca coloque um token real em script versionado). Os ids (`prj_example`, `run_example`…) são ilustrativos. O corpo das respostas não é descrito aqui: o servidor repassa o resultado dos serviços da Engine API e da IA — ver [canonical-flow.md](canonical-flow.md) para os campos que o fluxo usa.
 
 ## Índice
 
-- **Servidor:** [`server.health`](#serverhealth), [`server.info`](#serverinfo)
+- **Servidor:** [`server.health`](#serverhealth), [`server.info`](#serverinfo), [`server.metrics`](#servermetrics)
 - **Tokens:** [`tokens.create`](#tokenscreate), [`tokens.list`](#tokenslist), [`tokens.revoke`](#tokensrevoke), [`tokens.rotate`](#tokensrotate)
 - **Auditoria:** [`audit.list`](#auditlist)
 - **Projetos:** [`projects.create`](#projectscreate), [`projects.list`](#projectslist), [`projects.get`](#projectsget), [`projects.open`](#projectsopen), [`projects.close`](#projectsclose), [`projects.summary`](#projectssummary)
@@ -17,7 +17,7 @@ Os exemplos usam `$CAPIA_PORT` e `$CAPIA_TOKEN` (placeholders; nunca coloque um 
 - **Sequences e timeline:** [`sequences.list`](#sequenceslist), [`sequences.get`](#sequencesget), [`timeline.query`](#timelinequery)
 - **Comandos (preview → apply):** [`commands.preview`](#commandspreview), [`commands.apply`](#commandsapply), [`history.list`](#historylist)
 - **AI Runs:** [`runs.create`](#runscreate), [`runs.list`](#runslist), [`runs.get`](#runsget), [`runs.pause`](#runspause), [`runs.resume`](#runsresume), [`runs.cancel`](#runscancel), [`runs.approve`](#runsapprove), [`runs.plan`](#runsplan), [`runs.review`](#runsreview), [`runs.cost`](#runscost), [`runs.events`](#runsevents), [`runs.variants`](#runsvariants), [`memory.list`](#memorylist), [`gateway.status`](#gatewaystatus)
-- **Exports e entregáveis:** [`exports.start`](#exportsstart), [`exports.list`](#exportslist), [`exports.get`](#exportsget), [`exports.cancel`](#exportscancel), [`deliverables.list`](#deliverableslist)
+- **Exports e entregáveis:** [`exports.start`](#exportsstart), [`exports.encoders`](#exportsencoders), [`exports.list`](#exportslist), [`exports.get`](#exportsget), [`exports.cancel`](#exportscancel), [`deliverables.list`](#deliverableslist)
 - **Webhooks:** [`webhooks.create`](#webhookscreate), [`webhooks.list`](#webhookslist), [`webhooks.get`](#webhooksget), [`webhooks.update`](#webhooksupdate), [`webhooks.rotate_secret`](#webhooksrotate_secret), [`webhooks.delete`](#webhooksdelete), [`webhooks.test`](#webhookstest), [`webhooks.deliveries`](#webhooksdeliveries), [`webhooks.redeliver`](#webhooksredeliver)
 - **Eventos:** [`events.list`](#eventslist)
 
@@ -59,6 +59,26 @@ Exemplo:
 
 ```bash
 curl -sS -X GET "http://127.0.0.1:$CAPIA_PORT/v1/server" \
+  -H "Authorization: Bearer $CAPIA_TOKEN"
+```
+
+### `server.metrics`
+
+Local counters: requests, errors, rate limits, in-flight work, uptime.
+
+- **Rota:** `GET /v1/metrics`
+- **Scope:** `project:read`
+- **Efeito:** somente leitura · classe de rate limit `read`
+- **Sucesso:** HTTP 200
+- **Superfície:** REST + MCP (`server_metrics`)
+- **Exige o projeto aberto:** não
+
+_Sem parâmetros._
+
+Exemplo:
+
+```bash
+curl -sS -X GET "http://127.0.0.1:$CAPIA_PORT/v1/metrics" \
   -H "Authorization: Bearer $CAPIA_TOKEN"
 ```
 
@@ -262,7 +282,7 @@ One project.
 - **Efeito:** somente leitura · classe de rate limit `read`
 - **Sucesso:** HTTP 200
 - **Superfície:** REST + MCP (`projects_get`)
-- **Exige o projeto aberto:** sim (`{project_id}` precisa ser o projeto aberto no servidor)
+- **Exige o projeto aberto:** não
 
 | Parâmetro | Onde | Obrigatório | Restrições |
 |---|---|---|---|
@@ -284,7 +304,7 @@ Open a project (the engine hosts one at a time).
 - **Efeito:** mutante (aceita `Idempotency-Key`) · classe de rate limit `write`
 - **Sucesso:** HTTP 200
 - **Superfície:** REST + MCP (`projects_open`)
-- **Exige o projeto aberto:** sim (`{project_id}` precisa ser o projeto aberto no servidor)
+- **Exige o projeto aberto:** não
 
 | Parâmetro | Onde | Obrigatório | Restrições |
 |---|---|---|---|
@@ -307,7 +327,7 @@ Close the open project.
 - **Efeito:** mutante (aceita `Idempotency-Key`) · classe de rate limit `write`
 - **Sucesso:** HTTP 200
 - **Superfície:** REST + MCP (`projects_close`)
-- **Exige o projeto aberto:** sim (`{project_id}` precisa ser o projeto aberto no servidor)
+- **Exige o projeto aberto:** não
 
 | Parâmetro | Onde | Obrigatório | Restrições |
 |---|---|---|---|
@@ -1170,6 +1190,26 @@ Corpo:
     }
   ]
 }
+```
+
+### `exports.encoders`
+
+Approved export encoders available on this machine (capability catalog).
+
+- **Rota:** `GET /v1/exports/encoders`
+- **Scope:** `export:read`
+- **Efeito:** somente leitura · classe de rate limit `read`
+- **Sucesso:** HTTP 200
+- **Superfície:** REST + MCP (`exports_encoders`)
+- **Exige o projeto aberto:** não
+
+_Sem parâmetros._
+
+Exemplo:
+
+```bash
+curl -sS -X GET "http://127.0.0.1:$CAPIA_PORT/v1/exports/encoders" \
+  -H "Authorization: Bearer $CAPIA_TOKEN"
 ```
 
 ### `exports.list`

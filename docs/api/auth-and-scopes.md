@@ -15,7 +15,7 @@ Toda rota do catálogo, **exceto `server.health`**, exige um token no cabeçalho
 | Expiração | opcional; token expirado é tratado como inválido (401) |
 | Auditoria | `GET /v1/audit` (`audit.list`, `admin:tokens`): superfície (REST/MCP), operação, resultado, revisão antes/depois, `Idempotency-Key` e `request_id`; nunca o segredo |
 
-O primeiro token (bootstrap) é emitido localmente pelo próprio executável do servidor — veja [../user/09-api-local.md](../user/09-api-local.md) (interface prevista: o comando exato é definido pela implementação do servidor). A partir daí, quem tem `admin:tokens` cria os demais.
+O primeiro token é emitido **localmente** pelo próprio executável, sem passar pela rede: `capia-server token create --data-dir <dir> --name <nome> --scopes a,b [--expires-in SEGUNDOS]` (o segredo aparece uma única vez no stdout) ou `capia-server serve --bootstrap` (imprime `CAPIA_BOOTSTRAP_TOKEN=…` **somente se ainda não existir nenhum token ativo**, com todos os scopes — troque-o por tokens de escopo mínimo). Veja [../user/09-api-local.md](../user/09-api-local.md). A partir daí, quem tem `admin:tokens` cria os demais pela API.
 
 ### Boas práticas
 
@@ -29,10 +29,10 @@ O primeiro token (bootstrap) é emitido localmente pelo próprio executável do 
 | Situação | HTTP | `code` |
 |---|---|---|
 | Sem cabeçalho / token inválido, expirado ou revogado | 401 | `UNAUTHORIZED` |
-| Token válido, mas sem o scope da operação | 403 | `PERMISSION_DENIED` (ver nota) |
+| Token válido, mas sem o scope da operação | 403 | `INSUFFICIENT_SCOPE` |
 | Rate limit da classe da operação excedido | 429 | com `Retry-After` |
 
-Nota: o conjunto exato de `code` para 403/429 é definido pela implementação do servidor; o envelope é sempre `{code, message, details?, request_id}` (ver [README.md](README.md)). Mensagens de erro passam pelo redator central: nenhum segredo aparece nelas.
+Nota: o envelope é sempre `{code, message, details?, request_id}` (ver [README.md](README.md)). Mensagens de erro passam pelo redator central: nenhum segredo aparece nelas.
 
 ## Matriz de scopes
 
@@ -42,14 +42,14 @@ Gerada do catálogo (`node tools/docs/gen-api-docs.mjs`). O catálogo é a **ún
 
 | Scope | Operações (REST/MCP) | Mutantes |
 |---|---|---|
-| `project:read` | `server.info`, `projects.list`, `projects.get`, `projects.summary`, `sequences.list`, `sequences.get`, `timeline.query`, `history.list`, `events.list` | 0/9 |
+| `project:read` | `server.info`, `server.metrics`, `projects.list`, `projects.get`, `projects.summary`, `sequences.list`, `sequences.get`, `timeline.query`, `history.list`, `events.list` | 0/10 |
 | `project:write` | `projects.create`, `projects.open`, `projects.close`, `commands.preview`, `commands.apply` | 5/5 |
 | `media:read` | `uploads.list`, `assets.list`, `assets.get`, `imports.get` | 0/4 |
 | `media:write` | `uploads.create`, `uploads.create_inline`, `uploads.delete`, `assets.import` | 4/4 |
 | `run:read` | `runs.list`, `runs.get`, `runs.plan`, `runs.review`, `runs.cost`, `runs.events`, `memory.list`, `gateway.status` | 0/8 |
 | `run:start` | `runs.create`, `runs.pause`, `runs.resume`, `runs.cancel`, `runs.variants` | 5/5 |
 | `run:approve` | `runs.approve` | 1/1 |
-| `export:read` | `exports.list`, `exports.get`, `deliverables.list` | 0/3 |
+| `export:read` | `exports.encoders`, `exports.list`, `exports.get`, `deliverables.list` | 0/4 |
 | `export:start` | `exports.start`, `exports.cancel` | 2/2 |
 | `webhook:manage` | `webhooks.create`, `webhooks.list`, `webhooks.get`, `webhooks.update`, `webhooks.rotate_secret`, `webhooks.delete`, `webhooks.test`, `webhooks.deliveries`, `webhooks.redeliver` | 6/9 |
 | `admin:tokens` | `tokens.create`, `tokens.list`, `tokens.revoke`, `tokens.rotate`, `audit.list` | 3/5 |
@@ -61,6 +61,7 @@ Por rota:
 |---|---|---|---|---|
 | `server.health` | `GET /v1/health` | — | `read` | não |
 | `server.info` | `GET /v1/server` | `project:read` | `read` | não |
+| `server.metrics` | `GET /v1/metrics` | `project:read` | `read` | não |
 | `tokens.create` | `POST /v1/tokens` | `admin:tokens` | `admin` | sim |
 | `tokens.list` | `GET /v1/tokens` | `admin:tokens` | `admin` | não |
 | `tokens.revoke` | `DELETE /v1/tokens/{token_id}` | `admin:tokens` | `admin` | sim |
@@ -101,6 +102,7 @@ Por rota:
 | `memory.list` | `GET /v1/projects/{project_id}/memory` | `run:read` | `read` | não |
 | `gateway.status` | `GET /v1/gateway` | `run:read` | `read` | não |
 | `exports.start` | `POST /v1/projects/{project_id}/exports` | `export:start` | `export` | sim |
+| `exports.encoders` | `GET /v1/exports/encoders` | `export:read` | `read` | não |
 | `exports.list` | `GET /v1/projects/{project_id}/exports` | `export:read` | `read` | não |
 | `exports.get` | `GET /v1/projects/{project_id}/exports/{export_id}` | `export:read` | `read` | não |
 | `exports.cancel` | `POST /v1/projects/{project_id}/exports/{export_id}/cancel` | `export:start` | `write` | sim |

@@ -2,7 +2,7 @@
 
 O servidor MCP do CapIA é um **adaptador sobre o mesmo catálogo de operações e as mesmas facades da REST** — não é um segundo backend. Um agente externo (por exemplo, um cliente que fala MCP) vê as mesmas operações, com os mesmos scopes, validações, travas e erros que um cliente REST.
 
-> **Estado.** O contrato (nomes de tools, schemas, scopes, efeitos) vem do catálogo e está estável. Os **comandos de inicialização** (`capia-server mcp-stdio …`, `capia-server serve …`) e o caminho do endpoint HTTP são **interface prevista**: confirme com `capia-server --help` na sua versão. Os exemplos em `examples/mcp/` foram testados só contra um servidor MCP falso.
+> **Estado.** O contrato (nomes de tools, schemas, scopes, efeitos) vem do catálogo e está estável. Existem no servidor o endpoint HTTP `POST /mcp` e o comando `capia-server serve`; o comando `capia-server mcp-stdio --data-dir <dir> --token-env <VAR>` está declarado na CLI, mas no snapshot da integração lido para esta documentação ainda respondia “not implemented yet” — trate o transporte **stdio como interface prevista** e confirme com `capia-server --help`. Os exemplos em `examples/mcp/` foram testados só contra um servidor MCP falso.
 
 ## Regra de nomes
 
@@ -76,7 +76,7 @@ A paridade é **por construção**: REST, MCP e OpenAPI derivam do mesmo catálo
 }
 ```
 
-**HTTP** (servidor já em execução) — interface prevista:
+**HTTP** (servidor já em execução, `POST /mcp`):
 
 ```
 capia-server serve --data-dir <DATA_DIR> [--port N]     # 127.0.0.1 por padrão

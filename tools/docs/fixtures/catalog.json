@@ -50,6 +50,25 @@
       "tool": "server_info"
     },
     {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "server.metrics",
+      "path": "/v1/metrics",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "project:read",
+      "status": 200,
+      "summary": "Local counters: requests, errors, rate limits, in-flight work, uptime.",
+      "surface": "both",
+      "tool": "server_metrics"
+    },
+    {
       "class": "admin",
       "method": "POST",
       "mutating": true,
@@ -260,7 +279,7 @@
       "mutating": false,
       "name": "projects.get",
       "path": "/v1/projects/{project_id}",
-      "project": true,
+      "project": false,
       "schema": {
         "additionalProperties": false,
         "properties": {
@@ -288,7 +307,7 @@
       "mutating": true,
       "name": "projects.open",
       "path": "/v1/projects/{project_id}/open",
-      "project": true,
+      "project": false,
       "schema": {
         "additionalProperties": false,
         "properties": {
@@ -316,7 +335,7 @@
       "mutating": true,
       "name": "projects.close",
       "path": "/v1/projects/{project_id}/close",
-      "project": true,
+      "project": false,
       "schema": {
         "additionalProperties": false,
         "properties": {
@@ -1517,6 +1536,25 @@
       "summary": "Queue exports of sequences (server chooses the output location).",
       "surface": "both",
       "tool": "exports_start"
+    },
+    {
+      "class": "read",
+      "method": "GET",
+      "mutating": false,
+      "name": "exports.encoders",
+      "path": "/v1/exports/encoders",
+      "project": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "scope": "export:read",
+      "status": 200,
+      "summary": "Approved export encoders available on this machine (capability catalog).",
+      "surface": "both",
+      "tool": "exports_encoders"
     },
     {
       "class": "read",

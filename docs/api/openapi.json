@@ -80,6 +80,35 @@
         }
       }
     },
+    "/v1/metrics": {
+      "get": {
+        "operationId": "server.metrics",
+        "summary": "Local counters: requests, errors, rate limits, in-flight work, uptime.",
+        "tags": [
+          "Servidor"
+        ],
+        "x-capia-scope": "project:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "server_metrics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/tokens": {
       "post": {
         "operationId": "tokens.create",
@@ -2565,6 +2594,35 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Sucesso"
+          },
+          "default": {
+            "description": "Erro",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/exports/encoders": {
+      "get": {
+        "operationId": "exports.encoders",
+        "summary": "Approved export encoders available on this machine (capability catalog).",
+        "tags": [
+          "Exports e entregáveis"
+        ],
+        "x-capia-scope": "export:read",
+        "x-capia-mutating": false,
+        "x-capia-class": "read",
+        "x-capia-mcp-tool": "exports_encoders",
+        "parameters": [],
         "responses": {
           "200": {
             "description": "Sucesso"

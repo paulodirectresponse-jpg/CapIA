@@ -2,12 +2,13 @@
 
 > **Gerado** por `node tools/docs/gen-api-docs.mjs` a partir do catálogo único (ADR-102). Não edite à mão. Regras gerais, resources e falhas: [mcp.md](mcp.md).
 
-55 tools (uma por operação do catálogo, exceto as só-REST). Nome da tool = nome da operação com `.` trocado por `_`.
+57 tools (uma por operação do catálogo, exceto as só-REST). Nome da tool = nome da operação com `.` trocado por `_`.
 
 | Tool | Operação / rota REST | Scope | Efeito | Classe |
 |---|---|---|---|---|
 | `server_health` | `server.health` · `GET /v1/health` | — | leitura | `read` |
 | `server_info` | `server.info` · `GET /v1/server` | `project:read` | leitura | `read` |
+| `server_metrics` | `server.metrics` · `GET /v1/metrics` | `project:read` | leitura | `read` |
 | `tokens_create` | `tokens.create` · `POST /v1/tokens` | `admin:tokens` | mutante | `admin` |
 | `tokens_list` | `tokens.list` · `GET /v1/tokens` | `admin:tokens` | leitura | `admin` |
 | `tokens_revoke` | `tokens.revoke` · `DELETE /v1/tokens/{token_id}` | `admin:tokens` | mutante | `admin` |
@@ -47,6 +48,7 @@
 | `memory_list` | `memory.list` · `GET /v1/projects/{project_id}/memory` | `run:read` | leitura | `read` |
 | `gateway_status` | `gateway.status` · `GET /v1/gateway` | `run:read` | leitura | `read` |
 | `exports_start` | `exports.start` · `POST /v1/projects/{project_id}/exports` | `export:start` | mutante | `export` |
+| `exports_encoders` | `exports.encoders` · `GET /v1/exports/encoders` | `export:read` | leitura | `read` |
 | `exports_list` | `exports.list` · `GET /v1/projects/{project_id}/exports` | `export:read` | leitura | `read` |
 | `exports_get` | `exports.get` · `GET /v1/projects/{project_id}/exports/{export_id}` | `export:read` | leitura | `read` |
 | `exports_cancel` | `exports.cancel` · `POST /v1/projects/{project_id}/exports/{export_id}/cancel` | `export:start` | mutante | `write` |

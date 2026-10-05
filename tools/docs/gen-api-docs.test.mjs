@@ -23,7 +23,7 @@ const op = (name) => catalog().operations.find((o) => o.name === name);
 
 test("o fixture é um catálogo válido, com nomes e rotas únicos", () => {
   const c = validateCatalog(catalog());
-  assert.equal(c.operations.length, 56);
+  assert.equal(c.operations.length, 58);
   assert.equal(c.scopes.length, 11);
   assert.equal(c.events.length, 9);
 });

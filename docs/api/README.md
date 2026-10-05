@@ -2,7 +2,7 @@
 
 O `capia-server` (Fase 6, ADR-102) é o host headless da **mesma Engine API** que a UI usa: REST, MCP e webhooks são adaptadores sobre os mesmos serviços, com os mesmos scopes, `operation_id`s, revisões e travas. Não existe segunda lógica de edição: o cliente externo escreve na timeline **somente** por `preview → apply_plan` (ator `Api`) e por AI Runs (ator `run:<id>`), com undo.
 
-> **Estado honesto (0.6.0-rc.1).** O **contrato** (catálogo de 56 operações, scopes, erros, esquema do banco do servidor) está no código e é a fonte desta documentação. A **implementação** dos transportes (REST, MCP, entrega de webhooks) é uma frente da Fase 6 ainda em integração: onde um detalhe depende dela e não está no catálogo/no banco, o texto diz **“interface prevista”**. Nada aqui foi medido contra um servidor em produção; veja `docs/phase6/IMPL_DOCS_ACCEPTANCE.md`.
+> **Estado honesto (0.6.0-rc.1).** O **contrato** (catálogo de 58 operações, scopes, erros, esquema do banco do servidor) está no código e é a fonte desta documentação; o núcleo REST do `capia-server` (rotas, auth, idempotência, SSE, OpenAPI) já existe na branch de integração e foi lido para confirmar os detalhes abaixo. A implementação de MCP stdio e a entrega de webhooks eram frentes ainda em integração quando esta documentação foi escrita: onde um detalhe depende delas, o texto diz **“interface prevista”**. Nada aqui foi medido contra um servidor em produção; veja `docs/phase6/IMPL_DOCS_ACCEPTANCE.md`.
 
 | Documento | Conteúdo |
 |---|---|
@@ -20,7 +20,7 @@ O `capia-server` (Fase 6, ADR-102) é o host headless da **mesma Engine API** qu
 - **Base:** `http://127.0.0.1:<porta>/v1`. O servidor escuta **só em loopback** por padrão (ver [../user/09-api-local.md](../user/09-api-local.md)). Bind remoto é opt-in explícito, exige TLS (proxy reverso) e token; tokens nunca devem trafegar em texto claro fora de loopback.
 - **Formato:** JSON UTF-8 (`Content-Type: application/json`) em requisições com corpo e em todas as respostas. Corpos têm tamanho e profundidade limitados; JSON malformado → `400 BAD_JSON`; campo desconhecido → `422 INVALID_PARAMS` (os schemas têm `additionalProperties: false`).
 - **Autenticação:** `Authorization: Bearer <token>` em tudo, exceto `GET /v1/health`.
-- **`request_id`:** cada resposta, de sucesso ou erro, identifica a requisição (cabeçalho e, em erros, o campo `request_id` do corpo). Cite-o ao pedir suporte: ele aparece na auditoria (`audit.list`).
+- **`request_id`:** cada resposta, de sucesso ou erro, traz o cabeçalho `X-Request-Id` (e, em erros, o campo `request_id` do corpo). Um `X-Request-Id` enviado pelo cliente é aproveitado quando válido. Cite-o ao pedir suporte: ele aparece na auditoria (`audit.list`).
 - **Tempo:** timestamps de eventos em ISO-8601 UTC **e** em milissegundos Unix (`occurred_at`, `occurred_ms`). Dentro do documento de timeline o tempo é inteiro (`Ticks`); a API nunca expõe segundos em ponto flutuante como fonte de verdade.
 - **CORS (requisito de projeto):** negado por padrão (a API é para processos locais, não para páginas web); origens explícitas só por configuração.
 - **Host header (requisito de projeto):** requisições com `Host` inesperado devem ser recusadas (defesa contra DNS rebinding).
@@ -44,11 +44,12 @@ Todo erro tem o mesmo formato:
 |---|---|
 | 400 | `BAD_JSON`, `BAD_REQUEST`, `INVALID_PARAMS` (erros de parâmetro do engine) |
 | 401 | `UNAUTHORIZED` |
-| 403 | `PERMISSION_DENIED` (scope ou permissão de tool) |
+| 403 | `INSUFFICIENT_SCOPE` (token sem o scope da rota), `PERMISSION_DENIED` (permissão de tool do engine) |
+| 405 | `METHOD_NOT_ALLOWED` (com cabeçalho `Allow`) |
 | 404 | `NOT_FOUND`, `RUN_NOT_FOUND`, `ASSET_NOT_FOUND`, `SEQUENCE_NOT_FOUND`, `UNKNOWN_METHOD` |
 | 409 | `NO_PROJECT_OPEN`, `PROJECT_NOT_OPEN`, `STALE_PLAN`, `PLAN_STALE`, `PLAN_STATE_CHANGED`, `PLAN_EXPIRED`, `PLAN_DRIFT`, `REVISION_CONFLICT`, `CONFLICT`, `OVERLAP`, `ILLEGAL_TRANSITION`, `RUN_BUSY`, `TOO_MANY_RUNS`, `INVALID_STATE`, `AI_OFF`, `AI_DISABLED`, `NOT_CONFIGURED` |
 | 422 | `INVALID_PARAMS` (validação do servidor) e qualquer código do engine sem mapeamento específico (“entendi, mas recuso”) |
-| 429 | rate limit por token e classe (`Retry-After` em segundos) |
+| 429 | rate limit por token e classe (`Retry-After` em segundos); `TOO_MANY_STREAMS` (SSE) |
 | 500 | `INTERNAL`, `POISONED` |
 | 503 | serviço indisponível (`Retry-After`) |
 
@@ -69,7 +70,7 @@ Operações que podem demorar (importar asset, iniciar/retomar Run, gerar varian
 2. **Status por polling:** `GET …/imports/{ticket_id}`, `GET …/runs/{run_id}`, `GET …/exports/{export_id}`.
 3. **Eventos por polling incremental:** `GET …/runs/{run_id}/events?after=<seq>` e `GET /v1/events?after=<seq>&limit=` (cursor monotônico `seq`; guarde o último visto).
 4. **Webhook** na conclusão (`run.completed`, `export.completed`, …), sem nunca bloquear a Run se o seu endpoint estiver fora ([webhooks.md](webhooks.md)).
-5. **SSE** (`text/event-stream`) para clientes locais é **interface prevista**: não existe rota SSE no catálogo atual (o catálogo só tem polling por `after`). Quando existir, será aditivo.
+5. **SSE** (`text/event-stream`) para clientes locais: `GET /v1/events/stream` (fora do catálogo de operações por ser streaming; exige `project:read`). Retome com o cabeçalho `Last-Event-ID` ou `?after=<seq>`; cada quadro traz `id: <seq>`, `event: <tipo>` e `data: <JSON>`; o servidor envia `event: shutdown` ao encerrar. Há um teto de streams simultâneos (excedido → 429 `TOO_MANY_STREAMS`). Sem `after`, o stream começa no fim (só eventos novos).
 
 Estados terminais de uma Run: `completed`, `failed`, `cancelled`. `waiting_user` significa que há uma decisão pendente (`run.pending`) — resolva com `runs.approve` ([../user/05-aprovacoes-e-orcamentos.md](../user/05-aprovacoes-e-orcamentos.md)); `paused` exige `runs.resume` (o servidor **nunca** retoma sozinho uma Run interrompida).
 
@@ -93,17 +94,17 @@ Toda operação **mutante** aceita `Idempotency-Key: <1–128 caracteres>` (use 
 |---|---|
 | Chave nova | executa; guarda o status e o corpo da resposta |
 | Mesma chave, **mesmo** pedido, já concluído | **replay**: devolve o mesmo status e corpo guardados, sem executar de novo (o efeito acontece uma vez) |
-| Mesma chave, pedido **diferente** (outra operação ou outro corpo) | recusado (conflito de chave; **não** executa) |
-| Outra requisição com a mesma chave ainda em andamento | recusado como “em andamento”: espere e repita com a mesma chave |
-| Chave ficou “em andamento” de um processo que caiu (efeito **indeterminado**) | recusado como indeterminado: **consulte o estado** (ex.: `runs.list`, `assets.list`, `history.list`) antes de decidir; o servidor não adivinha se o efeito ocorreu |
+| Mesma chave, pedido **diferente** (outra operação ou outro corpo) | **422 `IDEMPOTENCY_KEY_REUSED`** (**não** executa) |
+| Outra requisição com a mesma chave ainda em andamento | **409 `IDEMPOTENCY_IN_PROGRESS`** com `Retry-After: 1`: espere e repita com a mesma chave |
+| Chave ficou “em andamento” de um processo que caiu (efeito **indeterminado**, após ~5 min) | **409 `IDEMPOTENCY_INDETERMINATE`**: **consulte o estado** (ex.: `runs.list`, `assets.list`, `history.list`) e repita com uma chave **nova** se o efeito não ocorreu; o servidor não adivinha |
 | Falha transitória **antes** de qualquer efeito | a chave é liberada e a repetição executa normalmente |
 
-Os `code`/HTTP exatos desses quatro casos de recusa são definidos pela implementação do servidor (interface prevista; esperado: 409 ou 422 com `code` próprio). Independentemente deles: **replay devolve o resultado original; qualquer outro caso nunca executa o efeito duas vezes.** Além disso, os `operation_id`s do engine (derivados por tarefa+passo+índice para a IA) tornam comandos repetidos idempotentes na camada de baixo.
+Um **replay** volta com o mesmo status e corpo e o cabeçalho `Idempotent-Replay: true`. Um `Idempotency-Key` malformado (vazio ou > 128 caracteres) → 400. **Replay devolve o resultado original; nenhum outro caso executa o efeito duas vezes.** Além disso, os `operation_id`s do engine (derivados por tarefa+passo+índice para a IA) tornam comandos repetidos idempotentes na camada de baixo.
 
 ## 6. Limites e rate limits
 
-Cada operação tem uma **classe** (`read`, `write`, `upload`, `run_start`, `approve`, `export`, `admin`) e o limite é por token e classe. Excedido → `429` estruturado com `Retry-After`. Há ainda tetos de concorrência (`TOO_MANY_RUNS`) e de tamanho de corpo/upload. Os valores numéricos estão em `server.info` (campo de limites; interface prevista) e podem mudar entre versões.
+Cada operação tem uma **classe** (`read`, `write`, `upload`, `run_start`, `approve`, `export`, `admin`) e o limite é por token e classe. Excedido → `429` estruturado com `Retry-After`. Há ainda tetos de concorrência (`TOO_MANY_RUNS`) e de tamanho de corpo/upload. Os valores numéricos estão em `server.info` (campo de limites) e em `server.metrics`, e podem mudar entre versões. O documento OpenAPI vivo do servidor é servido em `GET /v1/openapi.json` (e `capia-server openapi` o imprime); `capia-server catalog` imprime o catálogo em JSON.
 
 ## 7. Regenerar esta documentação
 
-`node tools/docs/gen-api-docs.mjs` (ou `pnpm docs:api`) regenera `rest-reference.md`, `mcp-tools.md`, `openapi.json` e o bloco de scopes de `auth-and-scopes.md` a partir do catálogo; `--check` falha se estiverem defasados. Entrada: `--catalog <arquivo|->` com o JSON do catálogo (hoje o fixture `tools/docs/fixtures/catalog.json`; depois, a saída de `capia-server catalog`).
+`node tools/docs/gen-api-docs.mjs` (ou `pnpm docs:api`) regenera `rest-reference.md`, `mcp-tools.md`, `openapi.json` e o bloco de scopes de `auth-and-scopes.md` a partir do catálogo; `--check` falha se estiverem defasados. Entrada: `--catalog <arquivo|->` com o JSON do catálogo: o fixture `tools/docs/fixtures/catalog.json` (extraído do `catalog.rs`) ou, equivalente, `capia-server catalog | node tools/docs/gen-api-docs.mjs --catalog -`.
