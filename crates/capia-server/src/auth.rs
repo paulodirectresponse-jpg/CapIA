@@ -92,6 +92,9 @@ pub fn authenticate(db: &ServerDb, bearer: &str) -> ApiResult<Principal> {
     let row = db
         .token_by_hash(&sha256_hex(bearer.as_bytes()))?
         .ok_or_else(deny)?;
+    // um segredo apresentado e reconhecido passa a ser "conhecido" do redator, mesmo que tenha sido
+    // criado por outro processo (ex.: CLI offline): nunca ecoa nem é gravado em dado de usuário
+    capia_secrets::register_global(bearer);
     let now = now_ms();
     if row.revoked_ms.is_some() || row.expires_ms.is_some_and(|e| e <= now) {
         return Err(deny());

@@ -75,7 +75,9 @@ impl ApiErr {
             "request_id": request_id,
         });
         if let Some(d) = &self.details {
-            v["details"] = d.clone();
+            // `details` também ecoa entrada (nomes de campo, valores): mesma redação da mensagem
+            v["details"] = serde_json::from_str(&capia_secrets::redact_global(&d.to_string()))
+                .unwrap_or(Value::Null);
         }
         v
     }

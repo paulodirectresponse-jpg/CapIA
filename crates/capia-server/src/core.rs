@@ -154,6 +154,16 @@ impl Core {
             std::fs::create_dir_all(cfg.data_dir.join(sub))
                 .map_err(|e| format!("cannot create {sub}/: {e}"))?;
         }
+        // upload interrompido (queda no meio do streaming) deixa `upl_*/…part` sem `meta.json`: nunca
+        // é listado nem contado na cota, então é só lixo — varrido na abertura
+        if let Ok(rd) = std::fs::read_dir(cfg.data_dir.join("uploads")) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() && !p.join("meta.json").exists() {
+                    let _ = std::fs::remove_dir_all(&p);
+                }
+            }
+        }
         let db = Arc::new(
             ServerDb::open(&cfg.data_dir.join("server.db"), Duration::from_secs(5))
                 .map_err(|e| format!("cannot open the server database: {}", e.message))?,
@@ -341,6 +351,9 @@ impl Core {
         F: FnOnce(&Self, &'static OpDef, Value) -> ApiResult<Value>,
     {
         let started = now_ms();
+        // nenhum valor conhecido como segredo (token, chave de provider, segredo de webhook) entra
+        // no pipeline: nem no documento, nem na auditoria, nem em eco de erro
+        let params = redact_registered(params);
         // a chave do cliente nunca é gravada em claro (banco/auditoria): só um digest dela
         let key = ctx
             .idempotency_key
@@ -587,6 +600,26 @@ impl Core {
             Ok(None) => {}
             Err(e) => eprintln!("capia-server: event write failed: {}", e.message),
         }
+    }
+}
+
+/// Troca, em todas as strings (e chaves) do valor, os segredos **registrados** do processo por
+/// `[REDACTED]`. Só valores exatos (não heurística): texto legítimo do usuário não é alterado.
+pub fn redact_registered(v: Value) -> Value {
+    match v {
+        Value::String(s) => Value::String(capia_secrets::redact_registered_global(&s)),
+        Value::Array(a) => Value::Array(a.into_iter().map(redact_registered).collect()),
+        Value::Object(m) => Value::Object(
+            m.into_iter()
+                .map(|(k, v)| {
+                    (
+                        capia_secrets::redact_registered_global(&k),
+                        redact_registered(v),
+                    )
+                })
+                .collect(),
+        ),
+        other => other,
     }
 }
 

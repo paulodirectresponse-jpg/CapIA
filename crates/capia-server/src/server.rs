@@ -331,7 +331,9 @@ fn handle(
                 && v.bytes()
                     .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
         })
-        .map_or_else(new_request_id, str::to_owned);
+        .map_or_else(new_request_id, |v| {
+            capia_secrets::redact_registered_global(v)
+        });
     let body_len = req.content_length;
     let unread = body_len > 0;
 
@@ -565,6 +567,7 @@ fn upload(
     let Some(filename) = req
         .header("x-capia-filename")
         .and_then(http::percent_decode)
+        .map(|f| capia_secrets::redact_registered_global(&f))
         .filter(|f| !f.is_empty() && f.len() <= 255)
     else {
         return fail(
