@@ -36,7 +36,28 @@ function Find-AppExe {
   }
   throw "executável principal não encontrado em $installDir"
 }
-function Install { $p = Start-Process -FilePath $Installer -ArgumentList '/S' -Wait -PassThru; if ($p.ExitCode -ne 0) { throw "instalador saiu com $($p.ExitCode)" } }
+# Onde o NSIS instalou de fato (o Tauri decide: registro de desinstalação primeiro, busca por exe depois)
+function Resolve-InstallDir {
+  foreach ($root in 'HKCU:', 'HKLM:') {
+    $k = Join-Path $root 'Software\Microsoft\Windows\CurrentVersion\Uninstall'
+    if (-not (Test-Path $k)) { continue }
+    foreach ($e in Get-ChildItem $k -ErrorAction SilentlyContinue) {
+      $v = Get-ItemProperty $e.PSPath -ErrorAction SilentlyContinue
+      if ($v -and $v.DisplayName -like '*CapIA*' -and $v.InstallLocation -and (Test-Path $v.InstallLocation)) { return $v.InstallLocation.Trim('"') }
+    }
+  }
+  foreach ($n in 'CapIA.exe', 'capia-desktop.exe') {
+    $f = Get-ChildItem $env:LOCALAPPDATA -Recurse -Depth 3 -Filter $n -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($f) { return $f.DirectoryName }
+  }
+  return $null
+}
+function Install {
+  $p = Start-Process -FilePath $Installer -ArgumentList '/S' -Wait -PassThru
+  if ($p.ExitCode -ne 0) { throw "instalador saiu com $($p.ExitCode)" }
+  $d = Resolve-InstallDir
+  if ($d) { $script:installDir = $d }
+}
 function SelfTest([string]$exe, [string]$out) {
   $p = Start-Process -FilePath $exe -ArgumentList @('--self-test', '--require-media', '--out', $out) -Wait -PassThru -WindowStyle Hidden
   if (-not (Test-Path $out)) { throw 'self-test não gravou o relatório' }
@@ -47,7 +68,8 @@ function SelfTest([string]$exe, [string]$out) {
 
 Step 'install.silent.per-user' {
   Install
-  if (-not (Test-Path $installDir)) { throw "diretório por usuário esperado ausente: $installDir" }
+  if (-not (Test-Path $installDir)) { throw "diretório de instalação não encontrado (registro de desinstalação e busca em %LOCALAPPDATA%): $installDir" }
+  if (-not $installDir.StartsWith($env:LOCALAPPDATA, [StringComparison]::OrdinalIgnoreCase)) { throw "instalação NÃO é por usuário: $installDir" }
   @{ dir = $installDir }
 }
 $exe = $null
