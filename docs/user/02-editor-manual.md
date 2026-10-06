@@ -4,7 +4,11 @@ O editor é um cliente do **Command Engine**: toda alteração (sua, da IA, da C
 
 ## Layout
 
-Painéis redimensionáveis e recolhíveis (`Ctrl+1` esquerdo, `Ctrl+2` direito; o tamanho é lembrado). **Rail** à esquerda: **Projeto · Mídia · Áudio · Texto · Legendas · Transições · IA**. Centro: **Preview** e **Timeline**. Direita: **Inspetor**. Topo: Desfazer/Refazer, **Exportar**, **Histórico**, **Configurações**, estado de salvamento e tarefas em segundo plano.
+Painéis redimensionáveis e recolhíveis (`Ctrl+1` esquerdo, `Ctrl+2` direito; o tamanho é lembrado). **Rail** à esquerda: **Mídia · Texto · Áudio · Transições · IA** (as **Sequências** ficam na aba "Sequências" de Mídia; as **legendas** ficam em Texto). Centro: **Preview** e **Timeline livre**. Direita: **Inspetor** (sem seleção mostra só o nome e o formato da sequência; com um clipe, o essencial — o resto está em "Avançado"). Topo: Desfazer/Refazer, **Exportar**, **Histórico**, **Configurações**, estado de salvamento e tarefas em segundo plano.
+
+## Timeline livre
+
+Não existem tracks fixas: o projeto novo começa vazio. Arraste um vídeo, imagem, texto ou áudio para a timeline — se soltar no espaço vazio (embaixo da última faixa, ou no meio de uma timeline vazia) o CapIA cria a faixa do tipo certo. Quantas faixas quiser, de vídeo e de áudio; as de cima cobrem as de baixo. Dê **dois cliques no nome** da faixa para renomear; **botão direito** no cabeçalho: renomear, mover para cima/baixo, excluir (faixa vazia). Também por faixa: travar, ocultar (vídeo), mudo e solo (áudio). Arrastar um clipe para outra faixa compatível o move; arrastar para o espaço vazio cria uma faixa nova.
 
 ## Projeto e sequences
 
