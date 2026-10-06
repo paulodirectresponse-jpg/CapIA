@@ -1045,3 +1045,15 @@ A Fase 6 precisa de documentação de API que não divirja do código, de um pac
 ## Evidência
 
 `tools/docs/gen-api-docs.test.mjs`, `tools/phase6-acceptance/**/*.test.mjs`, `examples/**/*.test.mjs`, `tools/sample-project/make-sample.test.mjs` (todos em `pnpm test:tools`).
+
+## RC2 — Estabilização e UX (ADR-120 …)
+
+### ADR-120 — Dissolução sem sobra de mídia congela o quadro da borda
+
+**Contexto.** O RC1 recusava `set_transition` de dissolução quando o clip anterior não tinha mídia além do fim ou o seguinte antes do início (`INSUFFICIENT_HANDLES`). Num teste real, um editor que juntou dois clipes inteiros e aplicou "Dissolver" recebeu erro técnico — o caso mais comum. O E2E RC2 reproduziu o erro.
+
+**Decisão.** A dissolução **não exige handles**. Fora do trecho do clip, o render usa o quadro da borda: depois do fim, `MediaSource::video_frame` já devolve o último quadro; antes do início, o tempo de fonte é limitado a 0 (primeiro quadro). Continuam valendo: adjacência na mesma track, duração em quadros inteiros e par, limite pela duração dos vizinhos, e a recusa de clips invertidos. `INSUFFICIENT_HANDLES` segue para os demais invariantes (`source_in` negativo, consumo além da fonte).
+
+**Alternativas.** Reduzir a duração automaticamente até caber (resultado surpreendente e às vezes zero); trocar silenciosamente por "mergulho no fundo" (muda o que o usuário pediu); manter a regra e só traduzir a mensagem (o caso comum continuaria falhando).
+
+**Consequências.** Preview e export continuam idênticos (mesmo `render_frame`). Teste `dissolve_between_whole_clips_without_handles_blends_and_holds_edges` fixa o comportamento; o teste de comandos deixou de esperar o erro. Documentos antigos abrem iguais.

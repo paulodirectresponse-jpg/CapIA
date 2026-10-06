@@ -392,7 +392,7 @@ fn text_style_and_content_are_validated() {
 }
 
 #[test]
-fn transitions_need_adjacency_and_handles() {
+fn transitions_need_adjacency_but_not_handles() {
     let mut w = W::new();
     w.media(0, 60, "a", 0).unwrap();
     w.media(60, 60, "b", 0).unwrap(); // sem handle antes do início
@@ -405,11 +405,8 @@ fn transitions_need_adjacency_and_handles() {
     };
     // fade não precisa de handles
     w.cmd(tr(TransitionKind::Fade, 20)).unwrap();
-    // dissolve: b não tem handle antes do início (source_in = 0)
-    assert_eq!(
-        code(w.cmd(tr(TransitionKind::Dissolve, 20))),
-        ErrorCode::InsufficientHandles
-    );
+    // ADR-120: dissolve sem handles é aceito (o quadro da borda congela durante a dissolução)
+    w.cmd(tr(TransitionKind::Dissolve, 20)).unwrap();
     // refaz b com handle (source_in = 30) e a termina com sobra de fonte
     w.cmd(Command::DeleteClip {
         clip: "b".into(),

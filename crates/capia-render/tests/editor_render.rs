@@ -319,3 +319,32 @@ fn scale_keyframes_grow_the_picture_and_render_is_deterministic() {
     let b = render_frame(&g, &"S".into(), Ticks(15 * F), &s, &src).unwrap();
     assert_eq!(frame_digest(&a.image), frame_digest(&b.image));
 }
+
+#[test]
+fn dissolve_between_whole_clips_without_handles_blends_and_holds_edges() {
+    // ADR-120: ambos os clipes usam a mídia inteira (source_in = 0, sem sobra): o corte ainda
+    // dissolve de verdade — vermelho congela no fim, azul congela no começo.
+    let mut d = Dsl::new();
+    d.seq("S", FrameRate::FPS_30);
+    d.track("S", "V1", TrackKind::Visual);
+    d.register("red", 10, true, false);
+    d.register("blue", 10, true, false);
+    d.media("V1", "a", "red", 0, 30 * F, true, false);
+    d.media("V1", "b", "blue", 30 * F, 30 * F, true, false); // media(): source_in = 0
+    set_tr(&mut d, TransitionKind::Dissolve, 20); // região [20F, 40F)
+    let src = Synth::default()
+        .solid_video("red", 16, 16, RED)
+        .solid_video("blue", 16, 16, BLUE);
+    let start = render_at(&d, &src, 20 * F).pixel(16, 16);
+    let mid = render_at(&d, &src, 30 * F).pixel(16, 16);
+    let end = render_at(&d, &src, 39 * F).pixel(16, 16);
+    assert!(
+        start[0] > 200 && start[2] < 60,
+        "início ~vermelho: {start:?}"
+    );
+    assert!(
+        (100..160).contains(&mid[0]) && (100..160).contains(&mid[2]),
+        "corte ~50/50: {mid:?}"
+    );
+    assert!(end[2] > 200 && end[0] < 60, "fim ~azul: {end:?}");
+}

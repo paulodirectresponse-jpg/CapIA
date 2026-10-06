@@ -327,7 +327,8 @@ impl RenderGraph {
                 ..
             } => LayerKind::Media {
                 asset: asset.clone(),
-                source_t: content_t,
+                // ADR-120: antes do 1º quadro (sem handle na dissolução) congela o 1º quadro
+                source_t: Ticks(content_t.0.max(0)),
             },
             GraphClipKind::Media { .. } => return Ok(None), // só áudio
             GraphClipKind::Image { asset } => LayerKind::Image {

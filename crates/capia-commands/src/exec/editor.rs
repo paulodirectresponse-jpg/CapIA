@@ -459,15 +459,6 @@ pub(crate) fn ungroup(ctx: &mut Ctx, clips: &[ClipId]) -> Result<CommandOutput> 
 
 // ------------------------------------------------------------------------------- transitions
 
-/// Duração de conteúdo (em ticks) disponível na fonte de um clip, se limitada.
-fn source_len(ctx: &Ctx, clip: &Clip) -> Option<Ticks> {
-    match &clip.content {
-        ClipContent::Media { asset, .. } => ctx.doc.asset(asset).and_then(|a: &Asset| a.duration),
-        ClipContent::Nested { sequence, .. } => ctx.doc.sequence(sequence).map(|s| s.duration()),
-        _ => None,
-    }
-}
-
 fn transition_hint(max: Ticks) -> serde_json::Value {
     serde_json::json!({ "max_duration_ticks": max.0 })
 }
@@ -545,25 +536,8 @@ pub(crate) fn set_transition(
                             "dissolve does not support reversed clips",
                         ));
                     }
-                    // handles: o anterior precisa de `half` de fonte além do fim; este, antes do início
-                    let need_after = i128::from(half.0) * i128::from(prev.speed.num())
-                        / i128::from(prev.speed.den());
-                    let need_before = i128::from(half.0) * i128::from(old.speed.num())
-                        / i128::from(old.speed.den());
-                    let prev_end_src = i128::from(prev.source_in.0)
-                        + i128::from(prev.duration.0) * i128::from(prev.speed.num())
-                            / i128::from(prev.speed.den());
-                    let after_ok = source_len(ctx, &prev)
-                        .is_none_or(|len| prev_end_src + need_after <= i128::from(len.0));
-                    let before_ok = !old.content.has_source_time()
-                        || i128::from(old.source_in.0) >= need_before;
-                    if !after_ok || !before_ok {
-                        return Err(CommandError::new(
-                            ErrorCode::InsufficientHandles,
-                            "not enough source handles for a dissolve at this cut (use fade or a shorter duration)",
-                        )
-                        .with_entities([clip_ref(clip), clip_ref(&prev.id)]));
-                    }
+                    // ADR-120: sem sobra de fonte (handles) o quadro da borda congela durante a
+                    // dissolução — transição entre clipes inteiros nunca é recusada.
                 }
             }
         }
