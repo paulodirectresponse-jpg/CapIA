@@ -1057,3 +1057,45 @@ A Fase 6 precisa de documentação de API que não divirja do código, de um pac
 **Alternativas.** Reduzir a duração automaticamente até caber (resultado surpreendente e às vezes zero); trocar silenciosamente por "mergulho no fundo" (muda o que o usuário pediu); manter a regra e só traduzir a mensagem (o caso comum continuaria falhando).
 
 **Consequências.** Preview e export continuam idênticos (mesmo `render_frame`). Teste `dissolve_between_whole_clips_without_handles_blends_and_holds_edges` fixa o comportamento; o teste de comandos deixou de esperar o erro. Documentos antigos abrem iguais.
+
+## RC3 — Timeline livre, redesign, export medido (ADR-121 …)
+
+### ADR-121 — O sink do executor vê `Queued → Running → terminal`, sempre, nessa ordem
+
+**Contexto.** O CI Windows (run 136) falhou em `capia-jobs --test executor the_sink_sees_every_transition_in_order`: esperado `[Queued, Running, Completed]`, recebido `[Running, Completed, Completed]`. Causa real, não do teste: `submit` publicava o job na fila **antes** de tirar o *snapshot* "Queued" e notificar o sink; um worker rápido podia pegar o job, marcá-lo `Running`/`Completed` e notificar antes, e o snapshot atrasado ainda mostrava o estado já terminal (duplicando `Completed` e perdendo `Queued`).
+
+**Decisão.** Cada job tem um `Mutex` de ordenação. `submit` o trava **antes** de enfileirar, tira o snapshot `Queued`, notifica o sink e só então o solta; o worker, antes de passar para `Running`, espera esse mutex. Resultado: a notificação `Queued` de um job precede qualquer outra, por construção, sem alterar a prioridade/ordem de execução.
+
+**Alternativas.** Tolerar qualquer ordem no teste (esconde a quebra do contrato que a UI/CLI usam); notificar sob o lock da fila (segura a fila durante I/O do sink).
+
+**Consequências.** Teste determinístico `queued_is_always_delivered_before_running_even_when_the_sink_is_slow` (sink lento + 2 workers) falha no código antigo e passa no novo; o teste original ficou intacto.
+
+### ADR-122 — Timeline livre: sem tracks fixas; renomear/reordenar são comandos; trocar de track é um salto
+
+**Contexto.** O RC2 ainda criava Main/Overlay/Text/Voice/Music/SFX em toda sequence e o usuário de editor (modelo CapCut) não precisa saber o que é "papel". Pedido: qualquer número de vídeos/áudios/textos; soltar acima/abaixo ou no espaço vazio cria a track do tipo certo; reordenar, renomear, travar, ocultar, mudo/solo, excluir track vazia.
+
+**Decisão.** (1) Uma sequence nova nasce **sem tracks**; a UI cria a track de que precisa ao soltar/mover para o espaço vazio (mesma transação do `insert_clip`/`move_clips`, com `$ref`). O `TrackRole` continua no modelo só como **dica interna** (cor, localizar legendas), nunca como regra. (2) Novos comandos `RenameTrack` (≤ 64 caracteres, sem controle) e `MoveTrack` (índice; recusa track travada), desfazíveis, com `PrimitiveOp::Track` reposicionando; os clips seguem a track. (3) `resolve_group_move`: trocar de track passa a ser um **salto** — o destino só precisa estar livre **onde o clip vai cair**, não onde estava (antes um clipe não podia ir para outra track se o intervalo original estivesse ocupado lá, o que na timeline livre é o caso comum). Se o ponto pedido estiver ocupado, vale o comportamento anterior (posição original, sem trim silencioso).
+
+**Alternativas.** Manter tracks de papel escondidas (continua exigindo conhecer papéis); criar tracks por heurística de papel (não é livre).
+
+**Consequências.** Specs antigos que dependem de papéis semeiam as tracks **por API** (`seedLegacyTracks`, preparação de teste, não UX). Projetos RC1/RC2 abrem iguais (nomes de fábrica contam como "sem nome": `Vídeo N`/`Áudio N`). Testes: `tracks_can_be_renamed_and_reordered_and_clips_follow_their_track`, `moving_to_another_track_only_needs_the_destination_free_where_the_clip_lands`, E2E `free-timeline.spec.ts` (3 vídeos + 4 áudios por arrastar/soltar, sem API para montar o cenário).
+
+### ADR-123 — Layout RC3: rail de 5 itens, inspector contextual, dados técnicos opt-in
+
+**Decisão.** Rail: Mídia / Texto / Áudio / Transições / IA. "Projeto" some como painel: as **Sequências** são uma aba de Mídia ("Arquivos | Sequências") com "+ Nova sequência", dica de arrastar para usar dentro da aberta, dois cliques para entrar, migalhas para voltar; sem o termo "nested" (pt-BR: "sequência"). "Legendas" funde com Texto (Adicionar texto / título / legenda + lista de legendas). O inspector é contextual: sem seleção só nome e formato; com clip, o essencial (conteúdo/estilo de texto, posição, escala, opacidade, transição) e **Avançado recolhido** (rotação, ativo, início/duração; taxa de quadros/duração da sequência). Entradas prontas de texto (Aparecer/Estourar/Subir) criam keyframes comuns, editáveis na aba Animação. Dados técnicos permanentes (fps/latência/resolução do preview) só com a preferência `technical` (Configurações), desligada por padrão. Em janelas baixas a timeline não passa de ~55% da altura.
+
+**Consequências.** Specs usam `rail-text` (legendas) e `rail-media` + `media-tab-sequences`; `perf.spec` liga `technical`. Teste de escala em 1366×768, 1536×864 (125%), 1280×720 (150%) e 1093×614 (1366 a 125%): sem rolagem da página, controles principais dentro da janela, timeline ≥ 120 px.
+
+### ADR-124 — Export medido por etapa; compositor em faixas; render ∥ encode
+
+**Contexto.** Faltava saber onde o export gasta tempo. `Mp4Report.timings` agora separa: áudio (mix + WAV), partida do encoder, laço de render = **decode** (dentro da `MediaSource`, medido por um wrapper) + **composição** + **espera do encoder**, escrita do encoder (thread própria), drenagem/mux, validação (ffprobe) e `fsync`; mais quadros/s e ×tempo real.
+
+**Medição (1080p, 2 camadas, 900 quadros, máquina de 4 núcleos, mpeg4-reference):** antes — 48,6 s (0,62× tempo real, 18,8 fps; composição 34,1 s, escrita 9,6 s serializada); depois — 25,0 s (1,20×, 37,1 fps; composição 20,2 s, espera do encoder ≈ 0).
+
+**Decisão.** (1) `blit_layer` divide o retângulo em **faixas de linhas** por thread (`std::thread::scope`); cada pixel depende só da fonte e do próprio destino, então o resultado é **idêntico bit a bit** ao serial (teste `threaded_blit_is_bit_identical_to_serial`; `CAPIA_RENDER_THREADS=1` força o serial). (2) O export entrega os quadros a uma thread que escreve no encoder por fila limitada (4 quadros), em vez de bloquear o render. Nada muda na semântica: mesmo `render_frame`, mesma validação, mesma publicação atômica; cancelamento e erro do encoder continuam abortando sem saída parcial.
+
+**Consequências.** O gargalo restante é a composição por CPU (`composite_ms`); GPU/SIMD ficam para um passo próprio com paridade medida. Benchmark: `cargo test --release -p capia-project --test perf_export -- --ignored --nocapture` (grava `target/rc3-export-bench.json`).
+
+### ADR-125 — Aceitação do OpenAI real: credencial já guardada, nunca lida pelo script
+
+**Decisão.** `ai.connect` aceita `use_stored: true`: usa a credencial que o app já guardou no cofre do SO (`capia/provider/openai`), sem o cliente informar ou receber o valor; sem credencial ⇒ erro `NO_CREDENTIAL`. O `capia-devserver --os-vault` usa o cofre real (nunca memória) e o `tools/rc3-acceptance/openai-real.ps1` conduz o fluxo (conectar, chat, edição com aprovação e desfazer exato, visão opcional, `whisper-1` à parte) e varre os logs por padrão de chave. **Sem chave ⇒ `pending_external` (exit 3), nunca sucesso.** O CI roda só esse caminho sem chave; o fluxo real é gate externo.

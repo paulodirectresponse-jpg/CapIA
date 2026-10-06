@@ -1,4 +1,4 @@
-# Problemas conhecidos e pendências externas — 0.6.0-rc.2
+# Problemas conhecidos e pendências externas — 0.6.0-rc.3
 
 Derivado de `docs/STATUS.md` (seções das Fases 3, 4 e 5) e dos documentos da Fase 6. **“Pendente externo”** = depende de máquina, pessoa, provedor, certificado ou decisão que a engenharia não tem; nunca é marcado como feito sem evidência real (validadores em `tools/phase*-acceptance/`).
 
@@ -14,6 +14,13 @@ Derivado de `docs/STATUS.md` (seções das Fases 3, 4 e 5) e dos documentos da F
 | E6 | **Paridade UI × REST × MCP e fluxo canônico contra o servidor real** | executar a mesma tarefa pelas três superfícies | `external-flow/` |
 | E7 | **Pentest independente** da API local | contratar/serviço externo | `security/` |
 | E8 | Verificação do **pacote de licenças** (FFmpeg LGPL, avisos de terceiros) no instalador final | revisão do artefato | `installer/` |
+
+## RC3 — pendências desta candidata
+
+- **OpenAI real (externo):** `tools/rc3-acceptance/openai-real.ps1` roda no Windows do usuário com a chave já guardada no Credential Manager; **sem chave ⇒ `pending_external`**. Servidor falso não fecha este gate. O CI não tem segredo.
+- **Dados técnicos** do preview (fps/latência) só aparecem com a preferência "Mostrar dados técnicos".
+- **Compositor em CPU:** o export de 1080p com 2 camadas roda a ~1,2× tempo real em 4 núcleos (medido); o gargalo restante é a composição. GPU/SIMD ficam para um passo próprio com paridade medida.
+- **Legibilidade em 1366×768 e em 125%/150%** é verificada por testes automáticos de geometria (sem rolagem da página, controles dentro da janela) e por capturas; a aprovação visual **humana** continua pendente.
 
 ## Pendências herdadas (Fases 3, 4, 5)
 
