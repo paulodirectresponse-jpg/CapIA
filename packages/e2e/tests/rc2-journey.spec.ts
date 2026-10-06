@@ -273,7 +273,7 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
   });
 
   await test.step("15. adicionar legenda", async () => {
-    await page.getByTestId("rail-captions").click();
+    await page.getByTestId("rail-text").click();
     await page.getByTestId("caption-add").click();
     await expect(page.getByTestId("caption-list").locator("li")).toHaveCount(1);
   });

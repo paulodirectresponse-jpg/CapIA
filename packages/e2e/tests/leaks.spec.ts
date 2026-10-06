@@ -55,8 +55,9 @@ test("no heap or DOM growth across repeated project open/close and sequence swit
     await page.waitForFunction(() => (window.__capiaTimeline?.stats().visibleClips ?? 0) > 0);
     // troca de painel e cria/fecha uma sequence
     await page.getByTestId("rail-media").click();
-    await page.getByTestId("rail-captions").click();
-    await page.getByTestId("rail-project").click();
+    await page.getByTestId("rail-text").click();
+    await page.getByTestId("rail-media").click();
+    await page.getByTestId("media-tab-sequences").click();
   };
   for (let i = 0; i < 3; i++) await cycle(); // aquece caches
   const before = await heap();

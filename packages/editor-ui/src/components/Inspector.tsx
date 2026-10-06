@@ -49,6 +49,17 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/** Bloco recolhido por padrão: dados que a maioria das edições não precisa ver. */
+function Advanced({ id, children }: { id: string; children: React.ReactNode }) {
+  const t = useT();
+  return (
+    <details className="ed-advanced" data-testid={id}>
+      <summary>{t("inspector.advanced")}</summary>
+      {children}
+    </details>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="ed-section">
@@ -236,12 +247,14 @@ function SequenceInspector({ id, summary }: { id: string; summary: SequenceSumma
           ))}
         </Select>
       </Row>
-      <Row label={t("inspector.frameRate")}>
-        <span>{summary.frame_rate} fps</span>
-      </Row>
-      <Row label={t("inspector.duration")}>
-        <span>{formatTimecode(summary.duration, summary.frame_rate)}</span>
-      </Row>
+      <Advanced id="inspector-advanced-sequence">
+        <Row label={t("inspector.frameRate")}>
+          <span>{summary.frame_rate} fps</span>
+        </Row>
+        <Row label={t("inspector.duration")}>
+          <span>{formatTimecode(summary.duration, summary.frame_rate)}</span>
+        </Row>
+      </Advanced>
     </div>
   );
 }
@@ -349,29 +362,11 @@ function BasicTab({
           }}
         />
       </Row>
-      <Row label={t("inspector.enabled")}>
-        <input
-          type="checkbox"
-          aria-label={t("inspector.enabled")}
-          checked={clip.enabled}
-          data-testid="clip-enabled"
-          onChange={(e) => {
-            void c.setClipEnabled(clip.id, e.currentTarget.checked);
-          }}
-        />
-      </Row>
-      <Row label={t("inspector.start")}>
-        <span data-testid="clip-start">{formatTimecode(clip.start, summary.frame_rate)}</span>
-      </Row>
-      <Row label={t("inspector.duration")}>
-        <span data-testid="clip-duration">{formatTimecode(clip.duration, summary.frame_rate)}</span>
-      </Row>
       {visual && (
         <Section title={t("inspector.position")}>
           {field("position_x")}
           {field("position_y")}
           {field("scale", 100)}
-          {field("rotation")}
           {field("opacity", 100)}
         </Section>
       )}
@@ -424,6 +419,28 @@ function BasicTab({
           )}
         </Section>
       )}
+      <Advanced id="inspector-advanced-clip">
+        <Row label={t("inspector.enabled")}>
+          <input
+            type="checkbox"
+            aria-label={t("inspector.enabled")}
+            checked={clip.enabled}
+            data-testid="clip-enabled"
+            onChange={(e) => {
+              void c.setClipEnabled(clip.id, e.currentTarget.checked);
+            }}
+          />
+        </Row>
+        <Row label={t("inspector.start")}>
+          <span data-testid="clip-start">{formatTimecode(clip.start, summary.frame_rate)}</span>
+        </Row>
+        <Row label={t("inspector.duration")}>
+          <span data-testid="clip-duration">
+            {formatTimecode(clip.duration, summary.frame_rate)}
+          </span>
+        </Row>
+        {visual && field("rotation")}
+      </Advanced>
     </>
   );
 }
@@ -460,6 +477,19 @@ function TextSection({
           if (v !== clip.content.text) void c.setText(clip.id, { text: v });
         }}
       />
+      <div className="ed-row" style={{ flexWrap: "wrap", gap: 6 }} data-testid="text-entrances">
+        {(["fade", "pop", "rise"] as const).map((k) => (
+          <Button
+            key={k}
+            data-testid={`text-entrance-${k}`}
+            onClick={() => {
+              void c.applyEntrance(clip, k);
+            }}
+          >
+            {t(`text.entrance.${k}`)}
+          </Button>
+        ))}
+      </div>
       <Row label={t("inspector.fontSize")}>
         <NumberField
           label={t("inspector.fontSize")}

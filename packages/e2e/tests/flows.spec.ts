@@ -124,7 +124,7 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
   });
 
   await test.step("10. add caption", async () => {
-    await page.getByTestId("rail-captions").click();
+    await page.getByTestId("rail-text").click();
     await page.getByTestId("caption-add").click();
     await expect(page.getByTestId("caption-list").locator("li")).toHaveCount(1);
     const ta = page.getByTestId("caption-list").locator("textarea").first();
@@ -187,7 +187,8 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
   });
 
   await test.step("13. nested sequence navigation", async () => {
-    await page.getByTestId("rail-project").click();
+    await page.getByTestId("rail-media").click();
+    await page.getByTestId("media-tab-sequences").click();
     await page.getByTestId("new-sequence").click();
     await expect.poll(async () => (await editor.snapshot()).sequences.length).toBe(2);
     const snap = await editor.snapshot();

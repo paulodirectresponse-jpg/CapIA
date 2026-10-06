@@ -235,7 +235,7 @@ test("inspector: transform, animation keyframes, text style and undo of all of i
 
 test("text and captions: style, edit, split and merge", async ({ editor, page }) => {
   await setup(editor);
-  await page.getByTestId("rail-captions").click();
+  await page.getByTestId("rail-text").click();
   await page.getByTestId("caption-add").click();
   await expect(page.getByTestId("caption-list").locator("li")).toHaveCount(1);
   const list = page.getByTestId("caption-list");
@@ -406,7 +406,7 @@ test("undo after a long run of UI edits restores the exact original document", a
   await posX.press("Enter");
   await page.getByTestId("rail-text").click();
   await page.getByTestId("text-add-title").click();
-  await page.getByTestId("rail-captions").click();
+  await page.getByTestId("rail-text").click();
   await page.getByTestId("caption-add").click();
   await page.keyboard.press("Control+a");
   await page.getByTestId("group").click();

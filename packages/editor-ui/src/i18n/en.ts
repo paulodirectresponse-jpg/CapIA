@@ -43,6 +43,17 @@ export const en = {
   "topbar.jobs": "{count} background job(s)",
   "topbar.noProject": "No project",
 
+  "settings.technical": "Show technical data (fps, latency, preview resolution)",
+  "media.tab.files": "Files",
+  "media.tab.sequences": "Sequences",
+  "text.entrance.fade": "Fade in",
+  "text.entrance.pop": "Pop",
+  "text.entrance.rise": "Rise",
+  "text.addText": "Add text",
+  "text.addTitle": "Add title",
+  "text.captionsHead": "Captions",
+  "project.dragHint":
+    "Drag a sequence onto the timeline to use it inside the open one. Double-click to enter it.",
   "rail.label": "Library",
   "rail.project": "Project",
   "rail.media": "Media",
@@ -261,6 +272,7 @@ export const en = {
   "inspector.noKeyframes": "No keyframes",
   "inspector.animatedHint": "Animated: edits create a keyframe at the playhead.",
   "inspector.format": "Frame size",
+  "inspector.advanced": "Advanced",
   "inspector.frameRate": "Frame rate",
   "inspector.reversed": "Reverse",
 

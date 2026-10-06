@@ -17,6 +17,8 @@ export interface Prefs {
     leftCollapsed: boolean;
     rightCollapsed: boolean;
   };
+  /** Mostra dados técnicos (fps/latência do preview…) na interface. Desligado por padrão. */
+  technical: boolean;
   keymap: Record<string, string[]>;
   preview: { quality: PreviewQuality; proxy: boolean; safeAreas: boolean; audio: boolean };
   timeline: { pxPerSecond: number; trackHeights: Record<string, number>; snapping: boolean };
@@ -63,6 +65,7 @@ export const DEFAULT_PREFS: Prefs = {
     leftCollapsed: false,
     rightCollapsed: false,
   },
+  technical: false,
   keymap: {},
   preview: { quality: "auto", proxy: false, safeAreas: false, audio: true },
   timeline: { pxPerSecond: 80, trackHeights: {}, snapping: true },
@@ -133,6 +136,7 @@ export function sanitizePrefs(raw: unknown): Prefs {
       leftCollapsed: bool(panels.leftCollapsed, d.panels.leftCollapsed),
       rightCollapsed: bool(panels.rightCollapsed, d.panels.rightCollapsed),
     },
+    technical: bool(raw.technical, d.technical),
     keymap,
     preview: {
       quality:

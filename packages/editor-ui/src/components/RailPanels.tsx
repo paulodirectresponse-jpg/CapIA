@@ -4,36 +4,35 @@ import type { Clip, TransitionKind } from "@capia/engine-bindings";
 import { useController, useUi } from "../context";
 import { useT, type MessageKey } from "../i18n";
 import { formatTimecode } from "../lib/timecode";
-import { TEXT_PRESETS, type TextPreset } from "../store/edit";
+import { type TextPreset } from "../store/edit";
 import { MediaPanel } from "./MediaPanel";
-
-const PRESET_LABEL: Record<TextPreset, MessageKey> = {
-  title: "text.style.title",
-  caption: "text.style.caption",
-  lowerThird: "text.style.lowerThird",
-};
 
 export function TextPanel() {
   const c = useController();
   const t = useT();
   const ready = useUi((s) => s.active !== null);
+  const add = (p: TextPreset, label: MessageKey, id: string) => (
+    <Button
+      className="ed-preset"
+      disabled={!ready}
+      data-testid={id}
+      onClick={() => {
+        void c.addText(p);
+      }}
+    >
+      <Icon name={p === "caption" ? "caption" : "text"} /> {t(label)}
+    </Button>
+  );
   return (
-    <div className="ed-panel-body" data-testid="text-panel">
-      <p className="ed-hint">{t("text.add")}</p>
-      {(["title", "lowerThird"] as TextPreset[]).map((p) => (
-        <Button
-          key={p}
-          className="ed-preset"
-          disabled={!ready}
-          data-testid={`text-add-${p}`}
-          onClick={() => {
-            void c.addText(p);
-          }}
-        >
-          <Icon name="text" /> {t(PRESET_LABEL[p])}
-          <small style={{ marginLeft: "auto" }}>{TEXT_PRESETS[p].style.size_permille / 10}%</small>
-        </Button>
-      ))}
+    <div className="ed-text-panel">
+      <div className="ed-panel-body" data-testid="text-panel" style={{ flex: "none" }}>
+        {add("lowerThird", "text.addText", "text-add-lowerThird")}
+        {add("title", "text.addTitle", "text-add-title")}
+      </div>
+      <h3 className="ed-subhead" style={{ padding: "0 12px" }}>
+        {t("text.captionsHead")}
+      </h3>
+      <CaptionsPanel />
     </div>
   );
 }
@@ -83,7 +82,7 @@ const CAPTION_STYLES: { id: string; label: string; style: Record<string, unknown
   },
 ];
 
-export function CaptionsPanel() {
+function CaptionsPanel() {
   const c = useController();
   const t = useT();
   const { seq, playhead, summary } = useUi((s) => ({

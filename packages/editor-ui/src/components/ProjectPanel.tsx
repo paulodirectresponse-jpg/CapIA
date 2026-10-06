@@ -3,7 +3,7 @@ import { Badge, Icon, IconButton, EmptyState, type MenuEntry } from "@capia/ui-k
 import type { Folder, SequenceSummary } from "@capia/engine-bindings";
 import { useController, useUi } from "../context";
 import { useT } from "../i18n";
-import { formatFps } from "../lib/timecode";
+import { formatFps, formatTimecode } from "../lib/timecode";
 import { FORMAT_PRESETS, type FormatPreset } from "../store/edit";
 import { useContextMenu } from "./Menus";
 
@@ -243,7 +243,7 @@ export function ProjectPanel() {
         seqMenu(sq, e.clientX, e.clientY);
       }}
     >
-      <Icon name="film" size={14} />
+      <Icon name="nested" size={14} />
       {renaming === sq.id ? (
         <InlineRename
           initial={sq.name}
@@ -259,8 +259,12 @@ export function ProjectPanel() {
           {sq.name}
         </span>
       )}
-      <Badge>{`${String(sq.width)}×${String(sq.height)}`}</Badge>
-      <Badge>{formatFps(sq.frame_rate)}</Badge>
+      <span
+        className="ed-tree-meta"
+        title={`${String(sq.width)}×${String(sq.height)} · ${formatFps(sq.frame_rate)}`}
+      >
+        {formatTimecode(sq.duration, sq.frame_rate)}
+      </span>
       {sq.nested_usage > 0 && (
         <Badge tone="success">{t("project.usedBy", { count: sq.nested_usage })}</Badge>
       )}
@@ -359,6 +363,9 @@ export function ProjectPanel() {
           renderChildren(null, 0)
         )}
       </div>
+      <p className="ed-hint" style={{ padding: "0 12px 12px" }} data-testid="sequence-hint">
+        {t("project.dragHint")}
+      </p>
       {menu.node}
       {presetMenu.node}
     </section>

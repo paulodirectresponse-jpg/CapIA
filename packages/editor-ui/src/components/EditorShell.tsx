@@ -11,7 +11,7 @@ import { Inspector } from "./Inspector";
 import { MediaPanel } from "./MediaPanel";
 import { PreviewPanel } from "./PreviewPanel";
 import { ProjectPanel } from "./ProjectPanel";
-import { AudioPanel, CaptionsPanel, TextPanel, TransitionsPanel } from "./RailPanels";
+import { AudioPanel, TextPanel, TransitionsPanel } from "./RailPanels";
 import { SettingsDialog } from "./SettingsDialog";
 import { TimelinePanel } from "./TimelinePanel";
 import { TopBar } from "./TopBar";
@@ -26,30 +26,50 @@ declare global {
   }
 }
 
-export type RailId = "project" | "media" | "audio" | "text" | "captions" | "transitions" | "ai";
+export type RailId = "media" | "text" | "audio" | "transitions" | "ai";
 
 const RAIL: { id: RailId; icon: IconName; label: MessageKey }[] = [
-  { id: "project", icon: "folder", label: "rail.project" },
   { id: "media", icon: "film", label: "rail.media" },
-  { id: "audio", icon: "music", label: "rail.audio" },
   { id: "text", icon: "text", label: "rail.text" },
-  { id: "captions", icon: "caption", label: "rail.captions" },
+  { id: "audio", icon: "music", label: "rail.audio" },
   { id: "transitions", icon: "transition", label: "rail.transitions" },
   { id: "ai", icon: "sparkle", label: "rail.ai" },
 ];
 
+/** Mídia: "Arquivos" e "Sequências" lado a lado (as sequências ficam à vista, sem painel escondido). */
+function MediaRail() {
+  const t = useT();
+  const [tab, setTab] = useState<"files" | "sequences">("files");
+  return (
+    <div className="ed-media-rail">
+      <div className="ed-segmented" role="tablist" aria-label={t("rail.media")}>
+        {(["files", "sequences"] as const).map((id) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            data-testid={`media-tab-${id}`}
+            onClick={() => {
+              setTab(id);
+            }}
+          >
+            {t(id === "files" ? "media.tab.files" : "media.tab.sequences")}
+          </button>
+        ))}
+      </div>
+      {tab === "files" ? <MediaPanel /> : <ProjectPanel />}
+    </div>
+  );
+}
+
 function RailContent({ id, onOpenAiSettings }: { id: RailId; onOpenAiSettings: () => void }) {
   switch (id) {
-    case "project":
-      return <ProjectPanel />;
     case "media":
-      return <MediaPanel />;
+      return <MediaRail />;
     case "audio":
       return <AudioPanel />;
     case "text":
       return <TextPanel />;
-    case "captions":
-      return <CaptionsPanel />;
     case "transitions":
       return <TransitionsPanel />;
     case "ai":
@@ -67,7 +87,7 @@ export function EditorShell() {
     exportNonce: s.exportNonce,
     lastError: s.lastError,
   }));
-  const [rail, setRail] = useState<RailId>("project");
+  const [rail, setRail] = useState<RailId>("media");
   const [exportOpen, setExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
@@ -75,7 +95,19 @@ export function EditorShell() {
   const [diagOpen, setDiagOpen] = useState(false);
   // tamanhos "ao vivo" durante o arrasto (o prefs só grava ao soltar)
   const [live, setLive] = useState<Partial<typeof panels>>({});
+  // janelas baixas (ex.: 1366×768 a 125%): a timeline nunca come mais que ~55% da altura
+  const [winH, setWinH] = useState(() => window.innerHeight);
+  useEffect(() => {
+    const on = () => {
+      setWinH(window.innerHeight);
+    };
+    window.addEventListener("resize", on);
+    return () => {
+      window.removeEventListener("resize", on);
+    };
+  }, []);
   const w = { ...panels, ...live };
+  w.timelineHeight = Math.min(w.timelineHeight, Math.max(220, Math.round(winH * 0.55)));
 
   // atalho/menu "Exportar" → abre o diálogo
   useEffect(() => {

@@ -31,6 +31,9 @@ async function window_commitCount(page: Page): Promise<number> {
 
 test("timeline UX §6 targets with 5k clips", async ({ editor, page, server }) => {
   test.setTimeout(300_000);
+  await page.addInitScript(() => {
+    localStorage.setItem("capia.prefs.v1", JSON.stringify({ technical: true }));
+  });
   await editor.goto();
   await editor.createProject();
   await editor.importMedia("video_audio.mp4", "image.jpg");

@@ -31,7 +31,6 @@ function wav(path: string, seconds: number, hz: number): void {
   writeFileSync(path, buf);
 }
 
-
 async function structure(editor: Editor): Promise<{ kind: string; clips: number }[]> {
   const seq = await editor.sequence();
   return seq.tracks.map((t) => ({
@@ -113,7 +112,8 @@ test("timeline livre: 3 vídeos + 4 áudios, tracks criadas ao soltar, mover, re
     expect(kinds.filter((k) => k === "visual")).toHaveLength(3);
   });
 
-  const audioTracks = async () => (await editor.sequence()).tracks.filter((t) => t.kind === "audio");
+  const audioTracks = async () =>
+    (await editor.sequence()).tracks.filter((t) => t.kind === "audio");
   await test.step("áudio 3 e 4 coexistem livremente nas tracks existentes", async () => {
     const [t1, t2] = await audioTracks();
     if (!t1 || !t2) throw new Error("faltam tracks de áudio");
@@ -139,9 +139,7 @@ test("timeline livre: 3 vídeos + 4 áudios, tracks criadas ao soltar, mover, re
     await page.mouse.down();
     await page.mouse.move(to.x, to.y, { steps: 14 });
     await page.mouse.up();
-    await expect
-      .poll(async () => (await editor.sequence()).clips[moving.id]?.track)
-      .toBe(t2.id);
+    await expect.poll(async () => (await editor.sequence()).clips[moving.id]?.track).toBe(t2.id);
   });
 
   await test.step("mover um clip para o espaço vazio cria uma track", async () => {
@@ -164,9 +162,7 @@ test("timeline livre: 3 vídeos + 4 áudios, tracks criadas ao soltar, mover, re
 
   await test.step("renomear (duplo clique), reordenar pelo menu e excluir track vazia", async () => {
     const seq = await editor.sequence();
-    const empty = seq.tracks.find(
-      (t) => !Object.values(seq.clips).some((c) => c.track === t.id),
-    );
+    const empty = seq.tracks.find((t) => !Object.values(seq.clips).some((c) => c.track === t.id));
     if (!empty) throw new Error("sem track vazia");
     const other = seq.tracks.find((t) => t.kind === "visual" && t.id !== empty.id);
     if (!other) throw new Error("sem outra track visual");
@@ -185,9 +181,13 @@ test("timeline livre: 3 vídeos + 4 áudios, tracks criadas ao soltar, mover, re
       .not.toEqual(before);
 
     await page.getByTestId(`lock-${other.id}`).click();
-    await expect.poll(async () => (await editor.sequence()).tracks.find((t) => t.id === other.id)?.locked).toBe(true);
+    await expect
+      .poll(async () => (await editor.sequence()).tracks.find((t) => t.id === other.id)?.locked)
+      .toBe(true);
     await page.getByTestId(`lock-${other.id}`).click();
-    await expect.poll(async () => (await editor.sequence()).tracks.find((t) => t.id === other.id)?.locked).toBe(false);
+    await expect
+      .poll(async () => (await editor.sequence()).tracks.find((t) => t.id === other.id)?.locked)
+      .toBe(false);
 
     const [au] = await audioTracks();
     if (!au) throw new Error("sem áudio");

@@ -330,15 +330,17 @@ export function PreviewPanel() {
           {formatTimecode(playhead, summary?.frame_rate ?? "30")}
         </span>
         <div className="ed-spacer" />
-        <span
-          className="ed-metrics"
-          data-testid="preview-metrics"
-          aria-label={t("preview.metricsLabel")}
-        >
-          {metrics.fps} fps · {t("preview.latency", { ms: Math.round(metrics.lastLatencyMs) })} ·{" "}
-          {t("preview.dropped", { count: metrics.dropped })} · {size.width}×{size.height} ·{" "}
-          {metrics.mode}
-        </span>
+        {prefs.technical && (
+          <span
+            className="ed-metrics"
+            data-testid="preview-metrics"
+            aria-label={t("preview.metricsLabel")}
+          >
+            {metrics.fps} fps · {t("preview.latency", { ms: Math.round(metrics.lastLatencyMs) })} ·{" "}
+            {t("preview.dropped", { count: metrics.dropped })} · {size.width}×{size.height} ·{" "}
+            {metrics.mode}
+          </span>
+        )}
         {proxy && <Badge>{t("preview.proxy")}</Badge>}
         <Select
           aria-label={t("preview.quality")}

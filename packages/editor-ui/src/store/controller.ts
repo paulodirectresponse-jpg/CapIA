@@ -1238,6 +1238,32 @@ export class EditorController {
     ]);
   }
 
+  /** Entrada pronta (keyframes comuns, 100% editáveis na aba Animação): suave, pop ou subir. */
+  applyEntrance(clip: Clip, kind: "fade" | "pop" | "rise"): Promise<ChangeSet | null> {
+    const frame = this.activeSequence()?.frame_ticks ?? frameTicks("30");
+    const want = Math.round(TICKS_PER_SECOND / 2 / frame) * frame;
+    const len = Math.max(frame, Math.min(want, Math.floor(clip.duration / 2 / frame) * frame));
+    const a = clip.start;
+    const b = clip.start + len;
+    const kf = (prop: string, from: number, to: number) => [
+      {
+        type: "add_keyframe",
+        clip: clip.id,
+        prop,
+        at: a,
+        value: from,
+        interp: { bezier: { x1: 0, y1: 0, x2: 0.2, y2: 1 } },
+      },
+      { type: "add_keyframe", clip: clip.id, prop, at: b, value: to, interp: "linear" },
+    ];
+    const cmds = [
+      ...kf("opacity", 0, 1),
+      ...(kind === "pop" ? kf("scale", 0.6, 1) : []),
+      ...(kind === "rise" ? kf("position_y", 60, 0) : []),
+    ];
+    return this.exec("entrance animation", cmds);
+  }
+
   deleteKeyframe(clip: string, prop: string, at: Ticks): Promise<ChangeSet | null> {
     return this.exec("keyframe", [{ type: "delete_keyframe", clip, prop, at }]);
   }

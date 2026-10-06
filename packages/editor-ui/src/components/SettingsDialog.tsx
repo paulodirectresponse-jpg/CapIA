@@ -19,7 +19,8 @@ import { PrivacySettings } from "./PrivacySettings";
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const c = useController();
   const t = useT();
-  const { language, keymap, recovered } = useUi((s) => ({
+  const { language, keymap, recovered, technical } = useUi((s) => ({
+    technical: s.prefs.technical,
     language: s.prefs.language,
     keymap: s.prefs.keymap,
     recovered: s.prefsRecovered,
@@ -77,6 +78,17 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
             </option>
           ))}
         </Select>
+        <label className="ed-row" style={{ gap: 8 }}>
+          <input
+            type="checkbox"
+            data-testid="settings-technical"
+            checked={technical}
+            onChange={(e) => {
+              c.setPrefs({ technical: e.currentTarget.checked });
+            }}
+          />
+          <span>{t("settings.technical")}</span>
+        </label>
         <div className="ed-row">
           <Button
             data-testid="copy-diagnostics"
