@@ -14,7 +14,9 @@ Escopo: correção após o teste manual do RC1. Cada linha diz **o que foi execu
 | Conectar IA / Brain Profile `auto` / whisper-1 só como STT | `crates/capia-intelligence/tests/connect.rs`; `connect.rs` (unit: escolha de modelo) |
 | Contexto da UI no chat (ids sanitizados) | `assistant.rs::ui_context_tests` |
 | Error Boundary, recentes, estatísticas de export, nomes de track | `packages/editor-ui` (Vitest, 70 testes) |
-| Jornada humana de 25 passos | `packages/e2e/tests/rc2-journey.spec.ts` — passou localmente (Chromium + devserver release + FFmpeg real); CI: ver abaixo |
+| Jornada humana de 25 passos | `packages/e2e/tests/rc2-journey.spec.ts` — passou localmente (Chromium + devserver release + FFmpeg real) **e** no CI (Linux e Windows/Tauri/WebView2) |
+| CI completo no HEAD `a2cd6a9` (branch `claude/rc2-stabilization-ux`) | Run [37421782016](https://github.com/paulodirectresponse-jpg/CapIA/actions/runs/37421782016): todos os jobs verdes (Linux headless, TypeScript, E2E Linux, Rust+desktop Windows, E2E Windows, arquitetura/licenças/segredos). Runs anteriores (133, 134) falharam por causas minhas — clippy, ESLint, gitleaks, dois passos do roteiro no Windows — e foram corrigidas |
+| Instalador Windows (NSIS) + smoke (instalar, self-test instalado, primeira execução, desinstalar sem apagar projetos, reinstalar) | Run [37425814693](https://github.com/paulodirectresponse-jpg/CapIA/actions/runs/37425814693) (`workflow_dispatch`, HEAD `a2cd6a9`): sucesso. Artefato `installer-windows-dev-test`, ~72 MB, `sha256:76fe4a4f06c7572b8cff226dfe71a7111176ab0db63fd7f4086433de7afae9d5` — **candidato SEM assinatura de código** |
 
 ## Achado pelo próprio teste
 O primeiro E2E reproduziu o erro técnico de transição sem handles (que o editor do teste manual relatou). Corrigido pelo ADR-120.
@@ -22,5 +24,5 @@ O primeiro E2E reproduziu o erro técnico de transição sem handles (que o edit
 ## Não executado / externo (não marcar como aceito)
 - **OpenAI real:** sem chave no ambiente e sem rede para `api.openai.com`; o provedor foi exercitado só por servidor falso em loopback.
 - Chat com edição (preview → aprovação → aplicar → desfazer): coberto pelos testes Rust do assistente (`crates/capia-intelligence/tests/assistant.rs`); **não** está no E2E de UI.
-- Instalador RC2, smoke do instalador, Windows 10/11 limpos, assinatura, beta humano, H.264/AAC jurídico, pentest independente.
+- Assinatura de código (sem certificado real: o instalador é um candidato **não assinado**), Windows 10/11 limpos, beta humano, H.264/AAC jurídico, pentest independente.
 - Trilhas do escopo RC2 **não** concluídas: layout/rail reduzido e inspetor contextual, acessibilidade/resolução, texto/legendas simplificados, sequences aninhadas, medição de gargalo do export.

@@ -11,7 +11,7 @@ Formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versionamen
 
 ## [0.6.0-rc.2] - 2026-10-06
 
-Correção depois de um teste manual real do RC1 por um editor experiente. **Não** declara a Fase 6 completa nem aceita nada externo. Evidências: `docs/RC2_TEST_REPORT.md`.
+Correção depois de um teste manual real do RC1 por um editor experiente. **Não** declara a Fase 6 completa nem aceita nada externo. Evidências: `docs/RC2_TEST_REPORT.md`. Instalador candidato (não assinado) gerado pelo workflow `installer.yml`, run 37425814693, com o smoke aprovado.
 
 ### Corrigido
 - **Transição entre clipes inteiros** falhava com "sem sobra de mídia" (`INSUFFICIENT_HANDLES`). Agora a dissolução congela o quadro da borda quando não há sobra (ADR-120); preview e export continuam idênticos. A UI aplica a transição no corte quando o clipe da esquerda está selecionado e, em clipe isolado, diz "Coloque a transição entre dois clipes encostados."
