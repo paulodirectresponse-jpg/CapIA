@@ -140,3 +140,26 @@ describe("timecode", () => {
     expect(snapToFrame(f30 * 3 + f30 / 2, f30)).toBe(f30 * 4);
   });
 });
+
+describe("recent projects (Home)", () => {
+  it("promotes without duplicating, newest first, capped", async () => {
+    const { pushRecent, MAX_RECENT } = await import("./prefs");
+    let list = pushRecent([], "/a.capia", 1);
+    list = pushRecent(list, "/b.capia", 2);
+    list = pushRecent(list, "/a.capia", 3);
+    expect(list.map((r) => r.path)).toEqual(["/a.capia", "/b.capia"]);
+    for (let i = 0; i < 20; i++) list = pushRecent(list, `/p${String(i)}.capia`, 10 + i);
+    expect(list).toHaveLength(MAX_RECENT);
+    expect(list[0]?.path).toBe("/p19.capia");
+    expect(pushRecent(list, "  ", 99)).toEqual(list);
+  });
+
+  it("sanitizes a corrupted recent list field by field", async () => {
+    const { sanitizePrefs } = await import("./prefs");
+    const p = sanitizePrefs({
+      recent: [{ path: "/ok.capia", openedAt: 5 }, { path: 7 }, "x", { path: "", openedAt: 1 }],
+    });
+    expect(p.recent).toEqual([{ path: "/ok.capia", openedAt: 5 }]);
+    expect(sanitizePrefs({ recent: "nope" }).recent).toEqual([]);
+  });
+});

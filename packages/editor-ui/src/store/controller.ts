@@ -42,6 +42,7 @@ import {
   browserStorage,
   loadPrefs,
   savePrefs,
+  pushRecent,
   type KeyValueStorage,
   type Prefs,
 } from "../lib/prefs";
@@ -476,7 +477,19 @@ export class EditorController {
 
   // ------------------------------------------------------------------------------ projeto
 
+  private lastPath = "";
+
+  private rememberRecent(path: string): void {
+    this.setPrefs({ recent: pushRecent(this.state.prefs.recent, path, Date.now()) });
+  }
+
+  /** Tira um projeto da lista de recentes (ex.: o arquivo sumiu). */
+  forgetRecent(path: string): void {
+    this.setPrefs({ recent: this.state.prefs.recent.filter((r) => r.path !== path) });
+  }
+
   async createProject(path: string): Promise<boolean> {
+    this.lastPath = path;
     const ok = await this.openWith(() => this.client.createProject(path));
     // projeto novo já abre com uma sequence pronta para editar (comando comum, desfazível)
     if (ok && Object.keys(this.state.model.sequences).length === 0) {
@@ -487,6 +500,7 @@ export class EditorController {
   }
 
   async openProject(path: string): Promise<boolean> {
+    this.lastPath = path;
     return this.openWith(() => this.client.openProject(path));
   }
 
@@ -511,6 +525,7 @@ export class EditorController {
       const first = snap.sequences[0];
       if (first) await this.openSequence(first.id);
       this.startPolling();
+      if (this.lastPath) this.rememberRecent(this.lastPath);
       return true;
     } catch (e) {
       this.store.set({ phase: "welcome" });

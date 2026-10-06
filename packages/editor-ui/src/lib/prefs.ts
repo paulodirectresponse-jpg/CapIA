@@ -20,11 +20,42 @@ export interface Prefs {
   keymap: Record<string, string[]>;
   preview: { quality: PreviewQuality; proxy: boolean; safeAreas: boolean; audio: boolean };
   timeline: { pxPerSecond: number; trackHeights: Record<string, number>; snapping: boolean };
+  /** Projetos abertos recentemente (mais novo primeiro). Preferência da UI: não vai no projeto. */
+  recent: RecentProject[];
+}
+
+export interface RecentProject {
+  path: string;
+  openedAt: number;
+}
+
+export const MAX_RECENT = 8;
+
+/** Adiciona/promove `path` no topo, sem duplicar, respeitando o limite. */
+export function pushRecent(
+  list: readonly RecentProject[],
+  path: string,
+  now: number,
+): RecentProject[] {
+  const p = path.trim();
+  if (p === "") return [...list];
+  return [{ path: p, openedAt: now }, ...list.filter((r) => r.path !== p)].slice(0, MAX_RECENT);
+}
+
+/** Primeira execução em português quando o sistema está em português. */
+export function systemLanguage(): Language {
+  try {
+    return typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("pt")
+      ? "pt-BR"
+      : "en";
+  } catch {
+    return "en";
+  }
 }
 
 export const DEFAULT_PREFS: Prefs = {
   version: 1,
-  language: "en",
+  language: systemLanguage(),
   panels: {
     leftWidth: 300,
     rightWidth: 300,
@@ -35,6 +66,7 @@ export const DEFAULT_PREFS: Prefs = {
   keymap: {},
   preview: { quality: "auto", proxy: false, safeAreas: false, audio: true },
   timeline: { pxPerSecond: 80, trackHeights: {}, snapping: true },
+  recent: [],
 };
 
 export interface KeyValueStorage {
@@ -77,6 +109,19 @@ export function sanitizePrefs(raw: unknown): Prefs {
         trackHeights[id] = Math.min(240, Math.max(24, h));
     }
   }
+  const recent: RecentProject[] = Array.isArray(raw.recent)
+    ? raw.recent
+        .filter(
+          (r): r is RecentProject =>
+            isRecord(r) &&
+            typeof r.path === "string" &&
+            r.path.length > 0 &&
+            r.path.length < 1024 &&
+            typeof r.openedAt === "number" &&
+            Number.isFinite(r.openedAt),
+        )
+        .slice(0, MAX_RECENT)
+    : [];
   const quality = preview.quality;
   return {
     version: 1,
@@ -101,6 +146,7 @@ export function sanitizePrefs(raw: unknown): Prefs {
       trackHeights,
       snapping: bool(timeline.snapping, d.timeline.snapping),
     },
+    recent,
   };
 }
 

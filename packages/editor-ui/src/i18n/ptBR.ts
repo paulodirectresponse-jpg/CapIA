@@ -16,6 +16,7 @@ export const ptBR: Record<MessageKey, string> = {
   "welcome.pathHint": "ex.: C:\\Videos\\meu-anuncio.capia ou /home/eu/meu-anuncio.capia",
   "welcome.create": "Criar",
   "welcome.open": "Abrir",
+  "welcome.recentForget": "Remover da lista",
   "welcome.recent": "Recentes",
 
   "common.cancel": "Cancelar",

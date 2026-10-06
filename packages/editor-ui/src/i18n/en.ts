@@ -14,6 +14,7 @@ export const en = {
   "welcome.pathHint": "e.g. C:\\Videos\\my-ad.capia or /home/me/my-ad.capia",
   "welcome.create": "Create",
   "welcome.open": "Open",
+  "welcome.recentForget": "Remove from list",
   "welcome.recent": "Recent",
 
   "common.cancel": "Cancel",
