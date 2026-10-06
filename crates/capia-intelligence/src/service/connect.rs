@@ -44,6 +44,11 @@ pub(crate) fn pick_model(ids: &[String]) -> Option<String> {
         .map(|(_, id)| id)
 }
 
+/// Modelo de transcrição: `whisper-1` entrega `verbose_json` com tempos (o que as legendas exigem).
+pub(crate) fn pick_stt_model(ids: &[String]) -> Option<String> {
+    ids.iter().find(|id| id.as_str() == "whisper-1").cloned()
+}
+
 pub(crate) async fn finish_connect(
     ai: Arc<AiRuntime>,
     provider_id: String,
@@ -87,9 +92,23 @@ pub(crate) async fn finish_connect(
             ]);
         }
     });
+    // transcrição só roda em modelo de transcrição: habilita o `whisper-1` à parte (se existir)
+    let stt_endpoint = pick_stt_model(&ids).map(|m| format!("{provider_id}:{m}"));
+    if let Some(ep) = &stt_endpoint {
+        ai.update_registry(|r| {
+            if let Some(m) = r.models.get_mut(ep) {
+                m.enabled = true;
+                m.capabilities = Capabilities::declared(&[Capability::SpeechToText]);
+            }
+        });
+    }
     persist();
     // 3) probe por capability: o resultado diz a verdade, não o catálogo
     let probe = ai.probe_endpoint(&endpoint, &cancel).await?;
+    let stt = match &stt_endpoint {
+        Some(ep) => ai.probe_endpoint(ep, &cancel).await.ok(),
+        None => None,
+    };
     // 4) Brain Profile automático, só se o modelo serve de Brain
     let (profile_created, reasons) = {
         let reg = ai.registry();
@@ -120,6 +139,8 @@ pub(crate) async fn finish_connect(
         "model": model,
         "endpoint_id": endpoint,
         "probe": probe,
+        "stt_endpoint_id": stt_endpoint,
+        "stt_probe": stt,
         "profile_created": profile_created,
         "active_profile": ai.registry().active_profile,
         "brain_rejections": reasons,
@@ -149,6 +170,16 @@ mod tests {
             "gpt-image-1",
         ]);
         assert_eq!(pick_model(&l).as_deref(), Some("gpt-5"));
+    }
+
+    #[test]
+    fn transcription_model_is_whisper_only() {
+        use super::pick_stt_model;
+        assert_eq!(
+            pick_stt_model(&ids(&["gpt-5", "whisper-1", "gpt-4o-transcribe"])).as_deref(),
+            Some("whisper-1")
+        );
+        assert_eq!(pick_stt_model(&ids(&["gpt-5"])), None);
     }
 
     #[test]

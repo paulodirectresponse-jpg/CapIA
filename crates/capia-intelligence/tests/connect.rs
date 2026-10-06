@@ -100,6 +100,20 @@ fn connect_picks_a_model_probes_it_and_activates_an_automatic_brain_profile() {
         "active_profile nunca fica nulo"
     );
     assert!(st["any_usable_model"].as_bool().unwrap());
+    // transcrição: o whisper-1 foi habilitado só com SpeechToText (nunca o modelo de chat)
+    assert_eq!(res["stt_endpoint_id"], "openai:whisper-1");
+    let models = st["models"].as_array().unwrap();
+    let stt = models
+        .iter()
+        .find(|m| m["id"] == "openai:whisper-1")
+        .unwrap();
+    assert_eq!(stt["enabled"], true);
+    let chat = models.iter().find(|m| m["id"] == "openai:gpt-5").unwrap();
+    assert!(
+        chat["capabilities"]["entries"]
+            .get("speech_to_text")
+            .is_none()
+    );
     // a chave nunca volta
     assert!(!st.to_string().contains(KEY));
     assert!(!last.to_string().contains(KEY));

@@ -416,6 +416,7 @@ export const ptBR: Record<MessageKey, string> = {
   "crash.saved": "Seu projeto está salvo: cada edição é gravada na hora.",
   "crash.retry": "Tentar de novo",
   "crash.reload": "Recarregar o editor",
+  "err.NO_CAPABLE_MODEL": "Para fazer isso, conecte um modelo compatível (transcrição: whisper-1). Abra Conectar IA.",
   "ai.settings.title": "Providers e modelos de IA",
   "ai.off.banner": "A IA está desligada. O restante do editor continua funcionando.",
   "ai.enabled": "Recursos de IA ativados",
