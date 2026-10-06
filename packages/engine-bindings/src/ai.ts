@@ -73,6 +73,9 @@ export interface AiModelEndpoint {
   enabled: boolean;
   last_probe?: {
     success: boolean;
+    /** `ready` tudo ok · `partial` gera texto mas algo falhou · `failed` sem conexão/texto. */
+    status?: "ready" | "partial" | "failed";
+    connected?: boolean;
     latency_ms: number;
     verified: string[];
     failures: Record<string, string>;
@@ -428,6 +431,14 @@ export class AiClient {
     return this.json<{ provider: AiProviderView }>("ai.provider.save", {
       provider,
       ...(apiKey ? { api_key: apiKey } : {}),
+    });
+  }
+  /** "Conectar IA": provedor + chave → modelo padrão, probe por capability e Brain Profile `auto`. */
+  connect(preset: string, apiKey: string, model?: string) {
+    return this.json<{ task_id: string }>("ai.connect", {
+      preset,
+      api_key: apiKey,
+      ...(model ? { model } : {}),
     });
   }
   deleteProvider(id: string) {

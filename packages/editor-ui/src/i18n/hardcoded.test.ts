@@ -14,6 +14,10 @@ const files = readdirSync(DIR)
 // literais permitidos: símbolos, unidades, nomes próprios/técnicos que não se traduzem
 const ALLOWED = new Set([
   "CapIA",
+  "OpenAI",
+  "Anthropic",
+  "Google Gemini",
+  "OpenRouter",
   "×",
   "…",
   "•",

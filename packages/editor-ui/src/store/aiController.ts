@@ -340,6 +340,12 @@ export class AiController {
     return status !== null;
   }
 
+  /** `apiKey` sai direto para o engine (write-only). Resultado chega pelo job `connect`. */
+  async connect(preset: string, apiKey: string, model?: string): Promise<void> {
+    const r = await this.wrap(() => this.client.connect(preset, apiKey, model));
+    if (r) this.track(r.task_id, "connect");
+  }
+
   async probe(endpointId: string): Promise<void> {
     const r = await this.wrap(() => this.client.probe(endpointId));
     if (r) this.track(r.task_id, "probe");
@@ -613,7 +619,8 @@ export class AiController {
       const spec = result?.spec as DemandSpec | undefined;
       if (spec) this.store.set({ demand: spec });
     }
-    if (job?.kind === "probe" || job?.kind === "import_models") void this.refresh();
+    if (job?.kind === "probe" || job?.kind === "import_models" || job?.kind === "connect")
+      void this.refresh();
     if (error) {
       this.store.set({ lastError: error });
       this.notify("error", error.code, error.message);

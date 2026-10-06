@@ -64,6 +64,7 @@ export function AiSettingsDialog({ open, onClose }: { open: boolean; onClose: ()
           />
           <span>{t("ai.enabled")}</span>
         </label>
+        <ConnectAi />
         {status && (
           <p className="ed-hint" data-testid="ai-backend">
             {t("ai.backend", { backend: status.secret_backend })}
@@ -597,5 +598,102 @@ function BrainForm({ current }: { current: BrainProfileView | undefined }) {
         {t("ai.brain.save")}
       </Button>
     </div>
+  );
+}
+
+const CONNECT_ERRORS = [
+  "AUTH_FAILED",
+  "PROVIDER_UNAVAILABLE",
+  "PROVIDER_TIMEOUT",
+  "NO_SUITABLE_MODEL",
+] as const;
+
+function connectError(code: string, t: (k: MessageKey) => string): string {
+  const known = CONNECT_ERRORS.find((k) => k === code);
+  return known ? t(`ai.connect.err.${known}`) : t("ai.connect.err.generic");
+}
+
+/** "Conectar IA": escolha o provedor, cole a chave e pronto — o resto é automático. */
+function ConnectAi() {
+  const c = useController();
+  const t = useT();
+  const [preset, setPreset] = useState("openai");
+  const [apiKey, setApiKey] = useState("");
+  const job = useAi((s) => {
+    const all = Object.values(s.jobs).filter((j) => j.kind === "connect");
+    return all[all.length - 1];
+  });
+  const active = useAi((s) => s.status?.active_profile ?? null);
+  const running = job?.state === "running";
+  const result = job?.state === "done" ? job.result : undefined;
+  const modelName = typeof result?.model === "string" ? result.model : "";
+  const probe = result?.probe as { status?: string; failures?: Record<string, string> } | undefined;
+  return (
+    <section className="ed-ai-connect" data-testid="ai-connect">
+      <h3 className="ed-subhead">{t("ai.connect.title")}</h3>
+      <p className="ed-hint">{t("ai.connect.hint")}</p>
+      <div className="ed-row">
+        <Select
+          aria-label={t("ai.connect.provider")}
+          value={preset}
+          onChange={(e) => {
+            setPreset(e.currentTarget.value);
+          }}
+        >
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="google">Google Gemini</option>
+          <option value="openrouter">OpenRouter</option>
+        </Select>
+        <TextInput
+          type="password"
+          autoComplete="off"
+          aria-label={t("ai.connect.key")}
+          data-testid="ai-connect-key"
+          placeholder={t("ai.connect.keyPlaceholder")}
+          value={apiKey}
+          onChange={(e) => {
+            setApiKey(e.currentTarget.value);
+          }}
+        />
+        <Button
+          variant="primary"
+          data-testid="ai-connect-go"
+          disabled={running || apiKey.trim() === ""}
+          onClick={() => {
+            const key = apiKey;
+            setApiKey("");
+            void c.ai.connect(preset, key);
+          }}
+        >
+          {running ? t("ai.connect.running") : t("ai.connect.go")}
+        </Button>
+      </div>
+      {job?.state === "failed" && (
+        <p className="ed-error" role="alert" data-testid="ai-connect-error">
+          {connectError(job.error?.code ?? "", t)}
+          <details>
+            <summary>{t("common.details")}</summary>
+            {job.error?.code}: {job.error?.message}
+          </details>
+        </p>
+      )}
+      {result && (
+        <p className="ed-ok" role="status" data-testid="ai-connect-ok">
+          {probe?.status === "ready"
+            ? t("ai.connect.ready", { model: modelName })
+            : t("ai.connect.partial", { model: modelName })}
+          {probe?.status === "partial" && (
+            <details>
+              <summary>{t("common.details")}</summary>
+              {Object.entries(probe.failures ?? {})
+                .map(([k, v]) => `${k}: ${v}`)
+                .join("\n")}
+            </details>
+          )}
+        </p>
+      )}
+      {active && <Badge>{t("ai.connect.active", { profile: active })}</Badge>}
+    </section>
   );
 }
