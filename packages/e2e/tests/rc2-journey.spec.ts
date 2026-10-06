@@ -283,8 +283,10 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
     const before = (await editor.sequence()).tracks.length;
     const audioTrack = (await editor.sequence()).tracks.find((t) => t.kind === "audio");
     if (!audioTrack) throw new Error("sem track de áudio");
+    // duplo clique na biblioteca = "adicionar à timeline" (não depende de arrastar até uma linha
+    // que, na janela estreita do app real, pode estar fora da área visível)
     await page.getByTestId("rail-media").click();
-    await editor.dragAssetTo(tone, await editor.rowPoint(audioTrack.id, 200));
+    await page.getByTestId(`asset-${tone}`).dblclick();
     await expect
       .poll(async () =>
         (await editor.clips()).some((c) => c.content.type === "media" && c.track === audioTrack.id),

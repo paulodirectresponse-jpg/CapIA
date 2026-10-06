@@ -453,7 +453,7 @@ impl IntelligenceService {
                         task.cancel.clone(),
                         move || {
                             if let (Some(db), Ok(v)) =
-                                (&db, serde_json::to_value(&persist_ai.registry()))
+                                (&db, serde_json::to_value(persist_ai.registry()))
                             {
                                 let _ = db.put(NS, KEY_REGISTRY, &v, now_ms());
                             }
