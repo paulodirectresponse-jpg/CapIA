@@ -6,7 +6,7 @@ use super::check::{check_clip, check_no_overlap, track_locked};
 use crate::ctx::{CommandOutput, Ctx};
 use crate::error::{CommandError, Result};
 use capia_model::{
-    Asset, Clip, ClipContent, ClipId, Deliverable, DeliverableId, EntityKind, EntityRef, ErrorCode,
+    Clip, ClipContent, ClipId, Deliverable, DeliverableId, EntityKind, EntityRef, ErrorCode,
     Folder, FolderId, PrimitiveOp, SequenceId, TextStyle, TrackId, TrackKind, Transition,
     TransitionKind,
 };
@@ -530,14 +530,12 @@ pub(crate) fn set_transition(
                     )
                     .with_hint(transition_hint(Ticks(own_cap.max(0) * 2))));
                 }
-                if tr.kind == TransitionKind::Dissolve {
-                    if old.reversed || prev.reversed {
-                        return Err(CommandError::invalid(
-                            "dissolve does not support reversed clips",
-                        ));
-                    }
-                    // ADR-120: sem sobra de fonte (handles) o quadro da borda congela durante a
-                    // dissolução — transição entre clipes inteiros nunca é recusada.
+                // ADR-120: sem sobra de fonte (handles) o quadro da borda congela durante a
+                // dissolução — transição entre clipes inteiros nunca é recusada.
+                if tr.kind == TransitionKind::Dissolve && (old.reversed || prev.reversed) {
+                    return Err(CommandError::invalid(
+                        "dissolve does not support reversed clips",
+                    ));
                 }
             }
         }

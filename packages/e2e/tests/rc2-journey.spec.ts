@@ -27,9 +27,10 @@ function fakeOpenAi(): Promise<{ server: HttpServer; url: string }> {
     req.on("data", (c: Buffer) => chunks.push(c));
     req.on("end", () => {
       const raw = Buffer.concat(chunks).toString("utf8");
-      const send = (status: number, ctype: string, body: string) => {
+      const send = (status: number, ctype: string, body: string): boolean => {
         res.writeHead(status, { "content-type": ctype });
         res.end(body);
+        return true;
       };
       if (req.headers.authorization !== `Bearer ${KEY}`) {
         return send(401, "application/json", JSON.stringify({ error: { message: "bad key" } }));
@@ -215,8 +216,10 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
       .toBe(true);
     const img = (await editor.clips()).find((c) => c.content.type === "image");
     if (!img) throw new Error("imagem não colocada");
-    const p = await editor.clipPoint(img.id, 0.5, 0.5);
+    // perto do início: na janela estreita do app real o centro pode cair fora do canvas
+    const p = await editor.clipPoint(img.id, 0.04, 0.5);
     await page.mouse.click(p.x, p.y);
+    await expect(page.getByTestId("clip-name")).toHaveValue("image.jpg");
     await page.getByTestId("rail-transitions").click();
     await page.getByTestId("transition-fade").click();
     await expect(page.getByText("Coloque a transição entre dois clipes encostados.")).toBeVisible();

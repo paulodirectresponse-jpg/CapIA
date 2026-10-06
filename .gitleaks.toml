@@ -11,6 +11,9 @@ description = "canários sintéticos e vetores de teste (nunca são credenciais)
 paths = [
   '''examples/webhook-receiver/receiver\.test\.mjs''',
   '''examples/webhook-receiver/test_receiver\.py''',
+  # RC2: chaves FALSAS dos testes de "Conectar IA" (servidor simulado em loopback; nunca são credenciais).
+  '''crates/capia-intelligence/tests/connect\.rs''',
+  '''packages/e2e/tests/rc2-journey\.spec\.ts''',
 ]
 regexes = [
   '''(?i)canary''',
@@ -18,5 +21,6 @@ regexes = [
   '''WRNG-[0-9a-z-]+''',
   '''KEY-[a-z0-9-]+-[0-9a-f]{8,}''',
   '''sk-E2E-[A-Za-z0-9-]+''',
+  '''sk-WRONG-[A-Za-z0-9-]+''',
 ]
 
