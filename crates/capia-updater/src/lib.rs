@@ -6,12 +6,16 @@
 //! * [`state`]: máquina de estados atômica persistida (`Idle → Downloaded → Verified → Staged → Switched →
 //!   Confirmed`), recuperação após morte em qualquer ponto e rollback automático.
 //!
-//! Sem código de rede e sem trocar arquivos: o download (`Downloader`) e a troca (`Switcher`, instalador
-//! NSIS silencioso) são injetados pelo host; os testes usam falsos com injeção de falhas.
+//! * [`switcher`]: `InstallerSwitcher` — a troca real é do instalador NSIS silencioso (por usuário), com
+//!   instalador anterior retido para o rollback; execução de processo sem shell, com timeout.
+//!
+//! Sem código de rede: o download (`Downloader`) é injetado pelo host; o `Switcher` real não sobrescreve
+//! binários por conta própria. Os testes usam falsos com injeção de falhas e processos reais (Unix).
 
 mod error;
 pub mod manifest;
 pub mod state;
+pub mod switcher;
 pub mod verify;
 pub mod version;
 
@@ -24,6 +28,7 @@ pub use state::{
     RollbackInfo, STATE_FILE, StateStore, SwitchGate, Switcher, UpdateRecord, UpdateState, Updater,
     UpdaterConfig, sha256_file, write_atomic,
 };
+pub use switcher::{CommandRunner, InstallerSwitcher, ProcessRunner};
 pub use verify::{
     Ed25519Signer, Ed25519Verifier, Signature, TrustedKey, Verifier, VerifyError, parse_key_list,
 };
