@@ -79,14 +79,24 @@ jobs:
           if (-not $real) { throw "binário real do ffprobe não encontrado (shim em $cmd)" }
           Write-Host "FFmpeg real em: $real"
           New-Item -ItemType Directory -Force -Path ffmpeg-ci | Out-Null
-          Copy-Item "$real\ffmpeg.exe", "$real\ffprobe.exe" ffmpeg-ci\
-          Get-ChildItem $real -Filter *.dll -ErrorAction SilentlyContinue | Copy-Item -Destination ffmpeg-ci\
+          Copy-Item "$real\ffmpeg.exe" ffmpeg-ci\
+          Copy-Item "$real\ffprobe.exe" ffmpeg-ci\
+          Get-ChildItem $real -Filter *.dll -File -ErrorAction SilentlyContinue | Copy-Item -Destination ffmpeg-ci\
           foreach ($lic in "$real\..\LICENSE", "$real\..\..\LICENSE", "$real\LICENSE") { if (Test-Path $lic) { Copy-Item $lic ffmpeg-ci\LICENSE.txt; break } }
           if (-not (Test-Path ffmpeg-ci\LICENSE.txt)) { Set-Content ffmpeg-ci\LICENSE.txt 'CI-only FFmpeg build; see upstream license.' }
-          # prova ANTES de empacotar: o binário copiado roda sozinho, fora do PATH e do diretório original
-          $v = & "$PWD\ffmpeg-ci\ffprobe.exe" -version | Select-Object -First 1
-          if ($LASTEXITCODE -ne 0 -or -not $v) { throw 'o ffprobe copiado não roda fora do diretório original (faltam DLLs?)' }
-          Write-Host $v
+          # Prova ANTES de empacotar: execute exatamente a cópia que vai para o bundle.
+          # Start-Process dá um ExitCode confiável no PowerShell e não depende de
+          # $LASTEXITCODE/stream capture herdados de comandos anteriores.
+          $stdout = Join-Path $env:RUNNER_TEMP 'capia-ffprobe-version.out'
+          $stderr = Join-Path $env:RUNNER_TEMP 'capia-ffprobe-version.err'
+          $p = Start-Process -FilePath "$PWD\ffmpeg-ci\ffprobe.exe" -ArgumentList '-version' -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $out = @(Get-Content $stdout -ErrorAction SilentlyContinue)
+          $err = @(Get-Content $stderr -ErrorAction SilentlyContinue)
+          if ($p.ExitCode -ne 0) {
+            throw "o ffprobe copiado não roda fora do diretório original (exit=$($p.ExitCode)): $($err -join ' ')"
+          }
+          $first = @($out + $err) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1
+          if ($first) { Write-Host $first } else { Write-Host 'ffprobe copiado executou com exit 0' }
 
       - name: Licença do FFmpeg (ADR-032) — relatório
         # O FFmpeg do CI normalmente é GPL (essentials): o relatório prova que o verificador REPROVA e o
