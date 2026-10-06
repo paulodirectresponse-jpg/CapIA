@@ -1,7 +1,7 @@
 {
   "name": "@capia/desktop",
   "private": true,
-  "version": "0.6.0-rc.1",
+  "version": "0.6.0-rc.2",
   "type": "module",
   "description": "Shell desktop: Vite + Tauri. Adaptador fino; a l\u00f3gica de produto vive em crates/ e packages/.",
   "scripts": {

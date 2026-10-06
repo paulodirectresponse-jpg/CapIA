@@ -1,4 +1,4 @@
-# Problemas conhecidos e pendências externas — 0.6.0-rc.1
+# Problemas conhecidos e pendências externas — 0.6.0-rc.2
 
 Derivado de `docs/STATUS.md` (seções das Fases 3, 4 e 5) e dos documentos da Fase 6. **“Pendente externo”** = depende de máquina, pessoa, provedor, certificado ou decisão que a engenharia não tem; nunca é marcado como feito sem evidência real (validadores em `tools/phase*-acceptance/`).
 

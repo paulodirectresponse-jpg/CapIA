@@ -1,7 +1,7 @@
 {
   "name": "@capia/ui-kit",
   "private": true,
-  "version": "0.6.0-rc.1",
+  "version": "0.6.0-rc.2",
   "type": "module",
   "description": "Design system interno do CapIA: tokens, componentes base acessíveis e ícones próprios. Sem lógica de produto.",
   "exports": {

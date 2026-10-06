@@ -9,7 +9,7 @@ Formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versionamen
 - Beta com usuários reais e fechamento do gate “sem Blocker/Critical aberto”.
 - Decisão de produto/jurídica sobre H.264/AAC.
 
-## [0.6.0-rc.2] - RC2 (estabilização e UX) — em preparação
+## [0.6.0-rc.2] - 2026-10-06
 
 Correção depois de um teste manual real do RC1 por um editor experiente. **Não** declara a Fase 6 completa nem aceita nada externo. Evidências: `docs/RC2_TEST_REPORT.md`.
 

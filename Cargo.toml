@@ -34,33 +34,33 @@ members = [
 exclude = ["spikes", "tools/s1-preview-spike"]
 
 [workspace.package]
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 edition = "2024"
 rust-version = "1.97"
 publish = false
 
 [workspace.dependencies]
-capia-time = { path = "crates/capia-time", version = "0.6.0-rc.1" }
-capia-model = { path = "crates/capia-model", version = "0.6.0-rc.1" }
-capia-commands = { path = "crates/capia-commands", version = "0.6.0-rc.1" }
-capia-jobs = { path = "crates/capia-jobs", version = "0.6.0-rc.1" }
-capia-render = { path = "crates/capia-render", version = "0.6.0-rc.1" }
-capia-preview = { path = "crates/capia-preview", version = "0.6.0-rc.1" }
-capia-media = { path = "crates/capia-media", version = "0.6.0-rc.1" }
-capia-decode = { path = "crates/capia-decode", version = "0.6.0-rc.1" }
-capia-assets = { path = "crates/capia-assets", version = "0.6.0-rc.1" }
-capia-store = { path = "crates/capia-store", version = "0.6.0-rc.1" }
-capia-project = { path = "crates/capia-project", version = "0.6.0-rc.1" }
-capia-timeline-wasm = { path = "crates/capia-timeline-wasm", version = "0.6.0-rc.1" }
-capia-editor-api = { path = "crates/capia-editor-api", version = "0.6.0-rc.1" }
-capia-ai = { path = "crates/capia-ai", version = "0.6.0-rc.1" }
-capia-intelligence = { path = "crates/capia-intelligence", version = "0.6.0-rc.1" }
-capia-secrets = { path = "crates/capia-secrets", version = "0.6.0-rc.1" }
-capia-webview-surface = { path = "crates/capia-webview-surface", version = "0.6.0-rc.1" }
-capia-support = { path = "crates/capia-support", version = "0.6.0-rc.1" }
-capia-updater = { path = "crates/capia-updater", version = "0.6.0-rc.1" }
-capia-fixtures = { path = "crates/capia-fixtures", version = "0.6.0-rc.1" }
-capia-server = { path = "crates/capia-server", version = "0.6.0-rc.1" }
+capia-time = { path = "crates/capia-time", version = "0.6.0-rc.2" }
+capia-model = { path = "crates/capia-model", version = "0.6.0-rc.2" }
+capia-commands = { path = "crates/capia-commands", version = "0.6.0-rc.2" }
+capia-jobs = { path = "crates/capia-jobs", version = "0.6.0-rc.2" }
+capia-render = { path = "crates/capia-render", version = "0.6.0-rc.2" }
+capia-preview = { path = "crates/capia-preview", version = "0.6.0-rc.2" }
+capia-media = { path = "crates/capia-media", version = "0.6.0-rc.2" }
+capia-decode = { path = "crates/capia-decode", version = "0.6.0-rc.2" }
+capia-assets = { path = "crates/capia-assets", version = "0.6.0-rc.2" }
+capia-store = { path = "crates/capia-store", version = "0.6.0-rc.2" }
+capia-project = { path = "crates/capia-project", version = "0.6.0-rc.2" }
+capia-timeline-wasm = { path = "crates/capia-timeline-wasm", version = "0.6.0-rc.2" }
+capia-editor-api = { path = "crates/capia-editor-api", version = "0.6.0-rc.2" }
+capia-ai = { path = "crates/capia-ai", version = "0.6.0-rc.2" }
+capia-intelligence = { path = "crates/capia-intelligence", version = "0.6.0-rc.2" }
+capia-secrets = { path = "crates/capia-secrets", version = "0.6.0-rc.2" }
+capia-webview-surface = { path = "crates/capia-webview-surface", version = "0.6.0-rc.2" }
+capia-support = { path = "crates/capia-support", version = "0.6.0-rc.2" }
+capia-updater = { path = "crates/capia-updater", version = "0.6.0-rc.2" }
+capia-fixtures = { path = "crates/capia-fixtures", version = "0.6.0-rc.2" }
+capia-server = { path = "crates/capia-server", version = "0.6.0-rc.2" }
 rusqlite = { version = "0.40", features = ["bundled"] }
 getrandom = "0.4"
 serde = { version = "1", features = ["derive", "rc"] }

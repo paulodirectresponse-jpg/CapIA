@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "capia-ai"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "capia-assets"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-media",
  "capia-model",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "capia-cli"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-assets",
  "capia-commands",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "capia-commands"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-model",
  "capia-time",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "capia-decode"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-media",
  "capia-time",
@@ -405,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "capia-desktop"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-editor-api",
  "capia-intelligence",
@@ -423,7 +423,7 @@ dependencies = [
 
 [[package]]
 name = "capia-devserver"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-editor-api",
  "capia-intelligence",
@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "capia-editor-api"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-assets",
  "capia-commands",
@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "capia-fixtures"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-assets",
  "capia-commands",
@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "capia-intelligence"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "capia-jobs"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -499,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "capia-media"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-media",
  "capia-time",
@@ -510,7 +510,7 @@ dependencies = [
 
 [[package]]
 name = "capia-model"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-time",
  "serde",
@@ -519,7 +519,7 @@ dependencies = [
 
 [[package]]
 name = "capia-preview"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-commands",
  "capia-model",
@@ -529,7 +529,7 @@ dependencies = [
 
 [[package]]
 name = "capia-project"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-assets",
  "capia-commands",
@@ -549,7 +549,7 @@ dependencies = [
 
 [[package]]
 name = "capia-render"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "ab_glyph",
  "capia-commands",
@@ -559,7 +559,7 @@ dependencies = [
 
 [[package]]
 name = "capia-secrets"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "keyring",
  "zeroize",
@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "capia-server"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "base64 0.22.1",
  "capia-ai",
@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "capia-store"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-assets",
  "capia-commands",
@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "capia-support"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-secrets",
  "capia-store",
@@ -617,7 +617,7 @@ dependencies = [
 
 [[package]]
 name = "capia-time"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "capia-timeline-wasm"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "capia-commands",
  "capia-model",
@@ -636,7 +636,7 @@ dependencies = [
 
 [[package]]
 name = "capia-updater"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.4.3",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "capia-webview-surface"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "tauri",
  "webview2-com",
