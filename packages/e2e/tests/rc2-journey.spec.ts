@@ -198,12 +198,12 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
   });
 
   await test.step("10. transição em clipe isolado mostra a mensagem humana", async () => {
-    // a imagem vai para uma track nova: sozinha, sem vizinho encostado
+    // a imagem vai sozinha para outra track: sem vizinho encostado
     const image = await editor.assetIdByName("image.jpg");
-    await editor.dragAssetTo(image, {
-      x: (await editor.rowPoint(main.id, 500)).x,
-      y: (await editor.rowPoint(main.id, 500)).y - 60,
-    });
+    const overlay = (await editor.sequence()).tracks.find((x) => x.role === "overlay");
+    if (!overlay) throw new Error("track overlay ausente");
+    await page.getByTestId("rail-media").click();
+    await editor.dragAssetTo(image, await editor.rowPoint(overlay.id, 300));
     await expect
       .poll(async () => (await editor.clips()).some((c) => c.content.type === "image"))
       .toBe(true);
@@ -276,6 +276,7 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
     const before = (await editor.sequence()).tracks.length;
     const audioTrack = (await editor.sequence()).tracks.find((t) => t.kind === "audio");
     if (!audioTrack) throw new Error("sem track de áudio");
+    await page.getByTestId("rail-media").click();
     await editor.dragAssetTo(tone, await editor.rowPoint(audioTrack.id, 200));
     await expect
       .poll(async () =>
