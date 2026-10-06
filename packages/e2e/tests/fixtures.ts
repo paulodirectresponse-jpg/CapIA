@@ -404,6 +404,17 @@ export class Editor {
     return { x: p.ox + x, y: p.y + p.h / 2 };
   }
 
+  /** Ponto de página no espaço VAZIO da timeline (abaixo da última track, ou no meio se não há tracks). */
+  async emptyPoint(x: number, gap = 22): Promise<{ x: number; y: number }> {
+    const p = await this.page.evaluate(() => {
+      const hook = window.__capiaTimeline;
+      const o = hook?.canvasOrigin();
+      return hook && o ? { ox: o.x, oy: o.y, bottom: hook.contentBottom() } : null;
+    });
+    if (!p) throw new Error("timeline indisponível");
+    return { x: p.ox + x, y: p.oy + p.bottom + gap };
+  }
+
   async dragAssetTo(assetId: string, to: { x: number; y: number }): Promise<void> {
     const src = this.page.getByTestId(`asset-${assetId}`);
     await src.hover();
@@ -430,6 +441,14 @@ export class Editor {
     await this.page.getByTestId("import-confirm").click();
   }
 
+  /** Importa arquivos por caminho absoluto (pela UI, como em "Por caminho…"). */
+  async importAbsolute(...files: string[]): Promise<void> {
+    await this.page.getByTestId("rail-media").click();
+    await this.openImportByPath();
+    await this.page.getByTestId("import-paths").fill(files.join("\n"));
+    await this.page.getByTestId("import-confirm").click();
+  }
+
   async importMedia(...files: string[]): Promise<void> {
     await this.page.getByTestId("rail-media").click();
     await this.openImportByPath();
@@ -443,6 +462,7 @@ declare global {
     __capiaTimeline?: {
       clipRect(id: string): { x: number; y: number; w: number; h: number } | null;
       rowRect(track: string): { y: number; h: number } | null;
+      contentBottom(): number;
       canvasOrigin(): { x: number; y: number };
       stats(): {
         fps: number;

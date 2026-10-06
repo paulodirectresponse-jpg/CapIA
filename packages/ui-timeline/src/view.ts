@@ -843,6 +843,11 @@ export class TimelineView {
     return rowAt(d.rows, this.contentY(y));
   }
 
+  /** Borda inferior das tracks (px no canvas): abaixo dela é espaço vazio (soltar cria uma track). */
+  contentBottom(): number {
+    return RULER_H + (this.data?.totalHeight ?? 0) - this.state.scrollY;
+  }
+
   /** Destino de um drop de mídia na posição do ponteiro (linha existente ou nova track). */
   dropTargetAt(x: number, y: number): DropTarget {
     const d = this.data;

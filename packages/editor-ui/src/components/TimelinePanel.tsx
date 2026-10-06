@@ -183,6 +183,7 @@ export function TimelinePanel() {
       window.__capiaTimeline = {
         clipRect: (id) => view.clipRect(id),
         rowRect: (track) => view.rowRect(track),
+        contentBottom: () => view.contentBottom(),
         canvasOrigin: () => {
           const r = canvas.getBoundingClientRect();
           return { x: r.left, y: r.top };
