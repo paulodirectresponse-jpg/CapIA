@@ -108,10 +108,17 @@ pub fn tiny_wav() -> Vec<u8> {
 }
 
 fn temp_dir() -> Result<PathBuf, String> {
+    // O relógio do Windows é grosso: testes paralelos no mesmo processo colidiam no mesmo
+    // diretório (PROJECT_ALREADY_EXISTS). Um contador atômico garante nome único.
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    let d = std::env::temp_dir().join(format!("capia-selftest-{}-{nanos}", std::process::id()));
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let d = std::env::temp_dir().join(format!(
+        "capia-selftest-{}-{nanos}-{seq}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
     Ok(d)
 }

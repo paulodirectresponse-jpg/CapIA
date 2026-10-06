@@ -219,9 +219,12 @@ fn a_dead_webhook_endpoint_never_blocks_run_completion_and_recovers_later() {
             .unwrap()
             .clone();
         (ds.len() >= 2
-            && ds
-                .iter()
-                .all(|d| d["state"] == "retrying" && d["attempt"].as_u64().unwrap() >= 1))
+            && ds.iter().all(|d| {
+                // `delivering` é transitório: no Windows conectar numa porta fechada leva ~2 s
+                matches!(d["state"].as_str(), Some("retrying" | "delivering"))
+                    && d["attempt"].as_u64().unwrap() >= 1
+                    && d["last_error"].is_string()
+            }))
         .then_some(ds)
     });
     assert!(

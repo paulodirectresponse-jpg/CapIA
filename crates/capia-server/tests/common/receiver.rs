@@ -154,6 +154,9 @@ impl Receiver {
             while !sh.stop.load(Ordering::SeqCst) {
                 match listener.accept() {
                     Ok((s, _)) => {
+                        // No Windows o socket aceito herda o modo não-bloqueante do listener;
+                        // sem isto `read` devolve WouldBlock e a conexão é abandonada.
+                        s.set_nonblocking(false).ok();
                         let sh = Arc::clone(&sh);
                         // uma thread por conexão: um atraso programado nunca trava as outras
                         std::thread::spawn(move || serve(&sh, s));
