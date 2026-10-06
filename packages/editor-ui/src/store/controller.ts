@@ -193,9 +193,17 @@ export class EditorController {
     this.visuals = new MediaVisuals(client, (ms) => {
       this.perf.record("thumb", ms);
     });
-    this.ai = new AiController(client.ai, (tone, title, detail) => {
-      this.toast(tone, title, detail);
-    });
+    this.ai = new AiController(
+      client.ai,
+      (tone, title, detail) => {
+        this.toast(tone, title, detail);
+      },
+      () => ({
+        selected_clips: [...this.state.selection],
+        playhead_ticks: this.state.playhead,
+        sequence: this.state.active,
+      }),
+    );
     this.support = new SupportController(client.support);
     this.storage = opts.storage === undefined ? browserStorage() : opts.storage;
     const { prefs, recovered } = loadPrefs(this.storage);

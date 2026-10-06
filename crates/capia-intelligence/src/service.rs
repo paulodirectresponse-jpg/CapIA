@@ -806,8 +806,19 @@ impl IntelligenceService {
                     text: String,
                     #[serde(default)]
                     mode: Option<ApprovalMode>,
+                    #[serde(default)]
+                    selected_clips: Vec<String>,
+                    #[serde(default)]
+                    playhead_ticks: Option<i64>,
+                    #[serde(default)]
+                    sequence: Option<String>,
                 }
                 let q: P = parse(p)?;
+                let ui_context = assistant::render_ui_context(
+                    &q.selected_clips,
+                    q.playhead_ticks,
+                    q.sequence.as_deref(),
+                );
                 if q.text.trim().is_empty() || q.text.chars().count() > 8_000 {
                     return Err(bad("the message must have 1..8000 characters"));
                 }
@@ -819,7 +830,7 @@ impl IntelligenceService {
                 let mode = q.mode.unwrap_or(ApprovalMode::Ask);
                 let cid = conv_id.clone();
                 let mut out = self.spawn("assistant", move |ctx, task, em| async move {
-                    let opts = AssistantOptions { mode, ..AssistantOptions::default() };
+                    let opts = AssistantOptions { mode, ui_context: Some(ui_context), ..AssistantOptions::default() };
                     let em2 = em.clone();
                     let on = move |e: AssistantEvent| match e {
                         AssistantEvent::Text(t) => em2(json!({"phase": "text", "delta": t})),

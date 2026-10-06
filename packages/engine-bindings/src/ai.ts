@@ -523,10 +523,16 @@ export class AiClient {
   saveDemand(spec: DemandSpec) {
     return this.json<{ spec: DemandSpec }>("ai.demand.save", { spec });
   }
-  assistantSend(text: string, mode: ApprovalMode, conversationId?: string) {
+  assistantSend(
+    text: string,
+    mode: ApprovalMode,
+    conversationId?: string,
+    context?: { selected_clips: string[]; playhead_ticks: number; sequence: string | null },
+  ) {
     return this.json<{ task_id: string; conversation_id: string }>("ai.assistant.send", {
       text,
       mode,
+      ...(context ?? {}),
       ...(conversationId ? { conversation_id: conversationId } : {}),
     });
   }

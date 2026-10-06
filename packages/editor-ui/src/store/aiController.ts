@@ -109,6 +109,12 @@ export class AiController {
     ) => void = () => {
       /* sem notificação */
     },
+    /** O que o editor mostra agora: dá referente a "este clipe" no chat. */
+    private readonly uiContext: () => {
+      selected_clips: string[];
+      playhead_ticks: number;
+      sequence: string | null;
+    } = () => ({ selected_clips: [], playhead_ticks: 0, sequence: null }),
   ) {
     this.store = createStore<AiState>({
       status: null,
@@ -461,7 +467,12 @@ export class AiController {
     if (!t || this.state.chatTask) return;
     this.push({ role: "user", text: t });
     const r = await this.wrap(() =>
-      this.client.assistantSend(t, this.state.mode, this.state.conversationId ?? undefined),
+      this.client.assistantSend(
+        t,
+        this.state.mode,
+        this.state.conversationId ?? undefined,
+        this.uiContext(),
+      ),
     );
     if (!r) return;
     this.store.set({ chatTask: r.task_id, conversationId: r.conversation_id, pending: null });

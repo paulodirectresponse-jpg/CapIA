@@ -81,7 +81,12 @@ describe("painel de IA", () => {
     fireEvent.change(screen.getByTestId("ai-input"), { target: { value: "renomeie o clip" } });
     fireEvent.click(screen.getByTestId("ai-send"));
     await waitFor(() => {
-      expect(ai.assistantSend).toHaveBeenCalledWith("renomeie o clip", "ask", undefined);
+      expect(ai.assistantSend).toHaveBeenCalledWith(
+        "renomeie o clip",
+        "ask",
+        undefined,
+        expect.objectContaining({ selected_clips: expect.any(Array) as string[] }),
+      );
     });
     controller.ai.handleEvent({
       kind: "ai_task",
