@@ -900,3 +900,48 @@ fn tracks_can_be_renamed_and_reordered_and_clips_follow_their_track() {
     .unwrap();
     assert_eq!(track_ids(&w), before);
 }
+
+#[test]
+fn moving_to_another_track_only_needs_the_destination_free_where_the_clip_lands() {
+    use capia_commands::{GroupMoveRequest, resolve_group_move};
+    let mut w = W::new();
+    add_visual(&mut w, "v2");
+    w.media(0, 30, "c1", 0).unwrap(); // [0,30) em "v"
+    w.insert(
+        "v2",
+        0,
+        30,
+        "c2",
+        ClipContent::Solid {
+            color: "#123456".into(),
+        },
+        0,
+    )
+    .unwrap(); // [0,30) em "v2": ocupa EXATAMENTE onde c1 está
+    let seq = w.e.document().sequence(&"s".into()).unwrap();
+    let ids = ["c1".into()];
+    // salta para v2 (índice +1) para depois do clip c2: livre onde vai cair
+    let ok = resolve_group_move(
+        seq,
+        &GroupMoveRequest {
+            members: &ids,
+            delta_time: frames(60),
+            delta_tracks: 1,
+            snap: None,
+        },
+    )
+    .unwrap();
+    assert_eq!((ok.delta_tracks, ok.delta_time), (1, frames(60)));
+    // cair em cima de c2 não é permitido: sem salto de track (fica na original, clampado)
+    let blocked = resolve_group_move(
+        seq,
+        &GroupMoveRequest {
+            members: &ids,
+            delta_time: frames(10),
+            delta_tracks: 1,
+            snap: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(blocked.delta_tracks, 0, "destino ocupado no ponto de queda");
+}

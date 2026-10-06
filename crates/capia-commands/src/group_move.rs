@@ -104,7 +104,8 @@ pub fn resolve_group_move(seq: &Sequence, req: &GroupMoveRequest<'_>) -> Result<
         let i = usize::try_from(idx(m) + d).ok()?;
         list.get(i).map(|t| t.id.clone())
     };
-    let feasible = |d: i64| -> bool {
+    // Viabilidade com os clips deslocados `dt` no tempo (`dt == 0` = posição original).
+    let feasible_at = |d: i64, dt: i64| -> bool {
         if d == 0 {
             return true;
         }
@@ -119,8 +120,9 @@ pub fn resolve_group_move(seq: &Sequence, req: &GroupMoveRequest<'_>) -> Result<
             if t.locked || t.magnetic {
                 return false;
             }
+            let (ms, me) = (Ticks(m.clip.start.0 + dt), Ticks(m.clip.end().0 + dt));
             let others_overlap = seq
-                .clips_in(&dest, m.clip.start, m.clip.end())
+                .clips_in(&dest, ms, me)
                 .iter()
                 .any(|c| !member_ids.contains(&c.id));
             if others_overlap {
@@ -128,22 +130,37 @@ pub fn resolve_group_move(seq: &Sequence, req: &GroupMoveRequest<'_>) -> Result<
             }
             if occupied
                 .iter()
-                .any(|(tid, s, e)| *tid == dest && m.clip.start < *e && *s < m.clip.end())
+                .any(|(tid, s, e)| *tid == dest && ms < *e && *s < me)
             {
                 return false;
             }
-            occupied.push((dest, m.clip.start, m.clip.end()));
+            occupied.push((dest, ms, me));
         }
         true
     };
-    while d != 0 && !feasible(d) {
+    let min_start = members.iter().map(|m| m.clip.start.0).min().unwrap_or(0);
+    let max_end = members.iter().map(|m| m.clip.end().0).max().unwrap_or(0);
+    let align_t = |t: Ticks| -> Result<Ticks> {
+        if has_visual {
+            Ok(fr.align_half_up(t)?)
+        } else {
+            Ok(t)
+        }
+    };
+    let req_dt = align_t(req.delta_time)?
+        .0
+        .clamp(-min_start, capia_time::MAX_TIMELINE_TICKS - max_end);
+    // Trocar de track é um salto: o destino só precisa estar livre onde o clip vai cair (não onde
+    // estava). Se o ponto pedido está ocupado, cai no comportamento antigo (posição original).
+    while d != 0 && !(feasible_at(d, req_dt) || feasible_at(d, 0)) {
         d -= d.signum();
     }
+    let jump = d != 0 && feasible_at(d, req_dt);
 
     // ---- delta de tempo: limites por obstáculo e por 0 ---------------------------------------
-    let mut back_limit = members.iter().map(|m| m.clip.start.0).min().unwrap_or(0); // até o início da sequence
+    let mut back_limit = min_start; // até o início da sequence
     let mut fwd_limit = i64::MAX;
-    for m in &members {
+    for m in members.iter().filter(|_| !jump) {
         let dest = dest_track(m, d).unwrap_or_else(|| m.clip.track.clone());
         for x in seq
             .track_clips(&dest)
@@ -158,14 +175,11 @@ pub fn resolve_group_move(seq: &Sequence, req: &GroupMoveRequest<'_>) -> Result<
         }
         fwd_limit = fwd_limit.min(capia_time::MAX_TIMELINE_TICKS - m.clip.end().0);
     }
+    if jump {
+        fwd_limit = capia_time::MAX_TIMELINE_TICKS - max_end;
+    }
     let (lo_t, hi_t) = (-back_limit, fwd_limit);
-    let align = |t: Ticks| -> Result<Ticks> {
-        if has_visual {
-            Ok(fr.align_half_up(t)?)
-        } else {
-            Ok(t)
-        }
-    };
+    let align = align_t;
     let mut dt = align(req.delta_time)?.0.clamp(lo_t, hi_t);
 
     if let Some(snap) = &req.snap {
@@ -185,7 +199,7 @@ pub fn resolve_group_move(seq: &Sequence, req: &GroupMoveRequest<'_>) -> Result<
                         continue;
                     }
                     let cand = align(Ticks(dt + adjust))?.0;
-                    if cand < lo_t || cand > hi_t {
+                    if cand < lo_t || cand > hi_t || (jump && !feasible_at(d, cand)) {
                         continue;
                     }
                     let (dist, prio, t) = rank(i128::from(adjust).abs(), *target);
@@ -203,6 +217,9 @@ pub fn resolve_group_move(seq: &Sequence, req: &GroupMoveRequest<'_>) -> Result<
     if has_visual {
         let f = fr.frame_duration().0;
         dt -= dt % f; // nunca ultrapassa um limite não alinhado (obstáculo de áudio)
+    }
+    if jump && !feasible_at(d, dt) {
+        dt = req_dt;
     }
     Ok(GroupMove {
         delta_time: Ticks(dt),

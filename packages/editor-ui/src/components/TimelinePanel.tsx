@@ -33,6 +33,7 @@ declare global {
     __capiaTimeline?: {
       clipRect(id: string): { x: number; y: number; w: number; h: number } | null;
       rowRect(track: string): { y: number; h: number } | null;
+      contentBottom(): number;
       canvasOrigin(): { x: number; y: number };
       stats(): {
         fps: number;
