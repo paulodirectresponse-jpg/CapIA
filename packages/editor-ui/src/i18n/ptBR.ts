@@ -410,6 +410,12 @@ export const ptBR: Record<MessageKey, string> = {
   "ai.connect.err.PROVIDER_TIMEOUT": "O provedor demorou demais para responder. Tente de novo.",
   "ai.connect.err.NO_SUITABLE_MODEL": "O provedor não listou nenhum modelo de chat compatível.",
   "ai.connect.err.generic": "Não deu para conectar. Veja os detalhes abaixo.",
+  "crash.title": "Algo deu errado nesta tela",
+  "crash.body":
+    "O CapIA encontrou um problema ao desenhar esta parte do editor, mas ele não travou.",
+  "crash.saved": "Seu projeto está salvo: cada edição é gravada na hora.",
+  "crash.retry": "Tentar de novo",
+  "crash.reload": "Recarregar o editor",
   "ai.settings.title": "Providers e modelos de IA",
   "ai.off.banner": "A IA está desligada. O restante do editor continua funcionando.",
   "ai.enabled": "Recursos de IA ativados",

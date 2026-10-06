@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { EditorClient } from "@capia/engine-bindings";
 import type { TimelineCore } from "@capia/ui-timeline";
 import { EditorShell } from "./components/EditorShell";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Welcome } from "./components/Welcome";
 import { ControllerProvider, useUi } from "./context";
 import { I18nProvider } from "./i18n";
@@ -27,13 +28,15 @@ function Root() {
   const lang = useUi((s) => s.prefs.language);
   return (
     <I18nProvider lang={lang}>
-      {phase === "ready" ? (
-        <EditorShell />
-      ) : phase === "boot" ? (
-        <div className="ed-welcome" role="status" aria-busy="true" />
-      ) : (
-        <Welcome />
-      )}
+      <ErrorBoundary scope="app">
+        {phase === "ready" ? (
+          <EditorShell />
+        ) : phase === "boot" ? (
+          <div className="ed-welcome" role="status" aria-busy="true" />
+        ) : (
+          <Welcome />
+        )}
+      </ErrorBoundary>
     </I18nProvider>
   );
 }
