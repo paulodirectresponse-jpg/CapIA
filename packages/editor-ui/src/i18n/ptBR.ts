@@ -107,16 +107,16 @@ export const ptBR: Record<MessageKey, string> = {
   "media.sort.type": "Tipo",
   "media.empty": "Sem mídia",
   "media.emptyHint": "Importe vídeo, áudio ou imagens para montar a edição.",
-  "media.offline": "Offline",
+  "media.offline": "Arquivo não encontrado",
   "media.modified": "Modificado",
-  "media.relink": "Relink…",
-  "media.relinkFolder": "Relink por pasta…",
-  "media.forceRelink": "Forçar relink…",
+  "media.relink": "Localizar arquivo…",
+  "media.relinkFolder": "Procurar numa pasta…",
+  "media.forceRelink": "Usar outro arquivo mesmo assim…",
   "media.forceRelinkWarning":
     "O novo arquivo tem conteúdo diferente. Clips que deixarem de caber bloqueiam a operação; nada é cortado em silêncio.",
   "media.relinkPath": "Caminho do novo arquivo",
   "media.relinkFolderPath": "Pasta onde procurar",
-  "media.relinkDone": "Relink concluído.",
+  "media.relinkDone": "Arquivo localizado. Seu projeto está de volta ao normal.",
   "media.relinkMismatch":
     "Esse arquivo tem conteúdo diferente. Use o relink forçado se for intencional.",
   "media.dragHint": "Arraste para a timeline",
@@ -179,7 +179,7 @@ export const ptBR: Record<MessageKey, string> = {
   "track.resize": "Ajustar altura da track",
 
   "clip.untitled": "Clip",
-  "clip.offlineBadge": "Mídia offline",
+  "clip.offlineBadge": "Arquivo não encontrado",
   "clip.speedBadge": "{speed}×",
   "clip.transitionBadge": "Transição",
 
