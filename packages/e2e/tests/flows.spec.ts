@@ -195,9 +195,10 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
     const second = snap.sequences[1];
     if (!first || !second) throw new Error("faltam sequences");
     // arrasta a primeira sequence para a timeline da nova (nested)
-    const secondMain = (await editor.sequence(second.id)).tracks.find((t) => t.role === "main");
-    if (!secondMain) throw new Error("sem main");
-    const to = await editor.rowPoint(secondMain.id, 140);
+    // a sequence nova nasce sem tracks: soltar na área vazia da timeline cria a track
+    const origin = await page.evaluate(() => window.__capiaTimeline?.canvasOrigin());
+    if (!origin) throw new Error("sem canvas da timeline");
+    const to = { x: origin.x + 140, y: origin.y + 90 };
     const src = page.getByTestId(`seq-${first.id}`);
     const box = await src.boundingBox();
     if (!box) throw new Error("sem caixa da sequence");

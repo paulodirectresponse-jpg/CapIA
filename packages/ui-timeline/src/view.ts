@@ -38,6 +38,8 @@ export interface MovePlan {
   /** Reorder de/para track magnética (um clip). */
   reorder: { clip: string; track: string; before: string | null; start: Ticks | null } | null;
   duplicate: boolean;
+  /** Soltou no espaço vazio: os clips vão para uma track NOVA do tipo informado (criada no commit). */
+  newTrack?: "visual" | "audio" | null;
 }
 
 export type DropTarget =
@@ -71,6 +73,8 @@ export interface ViewProviders {
   formatTime(t: Ticks): string;
   /** Duração (ticks) do item sendo arrastado da biblioteca/projeto, para o preview do drop. */
   dragSpan(): Ticks | null;
+  /** Textos já traduzidos desenhados no canvas (dica de faixa nova / timeline vazia). */
+  label?(key: "newTrack" | "emptyTimeline"): string;
 }
 
 export interface ViewState {
@@ -114,6 +118,8 @@ type Gesture =
       destTrack: string | null;
       reorderBefore: string | null | undefined;
       snapAt: Ticks | null;
+      /** O ponteiro está no espaço vazio abaixo das tracks: soltar cria uma track nova. */
+      newTrack: boolean;
     }
   | {
       type: "keyframe";
@@ -613,6 +619,9 @@ export class TimelineView {
     ctx.beginPath();
     ctx.rect(0, RULER_H, this.width, this.height - RULER_H);
     ctx.clip();
+    if (g?.type === "move" && g.moved && g.newTrack) {
+      this.paintGhostTrack(d, "below");
+    }
     if (g?.type === "move" && g.moved) {
       const primary = d.seq.clips[g.primary];
       for (const id of g.members) {
@@ -687,13 +696,40 @@ export class TimelineView {
           ctx.stroke();
         }
       } else {
-        const y = dp.target.side === "above" ? RULER_H : RULER_H + d.totalHeight - scrollY;
-        ctx.fillStyle = p.accent;
-        ctx.fillRect(0, y - 1.5, this.width, 3);
-        ctx.fillStyle = p.accentSoft;
-        ctx.fillRect(x, y - (dp.target.side === "above" ? 0 : 36), w, 36);
+        this.paintGhostTrack(d, dp.target.side, { x, w });
       }
     }
+    ctx.restore();
+  }
+
+  /** Faixa-fantasma tracejada com o texto "Solte aqui para criar uma faixa": mostra onde nasce a track. */
+  private paintGhostTrack(d: TimelineData, side: "above" | "below", at?: { x: number; w: number }) {
+    const { ctx, palette: p } = this;
+    const { scrollY } = this.state;
+    const h = 40;
+    const y = side === "above" ? RULER_H - scrollY + 2 : RULER_H + d.totalHeight - scrollY + 4;
+    ctx.save();
+    ctx.fillStyle = p.accentSoft;
+    ctx.strokeStyle = p.accent;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    roundRect(ctx, 4, y, Math.max(40, this.width - 8), h, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (at) {
+      ctx.fillStyle = p.accent;
+      ctx.globalAlpha = 0.55;
+      roundRect(ctx, at.x, y + 4, at.w, h - 8, 4);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    const text = this.providers.label?.("newTrack") ?? "Drop here to create a new track";
+    ctx.fillStyle = p.text;
+    ctx.font = "13px system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText(text, this.width / 2, y + h / 2);
     ctx.restore();
   }
 
@@ -918,6 +954,7 @@ export class TimelineView {
       destTrack: hit.row.track.id,
       reorderBefore: undefined,
       snapAt: null,
+      newTrack: false,
     };
   }
 
@@ -1025,6 +1062,15 @@ export class TimelineView {
     const srcRow = primary ? d.rowOf.get(primary.track) : undefined;
     if (!primary || !srcRow) return;
     const rawDt = Math.round(((p.x - g.x0) / this.state.pps) * TICKS_PER_SECOND);
+    // espaço vazio abaixo da última track (com folga): soltar aqui cria uma track nova
+    g.newTrack =
+      d.rows.length > 0 &&
+      this.rowAtY(p.y) === null &&
+      this.contentY(p.y) >= d.totalHeight + 6 &&
+      !g.members.some((id) => {
+        const c = d.seq.clips[id];
+        return c ? d.rowOf.get(c.track)?.track.kind !== srcRow.track.kind : true;
+      });
     const destRow = this.rowAtY(p.y) ?? srcRow;
     const sameFamily = destRow.track.kind === srcRow.track.kind;
     const effective = sameFamily ? destRow : srcRow;
@@ -1216,6 +1262,18 @@ export class TimelineView {
       return;
     }
     const srcRow = d.rowOf.get(primary.track);
+    if (g.newTrack && srcRow) {
+      this.cb.onMove({
+        moves: g.members.flatMap((id) => {
+          const c = d.seq.clips[id];
+          return c ? [{ clip: id, track: c.track, start: Math.max(0, c.start + g.dt) }] : [];
+        }),
+        reorder: null,
+        duplicate: false,
+        newTrack: srcRow.track.kind,
+      });
+      return;
+    }
     const destRow = g.destTrack ? d.rowOf.get(g.destTrack) : srcRow;
     // saída de uma track magnética para uma track livre
     if (srcRow?.track.magnetic && destRow && !destRow.track.magnetic) {

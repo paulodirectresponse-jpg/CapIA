@@ -566,16 +566,24 @@ export function trackFlagsCommand(
   return { type: "set_track_flags", track, ...flags };
 }
 
-/** Faixas padrão de uma sequence nova (ordem do documento: a primeira é a de baixo da pilha). */
-export function defaultTrackCommands(seqId: string): CommandBody[] {
-  return [
-    addTrackCommand(seqId, "visual", "main", { name: "Main", magnetic: true }),
-    addTrackCommand(seqId, "visual", "overlay", { name: "Overlay" }),
-    addTrackCommand(seqId, "visual", "text", { name: "Text" }),
-    addTrackCommand(seqId, "audio", "voice", { name: "Voice" }),
-    addTrackCommand(seqId, "audio", "music", { name: "Music" }),
-    addTrackCommand(seqId, "audio", "sfx", { name: "SFX" }),
-  ];
+/**
+ * Posição (na ordem do documento) da track vizinha, **como o usuário vê**: tracks de vídeo
+ * empilham de baixo para cima (a última do array é a de cima); as de áudio, na ordem do array.
+ * `null` quando já está na ponta.
+ */
+export function neighbourTrackIndex(
+  tracks: readonly { id: string; kind: string }[],
+  track: string,
+  dir: "up" | "down",
+): number | null {
+  const cur = tracks.find((t) => t.id === track);
+  if (!cur) return null;
+  const family = tracks.filter((t) => t.kind === cur.kind);
+  const pos = family.findIndex((t) => t.id === track);
+  const step = (cur.kind === "visual" ? dir === "up" : dir === "down") ? 1 : -1;
+  const neighbour = family[pos + step];
+  if (!neighbour) return null;
+  return tracks.findIndex((t) => t.id === neighbour.id);
 }
 
 export const FORMAT_PRESETS = {

@@ -163,6 +163,12 @@ export const ptBR: Record<MessageKey, string> = {
   "track.voice": "Voz",
   "track.music": "Música",
   "track.sfx": "Efeitos sonoros",
+  "timeline.dropNewTrack": "Solte aqui para criar uma nova faixa",
+  "timeline.emptyFree":
+    "Arraste vídeos, imagens, textos ou áudios para cá — as faixas aparecem sozinhas.",
+  "track.rename": "Renomear faixa",
+  "track.moveUp": "Mover para cima",
+  "track.moveDown": "Mover para baixo",
   "track.name": "Nome da track",
   "track.lock": "Travar",
   "track.unlock": "Destravar",

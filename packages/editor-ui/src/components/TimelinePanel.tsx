@@ -105,6 +105,15 @@ export function TimelinePanel() {
       captions: t("track.captions"),
     });
   }, [seq, t]);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  // textos desenhados no canvas (traduzidos): a view lê sempre o valor atual
+  const labelsRef = useRef({ newTrack: "", emptyTimeline: "" });
+  useEffect(() => {
+    labelsRef.current = {
+      newTrack: t("timeline.dropNewTrack"),
+      emptyTimeline: t("timeline.emptyFree"),
+    };
+  }, [t]);
   const rows = useMemo(
     () => (seq ? buildRows(seq.tracks, heights) : { rows: [], totalHeight: 0 }),
     [seq, heights],
@@ -162,6 +171,7 @@ export function TimelinePanel() {
             c.state.active ? (c.state.model.sequences[c.state.active]?.frame_rate ?? "30") : "30",
           ),
         dragSpan: () => c.dragSpan(),
+        label: (key) => labelsRef.current[key],
       },
       () => c.getCore(),
     );
@@ -729,6 +739,10 @@ export function TimelinePanel() {
                       y: e.clientY,
                       label: tr.name || tr.id,
                       entries: [
+                        { type: "item", id: "rename", label: t("track.rename") },
+                        { type: "item", id: "up", label: t("track.moveUp") },
+                        { type: "item", id: "down", label: t("track.moveDown") },
+                        { type: "separator" },
                         {
                           type: "item",
                           id: "magnetic",
@@ -738,7 +752,10 @@ export function TimelinePanel() {
                         { type: "item", id: "delete", label: t("track.delete"), danger: true },
                       ],
                       onSelect: (id) => {
-                        if (id === "magnetic")
+                        if (id === "rename") setRenaming(tr.id);
+                        else if (id === "up") void c.moveTrack(tr.id, "up");
+                        else if (id === "down") void c.moveTrack(tr.id, "down");
+                        else if (id === "magnetic")
                           void c.setTrackFlags(tr.id, { magnetic: !tr.magnetic });
                         else void c.deleteTrack(tr.id);
                       },
@@ -751,7 +768,43 @@ export function TimelinePanel() {
                   />
                   <div className="ed-tl-header-name">
                     <Icon name={tr.kind === "audio" ? "music" : "film"} size={12} />
-                    <span title={label}>{label}</span>
+                    {renaming === tr.id ? (
+                      <input
+                        className="ed-tl-rename"
+                        aria-label={t("track.name")}
+                        data-testid={`track-name-input-${tr.id}`}
+                        defaultValue={tr.name && label === tr.name ? tr.name : ""}
+                        placeholder={label}
+                        ref={(el) => {
+                          el?.focus();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            void c.renameTrack(tr.id, e.currentTarget.value);
+                            setRenaming(null);
+                          } else if (e.key === "Escape") setRenaming(null);
+                          e.stopPropagation();
+                        }}
+                        onBlur={(e) => {
+                          if (renaming === tr.id) void c.renameTrack(tr.id, e.currentTarget.value);
+                          setRenaming(null);
+                        }}
+                      />
+                    ) : (
+                      <span
+                        title={label}
+                        data-testid={`track-name-${tr.id}`}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setRenaming(tr.id);
+                        }}
+                      >
+                        {label}
+                      </span>
+                    )}
                     {tr.magnetic && <Badge>{t("track.magnetic")}</Badge>}
                   </div>
                   <div className="ed-tl-header-btns">
@@ -843,6 +896,23 @@ export function TimelinePanel() {
               }}
             >
               {t("timeline.noSequence")}
+            </div>
+          )}
+          {!noSeq && rows.rows.length === 0 && (
+            <div
+              data-testid="timeline-empty-free"
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: RULER_H + 24,
+                textAlign: "center",
+                color: "var(--text-muted)",
+                pointerEvents: "none",
+                padding: "0 24px",
+              }}
+            >
+              {t("timeline.emptyFree")}
             </div>
           )}
           {!noSeq && rows.rows.length > 0 && (summary?.clip_count ?? 0) === 0 && (

@@ -51,9 +51,9 @@ import {
   FORMAT_PRESETS,
   addTextCommands,
   copyPayload,
-  defaultTrackCommands,
   deleteCommands,
   dropAssetCommands,
+  neighbourTrackIndex,
   dropSequenceCommands,
   duplicateAtCommands,
   duplicateCommands,
@@ -658,7 +658,6 @@ export class EditorController {
         height: size.height,
         folder,
       },
-      ...defaultTrackCommands(id),
     ];
     const ch = await this.exec("create sequence", cmds);
     if (!ch) return null;
@@ -990,9 +989,35 @@ export class EditorController {
   }
 
   /** Aplica o plano de um arrasto (move/reorder/duplicar) como UMA transação. */
+  renameTrack(track: string, name: string): Promise<ChangeSet | null> {
+    const cur = this.activeSequence()?.tracks.find((x) => x.id === track);
+    if (!cur || cur.name === name.trim()) return Promise.resolve(null);
+    return this.exec("rename track", [{ type: "rename_track", track, name }]);
+  }
+
+  /** Move a track uma posição **como o usuário vê**: para cima/baixo entre as do mesmo tipo. */
+  moveTrack(track: string, dir: "up" | "down"): Promise<ChangeSet | null> {
+    const seq = this.activeSequence();
+    const cur = seq?.tracks.find((x) => x.id === track);
+    if (!seq || !cur) return Promise.resolve(null);
+    const index = neighbourTrackIndex(seq.tracks, track, dir);
+    if (index === null) return Promise.resolve(null);
+    return this.exec("move track", [{ type: "move_track", track, index }]);
+  }
+
   moveClips(plan: MovePlan): Promise<ChangeSet | null> {
     const c = this.editContext();
     if (!c) return Promise.resolve(null);
+    if (plan.newTrack && plan.moves.length > 0) {
+      // soltou no espaço vazio: cria a track e leva os clips para ela, numa transação só
+      const ref = `$trk-mv-${String(Date.now())}`;
+      return this.exec("move to new track", [
+        addTrackCommand(c.seqId, plan.newTrack, plan.newTrack === "visual" ? "overlay" : "sfx", {
+          ref,
+        }),
+        { type: "move_clips", moves: plan.moves.map((m) => ({ ...m, track: ref })) },
+      ]);
+    }
     if (plan.duplicate && plan.moves.length > 0)
       return this.exec("duplicate", duplicateAtCommands(c, plan.moves));
     if (plan.reorder) {

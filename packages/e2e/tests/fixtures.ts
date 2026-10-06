@@ -269,11 +269,49 @@ export class Editor {
     await expect(this.page.getByTestId("welcome")).toBeVisible();
   }
 
-  async createProject(name = "project"): Promise<void> {
+  /**
+   * Cria o projeto pela UI. A sequence nasce SEM tracks (timeline livre). Os specs antigos
+   * (flows, editing, crash…) foram escritos contra as 6 tracks de papel do RC1; por isso, a menos
+   * que `bare: true`, elas são semeadas por API — **preparação de teste, não UX**. Os specs da
+   * timeline livre usam `bare: true` e montam tudo pela interface.
+   */
+  async createProject(name = "project", opts: { bare?: boolean } = {}): Promise<void> {
     await this.page.getByTestId("project-path").fill(join(this.server.dir, `${name}.capia`));
     await this.page.getByTestId("project-create").click();
     // o primeiro projeto de uma partida fria do app real (WebView2 + WASM) pode demorar
     await expect(this.page.getByTestId("editor")).toBeVisible({ timeout: 45_000 });
+    if (!opts.bare) await this.seedLegacyTracks();
+  }
+
+  /** Tracks de papel do RC1 (Main/Overlay/Text/Voice/Music/SFX) para os specs antigos. */
+  async seedLegacyTracks(): Promise<void> {
+    await expect.poll(async () => (await this.snapshot()).sequences.length).toBeGreaterThan(0);
+    const seq = (await this.snapshot()).sequences[0];
+    if (!seq) throw new Error("projeto sem sequence");
+    const spec: [string, "visual" | "audio", string, boolean][] = [
+      ["main", "visual", "Main", true],
+      ["overlay", "visual", "Overlay", false],
+      ["text", "visual", "Text", false],
+      ["voice", "audio", "Voice", false],
+      ["music", "audio", "Music", false],
+      ["sfx", "audio", "SFX", false],
+    ];
+    await this.api("command.execute", {
+      label: "seed legacy tracks (test setup)",
+      commands: spec.map(([role, kind, name, magnetic], i) => ({
+        operation_id: `seed-${String(i)}`,
+        type: "add_track",
+        sequence: seq.id,
+        kind,
+        role,
+        name,
+        magnetic,
+      })),
+    });
+    // a UI recebe o resultado pelo poll de eventos
+    await expect
+      .poll(async () => (await this.sequence()).tracks.length, { timeout: 15_000 })
+      .toBeGreaterThanOrEqual(6);
   }
 
   /** Chama o engine direto (a verdade persistida, independente do que a UI mostra). */
