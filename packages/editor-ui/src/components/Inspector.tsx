@@ -248,6 +248,52 @@ function SequenceInspector({ id, summary }: { id: string; summary: SequenceSumma
 
 // ------------------------------------------------------------------------------------ basic
 
+/**
+ * Diamante de keyframe ao lado da propriedade: vazio = sem animação; contorno = animada, sem
+ * keyframe aqui; cheio = há keyframe no playhead (clicar remove). Clicar nos dois primeiros
+ * grava um keyframe com o valor atual — editar o valor depois, em outro instante, cria o seguinte.
+ */
+function KeyframeDiamond({
+  clip,
+  name,
+  playhead,
+  rate,
+}: {
+  clip: Clip;
+  name: string;
+  playhead: number;
+  rate: string;
+}) {
+  const c = useController();
+  const t = useT();
+  const spec = ANIMATABLE.find((a) => a.name === name);
+  if (!spec) return null;
+  const ct = contentTimeAt(clip, playhead);
+  const inside = playhead >= clip.start && playhead < clip.start + clip.duration;
+  const kfs = keyframesOf(clip, name);
+  const here = kfs.find((k) => Math.abs(k.at - playhead) < frameTicks(rate) / 2);
+  const value = evalAt(clip.properties[name], ct, spec.dflt);
+  const state = here ? "on" : kfs.length > 0 ? "animated" : "off";
+  return (
+    <button
+      type="button"
+      className={`ed-kf-diamond is-${state}`}
+      data-testid={`kf-diamond-${name}`}
+      data-state={state}
+      aria-pressed={state === "on"}
+      aria-label={here ? t("inspector.removeKeyframe") : t("inspector.addKeyframe")}
+      title={here ? t("inspector.removeKeyframe") : t("inspector.addKeyframe")}
+      disabled={!here && !inside}
+      onClick={() => {
+        if (here) void c.deleteKeyframe(clip.id, name, here.at);
+        else void c.addKeyframe(clip, name, value);
+      }}
+    >
+      {state === "off" ? "◇" : "◆"}
+    </button>
+  );
+}
+
 function BasicTab({
   clip,
   summary,
@@ -263,10 +309,6 @@ function BasicTab({
   const val = (name: string) => {
     const spec = ANIMATABLE.find((a) => a.name === name);
     return evalAt(clip.properties[name], ct, spec?.dflt ?? 0);
-  };
-  const animated = (name: string) => {
-    const p = clip.properties[name];
-    return !!p && "animated" in p;
   };
   const visual =
     clip.content.type !== "nested"
@@ -287,11 +329,7 @@ function BasicTab({
             void c.setProperty(clip, name, v / scale);
           }}
         />
-        {animated(name) && (
-          <span className="ed-kf-dot" title={t("inspector.animatedHint")}>
-            ◆
-          </span>
-        )}
+        <KeyframeDiamond clip={clip} name={name} playhead={playhead} rate={summary.frame_rate} />
       </Row>
     );
   };

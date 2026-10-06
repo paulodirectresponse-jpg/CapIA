@@ -817,3 +817,29 @@
   white-space: pre-wrap;
   font-size: 12px;
 }
+
+.ed-kf-diamond {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ed-text-muted, #9a9aa0);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.ed-kf-diamond.is-animated {
+  color: var(--ed-accent, #ffb020);
+}
+.ed-kf-diamond.is-on {
+  color: var(--ed-accent, #ffb020);
+  text-shadow: 0 0 6px var(--ed-accent, #ffb020);
+}
+.ed-kf-diamond:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ed-kf-diamond:focus-visible {
+  outline: 2px solid var(--ed-focus, #6aa8ff);
+}

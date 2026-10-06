@@ -293,3 +293,29 @@ fn design_size_makes_low_res_preview_match_full_res_composition() {
     let lit = bbox_x(100, 50, None);
     assert!((lit.0 - small.0).abs() > 0.1, "{lit:?} {small:?}");
 }
+
+#[test]
+fn scale_keyframes_grow_the_picture_and_render_is_deterministic() {
+    let (mut d, src) = two_clips();
+    // 50% → 100% ao longo do clip vermelho (as keyframes do inspector viram estes comandos)
+    d.keyframe("a", "scale", 0, 0.5);
+    d.keyframe("a", "scale", 29 * F, 1.0);
+    // início (50%): o canto é fundo, o centro é vermelho; ponto (6,6) ainda é fundo
+    let t0 = render_at(&d, &src, 0);
+    assert_eq!(t0.pixel(1, 1), BLACK);
+    assert_eq!(t0.pixel(16, 16), RED);
+    assert_eq!(t0.pixel(6, 6), BLACK);
+    // meio (~75%): (6,6) já é vermelho, o canto ainda não
+    let mid = render_at(&d, &src, 15 * F);
+    assert_eq!(mid.pixel(6, 6), RED);
+    assert_eq!(mid.pixel(1, 1), BLACK);
+    // fim (100%): cobre tudo
+    let end = render_at(&d, &src, 29 * F);
+    assert_eq!(end.pixel(1, 1), RED);
+    // o mesmo quadro duas vezes → mesmo digest (preview e export compartilham `render_frame`)
+    let g = RenderGraph::compile(d.doc(), &"S".into()).unwrap();
+    let s = RenderSettings::new(32, 32);
+    let a = render_frame(&g, &"S".into(), Ticks(15 * F), &s, &src).unwrap();
+    let b = render_frame(&g, &"S".into(), Ticks(15 * F), &s, &src).unwrap();
+    assert_eq!(frame_digest(&a.image), frame_digest(&b.image));
+}
