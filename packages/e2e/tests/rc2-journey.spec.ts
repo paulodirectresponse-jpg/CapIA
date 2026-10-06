@@ -211,6 +211,7 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
     if (!img) throw new Error("imagem não colocada");
     const p = await editor.clipPoint(img.id, 0.5, 0.5);
     await page.mouse.click(p.x, p.y);
+    await page.getByTestId("rail-transitions").click();
     await page.getByTestId("transition-fade").click();
     await expect(page.getByText("Coloque a transição entre dois clipes encostados.")).toBeVisible();
   });
