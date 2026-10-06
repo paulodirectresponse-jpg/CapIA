@@ -305,11 +305,15 @@ fn main() {
     capia_secrets::install_redacting_panic_hook();
     let mut port = 5199u16;
     let mut root = PathBuf::from("apps/desktop/dist");
+    let mut os_vault = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--port" => port = args.next().and_then(|p| p.parse().ok()).unwrap_or(port),
             "--static" => root = args.next().map(PathBuf::from).unwrap_or(root),
+            // harness de aceitação externa (tools/rc3-acceptance): usa o cofre REAL do SO (Credential
+            // Manager no Windows) e nunca cai para a memória; o valor da chave nunca sai do processo
+            "--os-vault" => os_vault = true,
             other => {
                 eprintln!("unknown argument `{other}`");
                 std::process::exit(2);
@@ -336,7 +340,20 @@ fn main() {
         Arc::new(SessionEngine::new(Arc::clone(&session))),
         capia_intelligence::service::ServiceConfig {
             appdb_path: std::env::var_os("CAPIA_AI_APPDB").map(PathBuf::from),
-            secrets: Arc::new(capia_secrets::MemoryStore::new()),
+            secrets: if os_vault {
+                match capia_secrets::platform_store() {
+                    Ok(s) => {
+                        println!("credential vault: the operating system store");
+                        s
+                    }
+                    Err(e) => {
+                        eprintln!("--os-vault: no secure credential backend here ({e})");
+                        std::process::exit(2);
+                    }
+                }
+            } else {
+                Arc::new(capia_secrets::MemoryStore::new())
+            },
         },
     )
     .expect("failed to start the intelligence service");

@@ -147,3 +147,37 @@ fn a_wrong_key_fails_with_an_auth_error_and_no_profile() {
     assert!(!last.to_string().contains("sk-WRONG-0123456789abcdef"));
     assert!(w.ai("ai.status", json!({}))["active_profile"].is_null());
 }
+
+#[test]
+fn connect_can_reuse_the_credential_already_in_the_vault_and_never_returns_it() {
+    use capia_secrets::{CredentialRef, SecretStore, SecretString};
+    let r = rt();
+    let srv = r.block_on(MockServer::start(openai_like));
+    let Some(w) = service_world("svc-connect-stored", false) else {
+        return;
+    };
+    // sem credencial no cofre: erro claro, nada fica configurado
+    let e = w.ai_err(
+        "ai.connect",
+        json!({"preset": "openai", "use_stored": true, "base_url": srv.url(), "allow_loopback": true}),
+    );
+    assert_eq!(e.code, "NO_CREDENTIAL");
+    assert!(w.ai("ai.status", json!({}))["active_profile"].is_null());
+    // com a credencial guardada pelo app (aqui: direto no cofre) a conexão funciona sem a chave
+    w.store
+        .put(
+            &CredentialRef::for_provider("openai").unwrap(),
+            SecretString::new(KEY),
+        )
+        .unwrap();
+    let t = w.ai(
+        "ai.connect",
+        json!({"preset": "openai", "use_stored": true, "base_url": srv.url(), "allow_loopback": true}),
+    );
+    let ev = w.wait_task(t["task_id"].as_str().unwrap(), &["done", "error"]);
+    let last = ev.last().unwrap();
+    assert_eq!(last["phase"], "done", "{last}");
+    assert_eq!(last["data"]["result"]["profile_created"], true);
+    assert!(!w.ai("ai.status", json!({})).to_string().contains(KEY));
+    assert!(!last.to_string().contains(KEY));
+}

@@ -176,6 +176,21 @@ jobs:
           $f = Get-ChildItem dist-release -Filter *setup*.exe | Select-Object -First 1
           node tools/release/make-update-manifest.mjs --artifact $f.FullName --version (node -p "require('./package.json').version") --channel beta --url "https://updates.example.invalid/$($f.Name)" --out dist-release/update-manifest.TEST-ONLY.json --test-key
 
+      # RC3: harness do OpenAI real para rodar no Windows do usuário (a chave vem do Credential Manager)
+      - name: Harness openai-real (devserver + script, sem segredo)
+        shell: pwsh
+        run: |
+          cargo build --release -p capia-devserver
+          New-Item -ItemType Directory -Force -Path rc3-live-harness | Out-Null
+          Copy-Item target/release/capia-devserver.exe rc3-live-harness/
+          Copy-Item tools/rc3-acceptance/openai-real.ps1 rc3-live-harness/
+          Copy-Item tools/rc3-acceptance/README.md rc3-live-harness/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capia-rc3-live-harness
+          path: rc3-live-harness/**
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:

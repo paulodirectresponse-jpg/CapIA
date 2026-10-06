@@ -439,7 +439,7 @@ impl IntelligenceService {
                 cfg.allow_loopback = p["allow_loopback"].as_bool().unwrap_or(false);
                 let provider = serde_json::to_value(&cfg)
                     .map_err(|e| IntelError::new("INTERNAL", e.to_string()))?;
-                self.provider_save(json!({"provider": provider, "api_key": p["api_key"]}))?;
+                self.provider_save(json!({"provider": provider, "api_key": p["api_key"], "use_stored": p["use_stored"]}))?;
                 let wanted = p["model"].as_str().map(str::to_owned);
                 let this = self.ai.clone();
                 let db = self.appdb.clone();
@@ -931,6 +931,21 @@ impl IntelligenceService {
             self.secrets
                 .put(&cref, SecretString::new(key))
                 .map_err(|e| IntelError::new("SECRET_STORE", e.to_string()))?;
+            cfg.credential_ref = Some(cref.as_str().to_owned());
+        }
+        // `use_stored`: reaproveita a credencial que JÁ está no cofre do SO (ex.: guardada pelo app).
+        // O cliente nunca vê nem informa o valor; sem credencial no cofre é erro explícito.
+        if p["api_key"].as_str().is_none_or(str::is_empty)
+            && p["use_stored"].as_bool().unwrap_or(false)
+        {
+            let cref = CredentialRef::for_provider(&cfg.id).map_err(|e| bad(e.to_string()))?;
+            let stored = self.secrets.get(&cref).map_err(|_| {
+                IntelError::new(
+                    "NO_CREDENTIAL",
+                    "there is no stored credential for this provider",
+                )
+            })?;
+            register_global(stored.expose());
             cfg.credential_ref = Some(cref.as_str().to_owned());
         }
         let id = cfg.id.clone();
