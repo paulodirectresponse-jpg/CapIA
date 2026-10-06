@@ -117,8 +117,8 @@ test("timeline livre: 3 vídeos + 4 áudios, tracks criadas ao soltar, mover, re
   await test.step("áudio 3 e 4 coexistem livremente nas tracks existentes", async () => {
     const [t1, t2] = await audioTracks();
     if (!t1 || !t2) throw new Error("faltam tracks de áudio");
-    await drop("tom_a3.wav", 700, { track: t1.id });
-    await drop("tom_a4.wav", 700, { track: t2.id });
+    await drop("tom_a3.wav", 420, { track: t1.id });
+    await drop("tom_a4.wav", 420, { track: t2.id });
     await expect
       .poll(async () => (await structure(editor)).filter((t) => t.kind === "audio"))
       .toEqual([
@@ -134,7 +134,7 @@ test("timeline livre: 3 vídeos + 4 áudios, tracks criadas ao soltar, mover, re
     const moving = Object.values(seq.clips).find((c) => c.track === t1.id && c.start > 0);
     if (!moving) throw new Error("clip a mover não encontrado");
     const from = await editor.clipPoint(moving.id);
-    const to = await editor.rowPoint(t2.id, 900);
+    const to = await editor.rowPoint(t2.id, 600);
     await page.mouse.move(from.x, from.y);
     await page.mouse.down();
     await page.mouse.move(to.x, to.y, { steps: 14 });
