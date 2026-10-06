@@ -5,6 +5,7 @@
 //! depende deste serviço (o editor funciona com ele ausente ou com a IA desligada).
 
 mod autonomy_api;
+mod connect;
 #[cfg(feature = "testkit")]
 mod demo;
 
@@ -418,6 +419,49 @@ impl IntelligenceService {
                 Ok(self.status())
             }
             "ai.provider.save" => self.provider_save(p),
+            "ai.connect" => {
+                let preset_key = p["preset"]
+                    .as_str()
+                    .ok_or_else(|| bad("`preset` is required"))?
+                    .to_owned();
+                let preset = provider_presets()
+                    .into_iter()
+                    .find(|x| x.key == preset_key)
+                    .ok_or_else(|| bad(format!("unknown preset `{preset_key}`")))?;
+                let mut cfg = ProviderConfig::new(preset.key, preset.kind, preset.display_name);
+                cfg.base_url = p["base_url"]
+                    .as_str()
+                    .filter(|u| !u.is_empty())
+                    .map(str::to_owned)
+                    .or_else(|| preset.base_url.map(str::to_owned));
+                cfg.enabled = true;
+                // loopback só para gateway/proxy local explícito (e testes)
+                cfg.allow_loopback = p["allow_loopback"].as_bool().unwrap_or(false);
+                let provider = serde_json::to_value(&cfg)
+                    .map_err(|e| IntelError::new("INTERNAL", e.to_string()))?;
+                self.provider_save(json!({"provider": provider, "api_key": p["api_key"]}))?;
+                let wanted = p["model"].as_str().map(str::to_owned);
+                let this = self.ai.clone();
+                let db = self.appdb.clone();
+                let provider_id = preset_key;
+                Ok(self.spawn("connect", move |_ctx, task, _em| async move {
+                    let persist_ai = this.clone();
+                    connect::finish_connect(
+                        this,
+                        provider_id,
+                        wanted,
+                        task.cancel.clone(),
+                        move || {
+                            if let (Some(db), Ok(v)) =
+                                (&db, serde_json::to_value(&persist_ai.registry()))
+                            {
+                                let _ = db.put(NS, KEY_REGISTRY, &v, now_ms());
+                            }
+                        },
+                    )
+                    .await
+                }))
+            }
             "ai.provider.delete" => {
                 let id = p["id"]
                     .as_str()

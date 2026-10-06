@@ -14,8 +14,26 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
+/// Resumo honesto do probe: o que o usuário pode esperar do modelo.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProbeStatus {
+    /// Conectou e tudo o que foi testado funcionou.
+    Ready,
+    /// Conectou e gera texto, mas alguma capability testada falhou (listada em `failures`).
+    Partial,
+    /// Sem conexão/autenticação, ou nem texto funcionou.
+    #[default]
+    Failed,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProbeResult {
+    /// Conexão e autenticação estabelecidas (independe de capabilities).
+    #[serde(default)]
+    pub connected: bool,
+    #[serde(default)]
+    pub status: ProbeStatus,
     /// Conectou, autenticou e nenhum probe tentado falhou.
     pub success: bool,
     pub latency_ms: u64,
@@ -270,7 +288,20 @@ pub async fn probe(
         }
     }
 
+    let connected = conn_err.is_none()
+        && (!verified.is_empty() || failures.values().all(|m| !m.contains("401")));
+    let text_ok = verified.contains(&Capability::TextGeneration)
+        || verified.contains(&Capability::SpeechToText);
+    let status = if conn_err.is_some() || !text_ok {
+        ProbeStatus::Failed
+    } else if failures.is_empty() {
+        ProbeStatus::Ready
+    } else {
+        ProbeStatus::Partial
+    };
     ProbeResult {
+        connected,
+        status,
         success: conn_err.is_none() && failures.is_empty() && !verified.is_empty(),
         latency_ms: started.elapsed().as_millis() as u64,
         verified,
