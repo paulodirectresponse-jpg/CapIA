@@ -12,6 +12,8 @@ import {
 import type { Deliverable, EncoderCapability, ExportItem } from "@capia/engine-bindings";
 import { useController, useUi } from "../context";
 import { useT } from "../i18n";
+import { exportStats, formatDuration, rateToFps } from "../lib/exportStats";
+import type { ExportRunItem } from "../store/controller";
 
 type Preset = "h264-mp4" | "intermediate";
 
@@ -342,6 +344,7 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
                     {" "}
                     <progress value={it.done} max={Math.max(1, it.total)} />{" "}
                     {t("export.progress", { done: it.done, total: it.total })}
+                    <ExportStatsLine item={it} />
                   </>
                 )}
                 {it.state === "done" && it.report && (
@@ -364,5 +367,32 @@ export function ExportDialog({ open, onClose }: { open: boolean; onClose: () => 
         )}
       </div>
     </Dialog>
+  );
+}
+
+/** Linha de medidas ao vivo: %, decorrido, restante, quadros/s e × tempo real. */
+function ExportStatsLine({ item }: { item: ExportRunItem }) {
+  const t = useT();
+  const rate = useUi((s) => (s.active ? s.model.sequences[s.active]?.frame_rate : undefined));
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNow(Date.now());
+    }, 500);
+    return () => {
+      clearInterval(id);
+    };
+  }, []);
+  const st = exportStats(item.done, item.total, item.startedAt, now, rate ? rateToFps(rate) : null);
+  return (
+    <div className="ed-hint" data-testid="export-stats" aria-live="off">
+      {t("export.stats", {
+        percent: st.percent,
+        elapsed: formatDuration(st.elapsedMs),
+        eta: st.etaMs === null ? t("export.etaUnknown") : formatDuration(st.etaMs),
+        fps: st.fps.toFixed(1),
+        realtime: st.realtime === null ? "—" : `${st.realtime.toFixed(2)}×`,
+      })}
+    </div>
   );
 }

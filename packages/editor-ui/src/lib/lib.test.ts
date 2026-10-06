@@ -163,3 +163,21 @@ describe("recent projects (Home)", () => {
     expect(sanitizePrefs({ recent: "nope" }).recent).toEqual([]);
   });
 });
+
+describe("export stats", () => {
+  it("computes percent, fps, ETA and realtime factor", async () => {
+    const { exportStats, formatDuration, rateToFps } = await import("./exportStats");
+    const s = exportStats(300, 900, 1_000, 11_000, 30); // 300 quadros em 10 s
+    expect(s.percent).toBe(33);
+    expect(s.fps).toBeCloseTo(30, 5);
+    expect(s.etaMs).toBe(20_000);
+    expect(s.realtime).toBeCloseTo(1, 5);
+    expect(exportStats(0, 900, 1_000, 2_000, 30).etaMs).toBeNull();
+    expect(exportStats(900, 900, 1_000, 2_000, null).etaMs).toBe(0);
+    expect(exportStats(5, 0, undefined, 5, null).percent).toBe(0);
+    expect(formatDuration(83_000)).toBe("1:23");
+    expect(formatDuration(3_723_000)).toBe("1:02:03");
+    expect(rateToFps("30000/1001")).toBeCloseTo(29.97, 2);
+    expect(rateToFps("x")).toBeNull();
+  });
+});

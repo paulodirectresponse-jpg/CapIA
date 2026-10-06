@@ -95,6 +95,8 @@ export interface ExportRunItem {
   state: ExportItemState;
   done: number;
   total: number;
+  /** Relógio (ms) do início do item: base de fps/ETA/×tempo-real. */
+  startedAt?: number;
   error?: ApiErrorBody;
   report?: Record<string, unknown>;
 }
@@ -379,7 +381,7 @@ export class EditorController {
         this.toast("error", this.t("media.importing"), ev.kind);
         break;
       case "export_item_started":
-        this.updateExport(ev.id, { state: "running" });
+        this.updateExport(ev.id, { state: "running", startedAt: Date.now() });
         break;
       case "export_progress":
         this.updateExport(ev.id, {

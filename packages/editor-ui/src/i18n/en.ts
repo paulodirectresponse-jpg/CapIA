@@ -298,6 +298,9 @@ export const en = {
   "export.overwrite": "Overwrite if it exists",
   "export.start": "Start export",
   "export.cancel": "Cancel export",
+  "export.stats":
+    "{percent}% · elapsed {elapsed} · {eta} left · {fps} frames/s · {realtime} realtime",
+  "export.etaUnknown": "estimating…",
   "export.progress": "Exporting {done}/{total} frames",
   "export.done": "Export finished",
   "export.failed": "Export failed",

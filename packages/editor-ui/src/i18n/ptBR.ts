@@ -300,6 +300,9 @@ export const ptBR: Record<MessageKey, string> = {
   "export.overwrite": "Sobrescrever se existir",
   "export.start": "Iniciar exportação",
   "export.cancel": "Cancelar exportação",
+  "export.stats":
+    "{percent}% · decorrido {elapsed} · faltam {eta} · {fps} quadros/s · {realtime} do tempo real",
+  "export.etaUnknown": "calculando…",
   "export.progress": "Exportando {done}/{total} quadros",
   "export.done": "Exportação concluída",
   "export.failed": "A exportação falhou",
