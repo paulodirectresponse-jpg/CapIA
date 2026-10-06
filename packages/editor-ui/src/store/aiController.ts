@@ -585,7 +585,11 @@ export class AiController {
   private finish(ev: AiTaskEvent, job: AiJob | undefined): void {
     const result = (ev.data.result ?? undefined) as Record<string, unknown> | undefined;
     const state: JobState =
-      ev.phase === "cancelled" ? "cancelled" : ev.phase === "done" && !failedAtAll(result) ? "done" : "failed";
+      ev.phase === "cancelled"
+        ? "cancelled"
+        : ev.phase === "done" && !failedAtAll(result)
+          ? "done"
+          : "failed";
     // o assistente devolve a falha do provedor como registro `status: "failed"` (fase `done`):
     // também é erro para o usuário — nunca um silêncio
     const failed = result?.status === "failed" ? result.error : undefined;
