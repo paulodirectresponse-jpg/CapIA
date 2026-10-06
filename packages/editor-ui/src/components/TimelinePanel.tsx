@@ -1,3 +1,4 @@
+import { trackLabels as trackLabelsOf } from "../lib/trackNames";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Icon, IconButton, Slider, Tabs, type MenuEntry } from "@capia/ui-kit";
 import { TICKS_PER_SECOND, type Clip } from "@capia/engine-bindings";
@@ -97,6 +98,13 @@ export function TimelinePanel() {
   const b = resolveBindings(prefs.keymap);
   const kb = (a: keyof typeof b) => formatBinding(b[a][0] ?? "");
 
+  const trackLabels = useMemo(() => {
+    return trackLabelsOf(seq ? seq.tracks : [], {
+      video: t("track.video"),
+      audio: t("track.audio"),
+      captions: t("track.captions"),
+    });
+  }, [seq, t]);
   const rows = useMemo(
     () => (seq ? buildRows(seq.tracks, heights) : { rows: [], totalHeight: 0 }),
     [seq, heights],
@@ -703,6 +711,7 @@ export function TimelinePanel() {
             {rows.rows.map((row) => {
               const tr = row.track;
               const role = typeof tr.role === "string" ? tr.role : "custom";
+              const label = trackLabels.get(tr.id) ?? "";
               return (
                 <div
                   key={tr.id}
@@ -742,12 +751,7 @@ export function TimelinePanel() {
                   />
                   <div className="ed-tl-header-name">
                     <Icon name={tr.kind === "audio" ? "music" : "film"} size={12} />
-                    <span title={tr.name || tr.id}>
-                      {tr.name ||
-                        t(
-                          `track.${role === "custom" ? tr.kind : (role as "main")}` as "track.main",
-                        )}
-                    </span>
+                    <span title={label}>{label}</span>
                     {tr.magnetic && <Badge>{t("track.magnetic")}</Badge>}
                   </div>
                   <div className="ed-tl-header-btns">
