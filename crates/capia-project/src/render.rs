@@ -20,7 +20,9 @@ use capia_render::{
 use capia_time::{Ticks, TimeRange};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 /// Margem (amostras de fonte) lida além do trecho para o filtro de reamostragem.
 const RESAMPLE_MARGIN: u64 = 32;
@@ -460,6 +462,35 @@ impl Project {
         render_video_range(&graph, seq, range, settings, &source, on_frame).map_err(render_err)
     }
 
+    /// Como [`Self::render_range`], medindo o tempo gasto **dentro da fonte de mídia** (decode,
+    /// cache de quadros, imagens) — o resto do tempo de parede é composição/overhead do render.
+    pub fn render_range_timed(
+        &self,
+        services: &Arc<RenderServices>,
+        seq: &SequenceId,
+        range: TimeRange,
+        settings: &RenderSettings,
+        on_frame: &mut dyn FnMut(i64, Ticks, Image) -> bool,
+    ) -> Result<(u64, Vec<RenderWarning>, SourceTimings), ProjectError> {
+        let graph = self.render_graph(seq)?;
+        let inner = self.render_source(services, &graph, SourceOptions::default())?;
+        let timed = TimedSource {
+            inner: &inner,
+            video_ns: AtomicU64::new(0),
+            still_ns: AtomicU64::new(0),
+        };
+        let (n, w) = render_video_range(&graph, seq, range, settings, &timed, on_frame)
+            .map_err(render_err)?;
+        Ok((
+            n,
+            w,
+            SourceTimings {
+                video_source_ns: timed.video_ns.load(Ordering::Relaxed),
+                still_source_ns: timed.still_ns.load(Ordering::Relaxed),
+            },
+        ))
+    }
+
     /// Mix de áudio de `range` na taxa/canais de `settings`.
     pub fn render_audio_range(
         &self,
@@ -471,5 +502,52 @@ impl Project {
         let graph = self.render_graph(seq)?;
         let source = self.render_source(services, &graph, SourceOptions::default())?;
         mix_audio_range(&graph, seq, range, settings, &source).map_err(render_err)
+    }
+}
+
+/// Tempo (ns) gasto dentro da fonte de mídia durante um render de range.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SourceTimings {
+    pub video_source_ns: u64,
+    pub still_source_ns: u64,
+}
+
+struct TimedSource<'a> {
+    inner: &'a ProjectSource,
+    video_ns: AtomicU64,
+    still_ns: AtomicU64,
+}
+
+impl MediaSource for TimedSource<'_> {
+    fn video_frame(
+        &self,
+        asset: &AssetId,
+        source_t: Ticks,
+    ) -> Result<Option<Arc<Image>>, SourceError> {
+        let t = Instant::now();
+        let r = self.inner.video_frame(asset, source_t);
+        self.video_ns.fetch_add(
+            u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        r
+    }
+
+    fn still_image(&self, asset: &AssetId) -> Result<Arc<Image>, SourceError> {
+        let t = Instant::now();
+        let r = self.inner.still_image(asset);
+        self.still_ns.fetch_add(
+            u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+        r
+    }
+
+    fn audio(&self, asset: &AssetId, req: AudioRequest) -> Result<AudioBuffer, SourceError> {
+        self.inner.audio(asset, req)
+    }
+
+    fn cancel_pending(&self) {
+        self.inner.cancel_pending();
     }
 }

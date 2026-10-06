@@ -427,6 +427,13 @@ export class Editor {
   }
 
   /** No app nativo "Importar" abre o diálogo do SO (não automatizável): usa "Por caminho…". */
+  /** Painel Mídia na aba "Arquivos" (o painel lembra a aba "Sequências" enquanto está aberto). */
+  async openMediaFiles(): Promise<void> {
+    await this.page.getByTestId("rail-media").click();
+    const tab = this.page.getByTestId("media-tab-files");
+    if (await tab.count()) await tab.click();
+  }
+
   async openImportByPath(): Promise<void> {
     const byPath = this.page.getByTestId("import-by-path");
     if (await byPath.count()) await byPath.click();
@@ -435,7 +442,7 @@ export class Editor {
 
   /** Importa um caminho absoluto qualquer (fora de `tests/fixtures/media`). */
   async openImportAfterRail(absPath: string): Promise<void> {
-    await this.page.getByTestId("rail-media").click();
+    await this.openMediaFiles();
     await this.openImportByPath();
     await this.page.getByTestId("import-paths").fill(absPath);
     await this.page.getByTestId("import-confirm").click();
@@ -443,14 +450,14 @@ export class Editor {
 
   /** Importa arquivos por caminho absoluto (pela UI, como em "Por caminho…"). */
   async importAbsolute(...files: string[]): Promise<void> {
-    await this.page.getByTestId("rail-media").click();
+    await this.openMediaFiles();
     await this.openImportByPath();
     await this.page.getByTestId("import-paths").fill(files.join("\n"));
     await this.page.getByTestId("import-confirm").click();
   }
 
   async importMedia(...files: string[]): Promise<void> {
-    await this.page.getByTestId("rail-media").click();
+    await this.openMediaFiles();
     await this.openImportByPath();
     await this.page.getByTestId("import-paths").fill(files.map((f) => join(MEDIA, f)).join("\n"));
     await this.page.getByTestId("import-confirm").click();

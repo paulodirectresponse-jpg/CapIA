@@ -13,7 +13,7 @@ use capia_media::{
     detect_encoders, select_export_encoder, validate_export,
 };
 use capia_model::SequenceId;
-use capia_render::{AudioBuffer, RenderSettings, RenderWarning, frame_digest};
+use capia_render::{AudioBuffer, Image, RenderSettings, RenderWarning, frame_digest};
 use capia_time::{Rational, TICKS_PER_SECOND, Ticks, TimeRange};
 use serde::Serialize;
 use serde_json::json;
@@ -21,8 +21,11 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
+
+/// Quadros na fila entre o render e a thread do encoder (≈ 8 MiB cada em 1080p).
+const WRITE_QUEUE: usize = 4;
 
 pub const INTERMEDIATE_FORMAT: &str = "capia-intermediate-v1";
 const PARTIAL_TAG: &str = ".partial-";
@@ -85,6 +88,37 @@ pub struct IntermediateReport {
     pub warnings: Vec<String>,
 }
 
+/// Onde o export gastou o tempo (ms de parede). `render_ms` é o laço de quadros inteiro:
+/// `decode_ms` (dentro da fonte de mídia) + `composite_ms` (render/composição do compositor e
+/// overhead do laço) + `encoder_wait_ms` (render bloqueado porque o encoder não acompanha; a
+/// escrita em si, `encode_write_ms`, acontece em outra thread em paralelo).
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct ExportTimings {
+    pub audio_render_ms: f64,
+    pub audio_write_ms: f64,
+    pub encoder_start_ms: f64,
+    pub render_ms: f64,
+    pub decode_ms: f64,
+    pub composite_ms: f64,
+    /// Tempo em que a thread do encoder esteve escrevendo quadros (roda em paralelo ao render).
+    pub encode_write_ms: f64,
+    /// Tempo em que o render ficou BLOQUEADO esperando o encoder (fila cheia): o gargalo do encoder.
+    pub encoder_wait_ms: f64,
+    /// Fechar o pipe e esperar o encoder terminar o que ficou na fila + mux.
+    pub encoder_drain_ms: f64,
+    pub validate_ms: f64,
+    pub sync_publish_ms: f64,
+    pub total_ms: f64,
+    /// Quadros de vídeo por segundo de parede no laço de render+encode.
+    pub render_fps: f64,
+    /// Duração do trecho ÷ tempo de parede total (×tempo real).
+    pub realtime_factor: f64,
+}
+
+fn ms(d: Duration) -> f64 {
+    d.as_secs_f64() * 1000.0
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Mp4Report {
     pub path: PathBuf,
@@ -98,6 +132,7 @@ pub struct Mp4Report {
     pub av_drift_ticks: Option<i64>,
     pub video_duration_ticks: i64,
     pub warnings: Vec<String>,
+    pub timings: ExportTimings,
 }
 
 fn warn_codes(w: &[RenderWarning]) -> Vec<String> {
@@ -462,12 +497,18 @@ impl Project {
         let stage = stage_path(out);
         std::fs::create_dir_all(&stage).map_err(|e| io("cannot create the staging area", &e))?;
         let partial = stage.join("out.mp4");
+        let t_total = Instant::now();
         let result = (|| -> Result<Mp4Report, ProjectError> {
+            let mut tm = ExportTimings::default();
             let mut s = *settings;
             s.frame_rate = Some(p.frame_rate);
+            let t = Instant::now();
             let (audio, aw) = self.render_audio_range(services, seq, p.audio_range, &s)?;
+            tm.audio_render_ms = ms(t.elapsed());
             let wav = stage.join("audio.wav");
+            let t = Instant::now();
             write_wav_f32(&wav, &audio)?;
+            tm.audio_write_ms = ms(t.elapsed());
             let audio_frames = (audio.samples.len() / audio.channels.max(1) as usize) as u64;
             let fr = p.frame_rate.rate();
             let spec = Mp4Spec {
@@ -482,36 +523,70 @@ impl Project {
                 video_bitrate_kbps: opts.video_bitrate_kbps,
                 gop: opts.gop,
             };
-            let mut session =
+            let t = Instant::now();
+            let session =
                 EncodeSession::start(services.toolchain(), &spec, &partial).map_err(media)?;
-            let mut err: Option<ProjectError> = None;
+            tm.encoder_start_ms = ms(t.elapsed());
+            // render e encode em paralelo: uma thread escreve os quadros no pipe do encoder enquanto
+            // o render calcula os seguintes (fila curta ⇒ memória limitada; o render só espera
+            // quando o encoder é o gargalo — esse tempo é `encoder_wait_ms`).
+            let (tx, rx) = std::sync::mpsc::sync_channel::<Image>(WRITE_QUEUE);
+            let writer_failed = Arc::new(AtomicBool::new(false));
+            let wf = Arc::clone(&writer_failed);
+            let writer = std::thread::spawn(move || {
+                let mut session = session;
+                let mut busy = Duration::ZERO;
+                let mut result: Result<(), MediaError> = Ok(());
+                while let Ok(img) = rx.recv() {
+                    if result.is_err() {
+                        continue; // drena sem escrever
+                    }
+                    let t = Instant::now();
+                    if let Err(e) = session.write_frame(&img.data) {
+                        result = Err(e);
+                        wf.store(true, Ordering::Relaxed);
+                    }
+                    busy += t.elapsed();
+                }
+                (session, result, busy)
+            });
             let mut cancelled = false;
             let mut first = true;
-            let render = self.render_range(services, seq, p.audio_range, &s, &mut |_, _, img| {
-                if cancel() {
-                    cancelled = true;
-                    return false;
-                }
-                if first {
-                    first = false;
-                    fp!("export_frames_running");
-                }
-                if let Err(e) = session.write_frame(&img.data) {
-                    err = Some(media(e));
-                    return false;
-                }
-                true
-            });
-            let (n, vw) = match render {
+            let mut wait_total = Duration::ZERO;
+            let t_render = Instant::now();
+            let render =
+                self.render_range_timed(services, seq, p.audio_range, &s, &mut |_, _, img| {
+                    if cancel() {
+                        cancelled = true;
+                        return false;
+                    }
+                    if writer_failed.load(Ordering::Relaxed) {
+                        return false;
+                    }
+                    if first {
+                        first = false;
+                        fp!("export_frames_running");
+                    }
+                    let tw = Instant::now();
+                    let sent = tx.send(img).is_ok();
+                    wait_total += tw.elapsed();
+                    sent
+                });
+            let render_wall = t_render.elapsed();
+            drop(tx);
+            let (mut session, write_result, write_busy) = writer
+                .join()
+                .map_err(|_| inv("EXPORT_WRITER", "the encoder writer thread panicked"))?;
+            let (n, vw, src) = match render {
                 Ok(v) => v,
                 Err(e) => {
                     session.abort();
                     return Err(e);
                 }
             };
-            if let Some(e) = err {
+            if let Err(e) = write_result {
                 session.abort();
-                return Err(e);
+                return Err(media(e));
             }
             if cancelled {
                 session.abort();
@@ -524,9 +599,16 @@ impl Project {
                     format!("rendered {n} of {} frames", p.count),
                 ));
             }
+            tm.render_ms = ms(render_wall);
+            tm.encode_write_ms = ms(write_busy);
+            tm.encoder_wait_ms = ms(wait_total);
+            tm.decode_ms = (src.video_source_ns + src.still_source_ns) as f64 / 1e6;
+            tm.composite_ms = (tm.render_ms - tm.encoder_wait_ms - tm.decode_ms).max(0.0);
+            let t = Instant::now();
             session
                 .finish(Duration::from_secs(3600), cancel)
                 .map_err(media)?;
+            tm.encoder_drain_ms = ms(t.elapsed());
             let tol = p.frame_rate.frame_duration();
             let expect = ExportExpect {
                 codec: opts.codec.codec_name().to_owned(),
@@ -538,7 +620,9 @@ impl Project {
                 audio: Some((settings.audio_sample_rate, settings.audio_channels)),
                 tolerance: tol,
             };
+            let t = Instant::now();
             let v = validate_export(services.toolchain(), &partial, &expect).map_err(media)?;
+            tm.validate_ms = ms(t.elapsed());
             if !v.is_valid() {
                 return Err(ProjectError::Invalid {
                     code: "EXPORT_VALIDATION_FAILED",
@@ -546,13 +630,30 @@ impl Project {
                     details: None,
                 });
             }
+            let t = Instant::now();
             sync_file(&partial)?;
+            tm.sync_publish_ms = ms(t.elapsed());
             fp!("export_before_publish");
             let mut warnings = aw;
             warnings.extend(vw);
             warnings.sort();
             warnings.dedup();
+            let wall = t_total.elapsed();
+            tm.total_ms = ms(wall);
+            let loop_s = (tm.render_ms + tm.encoder_drain_ms) / 1000.0;
+            tm.render_fps = if loop_s > 0.0 {
+                p.count as f64 / loop_s
+            } else {
+                0.0
+            };
+            let media_s = p.audio_range.duration.0 as f64 / TICKS_PER_SECOND as f64;
+            tm.realtime_factor = if wall.as_secs_f64() > 0.0 {
+                media_s / wall.as_secs_f64()
+            } else {
+                0.0
+            };
             Ok(Mp4Report {
+                timings: tm,
                 path: out.to_path_buf(),
                 encoder: enc.ffmpeg_name.clone(),
                 codec: enc.codec.clone(),

@@ -185,6 +185,13 @@
   background: var(--surface-0);
   border-top: 1px solid var(--border);
 }
+.ed-timeline > .ed-timeline {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 0;
+}
 .ed-tl-toolbar {
   display: flex;
   align-items: center;

@@ -20,6 +20,9 @@
 use crate::error::RenderError;
 
 pub const MAX_DIMENSION: u32 = 16_384;
+/// Abaixo disto (pixels do retângulo do layer) o laço fica numa thread só (custo de spawn).
+const PAR_MIN_PIXELS: usize = 250_000;
+const MAX_RENDER_THREADS: usize = 8;
 const MAX_BYTES: u64 = 1 << 30;
 
 /// RGBA8, alpha reto, linhas contíguas (`stride = width × 4`).
@@ -84,6 +87,12 @@ impl Image {
         })
     }
 
+    #[cfg(test)]
+    fn put(&mut self, x: u32, y: u32, p: [u8; 4]) {
+        let i = (y as usize * self.width as usize + x as usize) * 4;
+        self.data[i..i + 4].copy_from_slice(&p);
+    }
+
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
         let i = (y as usize * self.width as usize + x as usize) * 4;
         [
@@ -92,11 +101,6 @@ impl Image {
             self.data[i + 2],
             self.data[i + 3],
         ]
-    }
-
-    fn put(&mut self, x: u32, y: u32, p: [u8; 4]) {
-        let i = (y as usize * self.width as usize + x as usize) * 4;
-        self.data[i..i + 4].copy_from_slice(&p);
     }
 }
 
@@ -169,6 +173,21 @@ pub fn blit_layer(
     pos_y: f64,
     rotation_deg: f64,
 ) -> Result<bool, RenderError> {
+    blit_layer_threads(dst, src, opacity, scale, pos_x, pos_y, rotation_deg, None)
+}
+
+/// `blit_layer` com número de threads explícito (`None` = automático). O resultado não depende dele.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn blit_layer_threads(
+    dst: &mut Image,
+    src: &Image,
+    opacity: f64,
+    scale: f64,
+    pos_x: f64,
+    pos_y: f64,
+    rotation_deg: f64,
+    threads: Option<usize>,
+) -> Result<bool, RenderError> {
     if !(opacity.is_finite() && scale.is_finite() && pos_x.is_finite() && pos_y.is_finite())
         || !rotation_deg.is_finite()
     {
@@ -204,38 +223,43 @@ pub fn blit_layer(
     // cópia exata (pesos 0/256), então pulamos a matemática de ponto flutuante por pixel
     let ox = cx - sw / 2.0;
     let oy = cy - sh / 2.0;
+    let (y0u, y1u) = (y0 as usize, y1 as usize);
+    let (x0u, x1u) = (x0 as usize, x1 as usize);
     if quarter == 0 && s == 1.0 && ox.fract() == 0.0 && oy.fract() == 0.0 {
         let (ox, oy) = (ox as i64, oy as i64);
-        let mut drew = false;
-        for y in y0..y1 {
-            let sy = y - oy;
+        return Ok(par_rows(dst, y0u, y1u, threads, |y, row| {
+            let sy = y as i64 - oy;
             if sy < 0 || sy >= i64::from(src.height) {
-                continue;
+                return false;
             }
-            for x in x0..x1 {
-                let sx = x - ox;
+            let src_row =
+                &src.data[sy as usize * src.width as usize * 4..][..src.width as usize * 4];
+            let mut drew = false;
+            for x in x0u..x1u {
+                let sx = x as i64 - ox;
                 if sx < 0 || sx >= i64::from(src.width) {
                     continue;
                 }
-                let p = src.pixel(sx as u32, sy as u32);
-                if p[3] == 0 {
+                let sp = &src_row[sx as usize * 4..sx as usize * 4 + 4];
+                if sp[3] == 0 {
                     continue;
                 }
-                let a = ((u64::from(p[3]) * op + 127) / 255) as u8;
+                let a = ((u64::from(sp[3]) * op + 127) / 255) as u8;
                 if a == 0 {
                     continue;
                 }
-                let out = blend_over(dst.pixel(x as u32, y as u32), [p[0], p[1], p[2], a]);
-                dst.put(x as u32, y as u32, out);
+                let d = &mut row[x * 4..x * 4 + 4];
+                let out = blend_over([d[0], d[1], d[2], d[3]], [sp[0], sp[1], sp[2], a]);
+                d.copy_from_slice(&out);
                 drew = true;
             }
-        }
-        return Ok(drew);
+            drew
+        }));
     }
     let inv = 1.0 / s;
-    let mut drew = false;
-    for y in y0..y1 {
-        for x in x0..x1 {
+    Ok(par_rows(dst, y0u, y1u, threads, |y, row| {
+        let mut drew = false;
+        for x in x0u..x1u {
             // centro do pixel de saída, relativo ao centro do layer, no espaço do layer girado
             let px = (x as f64 + 0.5 - cx) * inv;
             let py = (y as f64 + 0.5 - cy) * inv;
@@ -260,13 +284,70 @@ pub fn blit_layer(
             if a == 0 {
                 continue;
             }
-            let (xu, yu) = (x as u32, y as u32);
-            let out = blend_over(dst.pixel(xu, yu), [p[0], p[1], p[2], a]);
-            dst.put(xu, yu, out);
+            let d = &mut row[x * 4..x * 4 + 4];
+            let out = blend_over([d[0], d[1], d[2], d[3]], [p[0], p[1], p[2], a]);
+            d.copy_from_slice(&out);
             drew = true;
         }
+        drew
+    }))
+}
+
+/// Executa `f(y, linha)` para cada linha `y ∈ [y0, y1)` de `dst`, em faixas contíguas por várias
+/// threads quando a área é grande. Cada pixel de saída depende só da fonte e do próprio destino,
+/// então o resultado é **idêntico** ao serial (bit a bit) qualquer que seja o número de threads.
+/// Devolve se alguma linha desenhou algo.
+fn par_rows<F>(dst: &mut Image, y0: usize, y1: usize, threads: Option<usize>, f: F) -> bool
+where
+    F: Fn(usize, &mut [u8]) -> bool + Sync,
+{
+    let stride = dst.width as usize * 4;
+    let rows = y1.saturating_sub(y0);
+    if rows == 0 || stride == 0 {
+        return false;
     }
-    Ok(drew)
+    let area = rows * dst.width as usize;
+    let threads = threads
+        .unwrap_or_else(|| {
+            if area >= PAR_MIN_PIXELS {
+                // `CAPIA_RENDER_THREADS=1` força o caminho serial (diagnóstico/benchmark)
+                std::env::var("CAPIA_RENDER_THREADS")
+                    .ok()
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .unwrap_or_else(|| {
+                        std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
+                    })
+                    .clamp(1, MAX_RENDER_THREADS)
+            } else {
+                1
+            }
+        })
+        .clamp(1, rows);
+    let region = &mut dst.data[y0 * stride..y1 * stride];
+    if threads <= 1 {
+        let mut drew = false;
+        for (k, row) in region.chunks_mut(stride).enumerate() {
+            drew |= f(y0 + k, row);
+        }
+        return drew;
+    }
+    let per = rows.div_ceil(threads);
+    let drew = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|sc| {
+        for (b, band) in region.chunks_mut(per * stride).enumerate() {
+            let (f, drew) = (&f, &drew);
+            sc.spawn(move || {
+                let mut any = false;
+                for (k, row) in band.chunks_mut(stride).enumerate() {
+                    any |= f(y0 + b * per + k, row);
+                }
+                if any {
+                    drew.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            });
+        }
+    });
+    drew.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Bilinear em ponto fixo com alpha pré-multiplicado; fora da fonte = transparente.
@@ -342,6 +423,43 @@ mod tests {
         assert_eq!(parse_color("#10203040"), Some([16, 32, 48, 64]));
         for bad in ["", "red", "#12", "#gggggg", "#1234567"] {
             assert_eq!(parse_color(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn threaded_blit_is_bit_identical_to_serial() {
+        // 700×500 com transparência variada: escala ≠ 1, rotação de 90° e o caminho de cópia
+        let mut data = Vec::new();
+        for y in 0..500u32 {
+            for x in 0..700u32 {
+                data.extend_from_slice(&[
+                    (x % 251) as u8,
+                    (y % 241) as u8,
+                    ((x + y) % 239) as u8,
+                    if (x / 7 + y / 5) % 9 == 0 {
+                        0
+                    } else {
+                        40 + ((x * y) % 215) as u8
+                    },
+                ]);
+            }
+        }
+        let src = Image::from_rgba(700, 500, data).unwrap();
+        for (op, scale, px, py, rot) in [
+            (1.0, 1.0, 0.0, 0.0, 0.0),
+            (0.6, 0.73, 31.5, -12.25, 0.0),
+            (0.9, 1.4, -20.0, 8.0, 90.0),
+            (1.0, 0.5, 5.0, 5.0, 270.0),
+        ] {
+            let mut base = Image::filled(900, 700, [10, 20, 30, 255]).unwrap();
+            let mut a = base.clone();
+            let mut b = base.clone();
+            let da = blit_layer_threads(&mut a, &src, op, scale, px, py, rot, Some(1)).unwrap();
+            let db = blit_layer_threads(&mut b, &src, op, scale, px, py, rot, Some(5)).unwrap();
+            assert_eq!(da, db);
+            assert_eq!(a, b, "op={op} scale={scale} rot={rot}");
+            let _ = blit_layer(&mut base, &src, op, scale, px, py, rot).unwrap();
+            assert_eq!(a, base);
         }
     }
 

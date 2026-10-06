@@ -222,7 +222,7 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
   await test.step("14. offline / relink", async () => {
     const copy = join(server.dir, "tone_copy.wav");
     copyFileSync(join(MEDIA, "audio.wav"), copy);
-    await page.getByTestId("rail-media").click();
+    await editor.openMediaFiles();
     await editor.openImportByPath();
     await page.getByTestId("import-paths").fill(copy);
     await page.getByTestId("import-confirm").click();
@@ -286,7 +286,7 @@ test("17 critical editor flows", async ({ editor, page, server }) => {
     await page.getByTestId("project-path").fill(join(server.dir, "project.capia"));
     await page.getByTestId("project-open").click();
     await expect(page.getByTestId("editor")).toBeVisible();
-    await page.getByTestId("rail-media").click();
+    await editor.openMediaFiles();
     await expect(page.locator("[data-testid^=asset-]").first()).toBeVisible({ timeout: 15_000 });
   });
 
