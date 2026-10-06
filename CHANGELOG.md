@@ -9,6 +9,26 @@ Formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versionamen
 - Beta com usuários reais e fechamento do gate “sem Blocker/Critical aberto”.
 - Decisão de produto/jurídica sobre H.264/AAC.
 
+## [0.6.0-rc.2] - RC2 (estabilização e UX) — em preparação
+
+Correção depois de um teste manual real do RC1 por um editor experiente. **Não** declara a Fase 6 completa nem aceita nada externo. Evidências: `docs/RC2_TEST_REPORT.md`.
+
+### Corrigido
+- **Transição entre clipes inteiros** falhava com "sem sobra de mídia" (`INSUFFICIENT_HANDLES`). Agora a dissolução congela o quadro da borda quando não há sobra (ADR-120); preview e export continuam idênticos. A UI aplica a transição no corte quando o clipe da esquerda está selecionado e, em clipe isolado, diz "Coloque a transição entre dois clipes encostados."
+- **Piscada no preview**: o canvas deixou de ser apagado a cada mudança de tamanho e a qualidade automática não troca de resolução por um pico isolado de latência (confirmação sustentada + intervalo mínimo).
+- **CI Windows**: colisão de diretório temporário no self-test do desktop e socket herdando modo não-bloqueante no receptor de teste de webhook.
+
+### Adicionado
+- **OpenAI nativo** (`POST /v1/responses`: texto, streaming, tools, saída estruturada, imagem, uso, erros, cancelamento) quando a base URL é `api.openai.com`; os demais provedores compatíveis seguem em `chat/completions`.
+- **Conectar IA** (uma ação): importa modelos, escolhe o padrão, mede cada capacidade (conexão/auth, texto, streaming, tools, saída estruturada, visão) e cria o Brain Profile `auto`; habilita `whisper-1` à parte para transcrição. O probe reporta `ready | partial | failed` com honestidade.
+- **Chat com contexto da UI**: seleção e playhead chegam ao assistente (ids sanitizados), então "este clipe" tem referente; resposta a "o que você pode fazer?" sem tools.
+- **Home** com projetos recentes; idioma inicial pelo sistema; tracks "Vídeo N / Áudio N"; losango de keyframe clicável ao lado de Posição/Escala/Rotação/Opacidade; Error Boundary global em pt-BR; progresso de export (%, decorrido, ETA, quadros/s, ×tempo real); textos de mídia offline/relink em linguagem simples.
+- **Jornada E2E de 25 passos** (`packages/e2e/tests/rc2-journey.spec.ts`).
+- `InstallerSwitcher` do updater (stage atômico, switch, restauração do instalador retido).
+
+### Ainda pendente (externo — nunca marcado como feito)
+OpenAI real com chave do usuário, certificado de assinatura, Windows 10/11 limpos, beta humano, decisão jurídica de H.264/AAC, pentest independente, endpoint de crash. Trilhas **não** feitas neste RC: layout de painéis (barra lateral reduzida/inspetor contextual), auditoria de acessibilidade em 1366×768 e escalas de 125/150%, simplificação de texto/legendas, descoberta de sequences aninhadas, medição de gargalo do export.
+
 ## [0.6.0-rc.1] - 2026-10-05
 
 Release candidate da **Fase 6 (Integração e Finalização)**. Estado: `PHASE 6 ENGINEERING COMPLETE — EXTERNAL RELEASE ACCEPTANCE PENDING` só vale quando `node tools/phase6-acceptance/run-all.mjs` reportar isso; até lá, o estado é o do `docs/STATUS.md`. Esta versão **não** declara a Fase 6 completa.
