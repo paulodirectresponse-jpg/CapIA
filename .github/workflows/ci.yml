@@ -102,11 +102,14 @@ jobs:
       - name: Harness openai-real.ps1 sem chave => pending_external (exit 3), sem segredo
         shell: pwsh
         run: |
-          ./tools/rc3-acceptance/openai-real.ps1 -DevServer target/release/capia-devserver.exe -Out target/rc3-openai-real -Port 5391
-          if ($LASTEXITCODE -ne 3) { throw "esperado exit 3 (pending_external), veio $LASTEXITCODE" }
+          # processo filho: o `exit 3` do script não pode ser confundido com falha do passo
+          pwsh -NoProfile -File ./tools/rc3-acceptance/openai-real.ps1 -DevServer target/release/capia-devserver.exe -Out target/rc3-openai-real -Port 5391
+          $code = $LASTEXITCODE
+          if ($code -ne 3) { throw "esperado exit 3 (pending_external), veio $code" }
           $s = Get-Content target/rc3-openai-real/summary.json -Raw | ConvertFrom-Json
           if ($s.status -ne "pending_external") { throw "status inesperado: $($s.status)" }
           if (($s.steps | Where-Object { $_.status -eq "ok" -and $_.name -eq "connect" })) { throw "connect nao pode ser ok sem chave" }
+          exit 0
       - name: E2E do aplicativo (fluxos críticos, H.264 real, SharedBuffer)
         shell: pwsh
         run: pnpm --filter @capia/e2e e2e --workers=1 --grep-invert "targets with 5k clips"

@@ -2941,7 +2941,25 @@ fn a_burst_of_connections_is_bounded_in_threads_and_fds_and_ends_with_503_not_gr
         std::time::Duration::from_secs(10),
         healthy_child
     ));
-    let (t0, f0) = (count("task"), count("fd"));
+    // baseline só depois que o processo ESTABILIZA (threads de fundo sobem logo após o primeiro
+    // pedido; sob carga do CI isso demora): 6 amostras iguais seguidas, com teto de 10 s
+    let stable = {
+        let mut last = (count("task"), count("fd"));
+        let mut same = 0;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while same < 6 && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let now = (count("task"), count("fd"));
+            if now == last {
+                same += 1;
+            } else {
+                same = 0;
+                last = now;
+            }
+        }
+        last
+    };
+    let (t0, f0) = stable;
     let mut socks = Vec::new();
     for _ in 0..500 {
         if let Ok(sk) = std::net::TcpStream::connect(addr) {
