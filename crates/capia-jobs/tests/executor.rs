@@ -423,6 +423,44 @@ fn the_sink_sees_every_transition_in_order() {
     );
 }
 
+/// Sink que demora justamente na notificação `Queued`: antes da correção o worker rodava e
+/// notificava `Running`/`Completed` enquanto o `submit` ainda não tinha entregue `Queued`.
+struct SlowQueuedSink(Mutex<Vec<JobState>>);
+
+impl JobSink for SlowQueuedSink {
+    fn record(&self, s: &JobSnapshot) {
+        if s.state == JobState::Queued {
+            std::thread::sleep(Duration::from_millis(80));
+        }
+        self.0.lock().unwrap().push(s.state);
+    }
+}
+
+#[test]
+fn queued_is_always_delivered_before_running_even_when_the_sink_is_slow() {
+    for _ in 0..5 {
+        let rec = Arc::new(SlowQueuedSink(Mutex::new(Vec::new())));
+        let e = Executor::new(
+            ExecutorConfig {
+                workers: 2,
+                ..ExecutorConfig::default()
+            },
+            Some(Arc::clone(&rec) as Arc<dyn JobSink>),
+        );
+        let h = e
+            .submit(spec(Priority::Normal), |_| Ok(Value::Null))
+            .unwrap()
+            .handle;
+        h.wait();
+        e.shutdown();
+        let seen = rec.0.lock().unwrap().clone();
+        assert_eq!(
+            seen,
+            [JobState::Queued, JobState::Running, JobState::Completed]
+        );
+    }
+}
+
 #[test]
 fn a_thousand_small_jobs_complete_with_bounded_threads() {
     let e = Executor::new(

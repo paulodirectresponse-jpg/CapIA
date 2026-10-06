@@ -45,6 +45,9 @@ struct JobShared {
     progress: Arc<ProgressCell>,
     /// O cancelamento veio do desligamento do executor (⇒ `interrupted`, não `cancelled`).
     interrupt: AtomicBool,
+    /// Ordena as notificações do sink: o `submit` segura isto até entregar `Queued`, e o worker só
+    /// começa (e só notifica `Running`) depois — o sink vê sempre Queued → Running → terminal.
+    order: Mutex<()>,
 }
 
 impl JobShared {
@@ -186,6 +189,8 @@ impl Core {
 
     fn run(self: &Arc<Self>, entry: Entry) {
         let Entry { shared, f } = entry;
+        // espera o `submit` terminar de entregar `Queued` ao sink (ordem de notificação)
+        drop(lock(&shared.order));
         let (id, key) = {
             let mut s = lock(&shared.snapshot);
             s.state = JobState::Running;
@@ -413,6 +418,8 @@ impl Executor {
         F: FnOnce(&JobCtx) -> Result<Value, JobError> + Send + 'static,
     {
         let shared;
+        let order_guard;
+        let queued_view;
         {
             let mut inner = lock(&self.core.inner);
             if inner.shutdown {
@@ -461,17 +468,24 @@ impl Executor {
                 token: CancelToken::new(),
                 progress: Arc::new(ProgressCell::default()),
                 interrupt: AtomicBool::new(false),
+                order: Mutex::new(()),
             });
             if let Some(key) = spec.dedup_key {
                 inner.dedup.insert(key, id.clone());
             }
             inner.jobs.insert(id, Arc::clone(&shared));
+            // o instantâneo `Queued` é tirado ANTES de o job ficar visível aos workers
+            order_guard = Some(lock(&shared.order));
+            queued_view = Some(shared.view());
             inner.queues[q].push_back(Entry {
                 shared: Arc::clone(&shared),
                 f: Box::new(f),
             });
         }
-        self.core.record(&shared.view());
+        if let Some(view) = queued_view {
+            self.core.record(&view);
+        }
+        drop(order_guard);
         self.core.wake.notify_one();
         Ok(Submitted {
             handle: JobHandle { shared },
