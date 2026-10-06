@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildSummary, failedTests, parseCargoSummary, stepPassed, summarizeMutation } from "./lib.mjs";
+import {
+  buildSummary,
+  failedTests,
+  parseCargoSummary,
+  stepPassed,
+  summarizeMutation,
+} from "./lib.mjs";
 
 const SAMPLE = `running 3 tests
 test a ... ok
@@ -61,8 +67,11 @@ test("buildSummary: falha de passo ou mutação reprova; mutação não rodada n
   assert.equal(buildSummary({ generated: "t", steps, mutation: null }).mutation_run, false);
   assert.equal(buildSummary({ generated: "t", steps, mutation: { passed: false } }).passed, false);
   assert.equal(
-    buildSummary({ generated: "t", steps: [{ passed: false, tests: { passed: 0, failed: 1 } }], mutation: mut })
-      .passed,
+    buildSummary({
+      generated: "t",
+      steps: [{ passed: false, tests: { passed: 0, failed: 1 } }],
+      mutation: mut,
+    }).passed,
     false,
   );
 });

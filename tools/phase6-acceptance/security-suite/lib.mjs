@@ -5,7 +5,9 @@
 /** Soma as linhas `test result: ok. N passed; M failed; …` de uma saída do cargo. */
 export function parseCargoSummary(text) {
   const out = { passed: 0, failed: 0, ignored: 0, binaries: 0 };
-  for (const m of text.matchAll(/test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored/g)) {
+  for (const m of text.matchAll(
+    /test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored/g,
+  )) {
     out.binaries += 1;
     out.passed += Number(m[2]);
     out.failed += Number(m[3]);

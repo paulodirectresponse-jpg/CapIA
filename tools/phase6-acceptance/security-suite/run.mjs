@@ -8,7 +8,13 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildSummary, failedTests, parseCargoSummary, stepPassed, summarizeMutation } from "./lib.mjs";
+import {
+  buildSummary,
+  failedTests,
+  parseCargoSummary,
+  stepPassed,
+  summarizeMutation,
+} from "./lib.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const out = join(root, "target/phase6-acceptance");
@@ -40,14 +46,18 @@ function run(label, bin, binArgs) {
   };
 }
 
-const cargo = (label, extra) => run(label, "cargo", ["test", "-p", "capia-server", "--no-fail-fast", ...extra]);
+const cargo = (label, extra) =>
+  run(label, "cargo", ["test", "-p", "capia-server", "--no-fail-fast", ...extra]);
 
 const steps = [
-  cargo("pentest REST (auth, escopos, tokens, rotas, caminhos, SSRF, upload, forma, CORS, idempotência, DoS)", [
+  cargo(
+    "pentest REST (auth, escopos, tokens, rotas, caminhos, SSRF, upload, forma, CORS, idempotência, DoS)",
+    ["--test", "security_rest"],
+  ),
+  cargo("canário de segredo (respostas, disco, SSE, stdout/stderr do processo real)", [
     "--test",
-    "security_rest",
+    "secret_canary",
   ]),
-  cargo("canário de segredo (respostas, disco, SSE, stdout/stderr do processo real)", ["--test", "secret_canary"]),
   cargo("fuzz determinístico + corpus commitado", ["--test", "fuzz_rest"]),
   cargo("resiliência a SIGKILL (upload, apply, idempotência, export)", ["--test", "crash_rest"]),
   cargo("testes unitários do servidor (sanitização, sniff, rate limit, http)", ["--lib"]),
@@ -58,12 +68,23 @@ const steps = [
 let mutation = null;
 if (!skipMutation) {
   const t0 = Date.now();
-  const r = spawnSync("python3", ["tools/mutation-phase6.py"], { cwd: root, encoding: "utf8", env, maxBuffer: 1 << 28 });
+  const r = spawnSync("python3", ["tools/mutation-phase6.py"], {
+    cwd: root,
+    encoding: "utf8",
+    env,
+    maxBuffer: 1 << 28,
+  });
   console.log(r.stdout ?? "");
   const file = join(root, "target/mutation-phase6.json");
   const rows = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : [];
-  mutation = { ...summarizeMutation(rows), seconds: Math.round((Date.now() - t0) / 1000), exit: r.status };
-  console.log(`${mutation.passed ? "PASS" : "FAIL"}  mutação: ${mutation.detected}/${mutation.total} detectadas`);
+  mutation = {
+    ...summarizeMutation(rows),
+    seconds: Math.round((Date.now() - t0) / 1000),
+    exit: r.status,
+  };
+  console.log(
+    `${mutation.passed ? "PASS" : "FAIL"}  mutação: ${mutation.detected}/${mutation.total} detectadas`,
+  );
 }
 
 const summary = buildSummary({ generated: new Date().toISOString(), steps, mutation });

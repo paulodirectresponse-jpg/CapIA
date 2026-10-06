@@ -1554,7 +1554,8 @@ fn storage_failures_answer_a_structured_5xx_and_the_server_keeps_serving() {
     std::fs::create_dir_all(&uploads).unwrap();
     let ok = upload(&s, &s.admin, "x.png", &png_padded(100), &[]).unwrap();
     assert_eq!(ok.status, 201);
-    // (c) somente leitura (só vale para não-root: root ignora permissões)
+    // (c) somente leitura (só vale para não-root: root ignora permissões; permissões Unix só em Unix)
+    #[cfg(unix)]
     if !is_root() {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&uploads, std::fs::Permissions::from_mode(0o555)).unwrap();
