@@ -298,9 +298,7 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
     await page.getByTestId("recent-open").first().click();
     await expect(page.getByTestId("editor")).toBeVisible({ timeout: 45_000 });
     const clips = await editor.clips();
-    const kf = clips.find((x) => x.id === first.id)?.properties.scale as
-      { animated?: { keyframes?: unknown[] } } | undefined;
-    expect(kf?.animated?.keyframes?.length).toBe(2);
+    expect(kfCount(clips.find((x) => x.id === first.id)?.properties.scale)).toBe(2);
     expect(clips.find((c) => c.id === "rc2-clip-b")?.transition_in?.kind).toBe("dissolve");
   });
 
