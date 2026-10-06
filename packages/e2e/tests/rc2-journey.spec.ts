@@ -10,6 +10,12 @@ import { test, expect } from "./fixtures";
  * Cada passo confere o estado persistido pelo engine, não só o que a UI desenha.
  */
 
+/** Quantidade de keyframes de uma propriedade (`{ animated: [...] }` no JSON do engine). */
+function kfCount(p: unknown): number {
+  const a = (p as { animated?: unknown[] } | undefined)?.animated;
+  return Array.isArray(a) ? a.length : 0;
+}
+
 const KEY = "KEY-rc2-journey-0123456789abcdef";
 
 /** OpenAI de mentira (chat/completions em SSE + /models): suficiente para o probe e o chat. */
@@ -225,8 +231,7 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
     await expect
       .poll(async () => {
         const c = (await editor.clips()).find((x) => x.id === first.id);
-        const s = c?.properties.scale as { animated?: { keyframes?: unknown[] } } | undefined;
-        return s?.animated?.keyframes?.length ?? 0;
+        return kfCount(c?.properties.scale);
       })
       .toBe(1);
   });
@@ -240,8 +245,7 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
     await expect
       .poll(async () => {
         const c = (await editor.clips()).find((x) => x.id === first.id);
-        const s = c?.properties.scale as { animated?: { keyframes?: unknown[] } } | undefined;
-        return s?.animated?.keyframes?.length ?? 0;
+        return kfCount(c?.properties.scale);
       })
       .toBe(2);
   });
@@ -251,8 +255,7 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
     await expect
       .poll(async () => {
         const c = (await editor.clips()).find((x) => x.id === first.id);
-        const s = c?.properties.scale as { animated?: { keyframes?: unknown[] } } | undefined;
-        return s?.animated?.keyframes?.length ?? 0;
+        return kfCount(c?.properties.scale);
       })
       .toBe(1);
     await page.getByTestId("redo").click();
