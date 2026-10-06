@@ -585,11 +585,22 @@ export class AiController {
   private finish(ev: AiTaskEvent, job: AiJob | undefined): void {
     const result = (ev.data.result ?? undefined) as Record<string, unknown> | undefined;
     const state: JobState =
-      ev.phase === "done" ? "done" : ev.phase === "cancelled" ? "cancelled" : "failed";
+      ev.phase === "cancelled" ? "cancelled" : ev.phase === "done" && !failedAtAll(result) ? "done" : "failed";
+    // o assistente devolve a falha do provedor como registro `status: "failed"` (fase `done`):
+    // também é erro para o usuário — nunca um silêncio
+    const failed = result?.status === "failed" ? result.error : undefined;
+    const failedPair = Array.isArray(failed)
+      ? { code: text(failed[0], "ERROR"), message: text(failed[1]) }
+      : typeof failed === "object" && failed !== null
+        ? {
+            code: text((failed as Record<string, unknown>).code, "ERROR"),
+            message: text((failed as Record<string, unknown>).message),
+          }
+        : undefined;
     const error =
       ev.phase === "error"
         ? { code: text(ev.data.code, "ERROR"), message: text(ev.data.message) }
-        : undefined;
+        : failedPair;
     this.store.set((s) => ({
       jobs: {
         ...s.jobs,
@@ -637,4 +648,8 @@ export class AiController {
       this.notify("error", error.code, error.message);
     }
   }
+}
+
+function failedAtAll(result: Record<string, unknown> | undefined): boolean {
+  return result?.status === "failed";
 }

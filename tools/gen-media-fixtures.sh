@@ -7,6 +7,9 @@ F="ffmpeg -hide_banner -loglevel error -y -bitexact -fflags +bitexact -flags:v +
 # vídeo 64x48, 25 fps, 1 s (25 frames) + áudio 48 kHz estéreo 1 s
 $F -f lavfi -i "testsrc=size=64x48:rate=25:duration=1" -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=1" \
    -c:v libx264 -preset veryfast -crf 35 -pix_fmt yuv420p -g 25 -c:a aac -b:a 32k -ac 2 -shortest video_audio.mp4
+# vídeo 64x48, 25 fps, 6 s + áudio 6 s (E2E do chat: "remova os primeiros 2 segundos")
+$F -f lavfi -i "testsrc=size=64x48:rate=25:duration=6" -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=6" \
+   -c:v libx264 -preset veryfast -crf 35 -pix_fmt yuv420p -g 25 -c:a aac -b:a 32k -ac 2 -shortest long_6s.mp4
 # vídeo + DOIS áudios (48 kHz e 44,1 kHz): seleção de stream padrão explícita
 $F -f lavfi -i "testsrc=size=64x48:rate=25:duration=1" -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=1" \
    -f lavfi -i "sine=frequency=880:sample_rate=44100:duration=1" -map 0:v -map 1:a -map 2:a \

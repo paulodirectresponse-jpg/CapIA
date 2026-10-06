@@ -49,7 +49,10 @@ const transcript = {
 async function boot(
   page: Page,
   scripts: Record<string, unknown[]> | null,
+  opts: { media?: string; frames?: number } = {},
 ): Promise<{ editor: Editor; server: Server; dir: string }> {
+  const mediaName = opts.media ?? "video_audio.mp4";
+  const frames = opts.frames ?? 30;
   const dir = mkdtempSync(join(tmpdir(), "capia-ai-e2e-"));
   const env: Record<string, string> = {};
   if (scripts) {
@@ -62,12 +65,12 @@ async function boot(
   const editor = new Editor(page, server);
   await editor.goto();
   await editor.createProject();
-  await editor.importMedia("video_audio.mp4");
+  await editor.importMedia(mediaName);
   await expect.poll(async () => (await editor.snapshot()).assets.length).toBe(1);
   const seq = await editor.sequence();
   const main = seq.tracks.find((t) => t.role === "main");
   if (!main) throw new Error("sem track principal");
-  const asset = await editor.assetIdByName("video_audio.mp4");
+  const asset = await editor.assetIdByName(mediaName);
   await editor.api("command.execute", {
     label: "setup",
     commands: [
@@ -78,7 +81,7 @@ async function boot(
         start: 0,
         clip: {
           id: "vclip",
-          duration: 30 * FRAME,
+          duration: frames * FRAME,
           content: { type: "media", asset, has_video: true, has_audio: true },
         },
       },
@@ -230,6 +233,67 @@ test("chat: ferramenta → preview → pede aprovação → aplicar → desfazer
   }
 });
 
+test('RC3: clipe selecionado → "remova os primeiros 2 segundos" → proposta → aprovar → timeline muda → desfazer volta exato', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const TWO_S = 2 * 705_600_000;
+  const { editor, server } = await boot(
+    page,
+    {
+      brain: [
+        toolCall("c0", "timeline.preview", {
+          label: "Remover os primeiros 2 segundos",
+          commands: [{ type: "trim_clip", clip: "vclip", edge: "in", to: TWO_S }],
+        }),
+        toolCall("c1", "timeline.apply_plan", { plan_token: "$LAST_PLAN_TOKEN" }),
+        textDelta("Removi os primeiros 2 segundos do clipe."),
+      ],
+    },
+    { media: "long_6s.mp4", frames: 150 },
+  );
+  try {
+    const original = (await editor.clips())[0];
+    if (!original) throw new Error("sem clipe");
+    expect(original.duration).toBe(150 * FRAME);
+    await configure(editor, { brain: true });
+    // seleciona o clipe PELA INTERFACE (clique na timeline)
+    const p = await editor.clipPoint(original.id, 0.5, 0.7);
+    await page.mouse.click(p.x, p.y);
+    const widthBefore = await page.evaluate(
+      () => window.__capiaTimeline?.clipRect("vclip")?.w ?? 0,
+    );
+    await page.getByTestId("rail-ai").click();
+    await page.getByTestId("ai-input").fill("remova os primeiros 2 segundos deste clipe");
+    await page.getByTestId("ai-send").click();
+    // a proposta aparece e NADA foi aplicado ainda
+    await expect(page.getByTestId("ai-approval")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("ai-approval")).toContainText("Remover os primeiros 2 segundos");
+    expect(JSON.stringify((await editor.clips())[0])).toBe(JSON.stringify(original));
+    await page.getByTestId("ai-approve").click();
+    // aprovado: a timeline muda (engine e interface)
+    await expect
+      .poll(async () => (await editor.clips())[0]?.duration, { timeout: 30_000 })
+      .toBe(original.duration - 60 * FRAME);
+    const after = (await editor.clips())[0];
+    expect(after?.source_in).toBe(original.source_in + TWO_S);
+    await expect
+      .poll(async () => page.evaluate(() => window.__capiaTimeline?.clipRect("vclip")?.w ?? 0))
+      .toBeLessThan(widthBefore);
+    await expect(page.getByTestId("ai-log")).toContainText("applied");
+    const hist = await editor.api<{ entries: { actor: { kind: string } }[] }>("history.list");
+    expect(hist.entries.at(-1)?.actor.kind).toBe("agent");
+    // desfazer (como qualquer edição): volta EXATAMENTE ao clipe original
+    await page.getByTestId("undo").click();
+    await expect
+      .poll(async () => JSON.stringify((await editor.clips())[0]))
+      .toBe(JSON.stringify(original));
+    await expect(page.getByTestId("error-boundary")).toHaveCount(0);
+  } finally {
+    server.child.kill();
+  }
+});
+
 test("chat: o usuário recusa e nada é aplicado; cancelar para a tarefa", async ({ page }) => {
   const { editor, server } = await boot(page, {
     brain: [
@@ -350,6 +414,135 @@ test("a chave de API é só de escrita: nada de segredo no DOM, no status nem no
     expect(diag).not.toContain(KEY);
     const stored = await page.evaluate(() => JSON.stringify(Object.entries(localStorage)));
     expect(stored).not.toContain(KEY);
+  } finally {
+    server.child.kill();
+  }
+});
+
+/** O editor continua vivo depois de uma falha: edição manual pela interface funciona e nada de tela de falha. */
+async function expectEditorAlive(page: Page, editor: Editor) {
+  await expect(page.getByTestId("error-boundary")).toHaveCount(0);
+  const clip = (await editor.clips())[0];
+  if (!clip) throw new Error("sem clipe");
+  const p = await editor.clipPoint(clip.id, 0.5, 0.7);
+  await page.mouse.click(p.x, p.y);
+  const name = page.getByTestId("clip-name");
+  await expect(name).toBeVisible();
+  await name.fill("Sobreviveu");
+  await name.blur();
+  await expect.poll(async () => (await editor.clips())[0]?.name).toBe("Sobreviveu");
+  await expect(page.getByTestId("error-boundary")).toHaveCount(0);
+}
+
+test("falha do provedor no chat: mensagem clara, sem tela preta, editor segue funcionando", async ({
+  page,
+}) => {
+  const { editor, server } = await boot(page, {
+    // erro "retentável": o roteador tenta de novo, então o roteiro falha em todas as tentativas
+    brain: Array.from({ length: 8 }, () => ({
+      kind: "error",
+      code: "PROVIDER_UNAVAILABLE",
+      message: "provedor fora do ar (simulado)",
+      status: 503,
+      after_events: [],
+    })),
+  });
+  try {
+    await configure(editor, { brain: true });
+    await page.getByTestId("rail-ai").click();
+    await page.getByTestId("ai-input").fill("oi");
+    await page.getByTestId("ai-send").click();
+    // a tarefa termina (sem "parar" pendente) e a falha fica visível ao usuário
+    await expect(page.getByTestId("ai-stop")).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId("ai-panel")).toContainText(/fora do ar|unavailable|indispon/i, {
+      timeout: 15_000,
+    });
+    await expectEditorAlive(page, editor);
+  } finally {
+    server.child.kill();
+  }
+});
+
+test("falha da transcrição: tarefa falha com aviso, sem aplicar nada e sem derrubar a interface", async ({
+  page,
+}) => {
+  const { editor, server } = await boot(page, {
+    stt: Array.from({ length: 8 }, () => ({
+      kind: "error",
+      code: "PROVIDER_TIMEOUT",
+      message: "transcrição expirou (simulado)",
+      status: 504,
+      after_events: [],
+    })),
+  });
+  try {
+    await configure(editor, { stt: true });
+    await page.getByTestId("rail-ai").click();
+    await page.getByRole("tab", { name: /AI tools|Ferramentas de IA/ }).click();
+    await page.getByTestId("ai-captions").click();
+    await expect(page.getByTestId("ai-jobs")).toContainText(/fail|falh|expir|timeout/i, {
+      timeout: 30_000,
+    });
+    expect((await editor.clips()).filter((c) => c.content.type === "text")).toHaveLength(0);
+    expect(await page.getByTestId("ai-offer").count()).toBe(0);
+    await expectEditorAlive(page, editor);
+  } finally {
+    server.child.kill();
+  }
+});
+
+test("cancelar uma resposta em andamento para a tarefa e o chat continua utilizável", async ({
+  page,
+}) => {
+  const slow = {
+    kind: "chat",
+    events: Array.from({ length: 200 }, (_, i) => ({
+      event: "text_delta",
+      text: `parte ${String(i)} `,
+    })),
+    chunk_delay_ms: 100,
+  };
+  const { editor, server } = await boot(page, { brain: [slow, textDelta("pronto de novo")] });
+  try {
+    await configure(editor, { brain: true });
+    await page.getByTestId("rail-ai").click();
+    await page.getByTestId("ai-input").fill("conte uma história longa");
+    await page.getByTestId("ai-send").click();
+    await expect(page.getByTestId("ai-stop")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("ai-log")).toContainText("parte", { timeout: 15_000 });
+    await page.getByTestId("ai-stop").click();
+    await expect(page.getByTestId("ai-stop")).toBeHidden({ timeout: 15_000 });
+    // o chat segue vivo: nova pergunta funciona
+    await page.getByTestId("ai-input").fill("e agora?");
+    await expect(page.getByTestId("ai-send")).toBeEnabled();
+    await page.getByTestId("ai-send").click();
+    await expect(page.getByTestId("ai-log")).toContainText("pronto de novo", { timeout: 30_000 });
+    await expectEditorAlive(page, editor);
+  } finally {
+    server.child.kill();
+  }
+});
+
+test("erro inesperado do engine (HTTP 500/JSON inválido) é recuperável: aviso, sem tela preta, tenta de novo", async ({
+  page,
+}) => {
+  const { editor, server } = await boot(page, null);
+  try {
+    // o engine responde lixo uma vez às chamadas de IA
+    let broken = true;
+    await page.route("**/api/ai.status", async (route) => {
+      if (broken) await route.fulfill({ status: 500, body: "<<<não é json>>>" });
+      else await route.continue();
+    });
+    await page.getByTestId("rail-ai").click();
+    await expect(page.getByTestId("ai-panel")).toBeVisible();
+    await expectEditorAlive(page, editor);
+    // recuperou: voltando a funcionar, o painel carrega normalmente
+    broken = false;
+    await page.getByTestId("rail-media").click();
+    await page.getByTestId("rail-ai").click();
+    await expect(page.getByTestId("ai-not-configured")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("error-boundary")).toHaveCount(0);
   } finally {
     server.child.kill();
   }
