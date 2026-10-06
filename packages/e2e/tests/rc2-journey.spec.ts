@@ -168,6 +168,8 @@ test("RC2 journey: 25 human steps", async ({ editor, page, server }) => {
   });
 
   await test.step("8. selecionar o clipe da esquerda e aplicar transição entre os dois", async () => {
+    // a UI recebe o clipe inserido pela API via evento (poll): espera o clipe B aparecer
+    await editor.clipPoint("rc2-clip-b", 0.5, 0.5);
     const p = await editor.clipPoint(first.id, 0.5, 0.5);
     await page.mouse.click(p.x, p.y);
     await page.getByTestId("rail-transitions").click();
