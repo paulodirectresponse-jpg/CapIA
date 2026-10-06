@@ -87,6 +87,8 @@ pub struct Session {
     cfg: SessionConfig,
     open: Option<Open>,
     toolchain: Option<MediaToolchain>,
+    /// Por que o FFmpeg/ffprobe não foi localizado (diagnóstico: mensagem do `MediaError`).
+    toolchain_error: Option<String>,
     services: Option<Arc<RenderServices>>,
     events: EventQueue,
     exports: export::Exports,
@@ -212,8 +214,11 @@ struct FolderParam {
 impl Session {
     pub fn new(cfg: SessionConfig) -> Self {
         let actor = cfg.actor.clone().unwrap_or_else(|| Actor::user("editor"));
+        let located = MediaToolchain::locate(&cfg.media);
+        let toolchain_error = located.as_ref().err().map(|e| e.to_string());
         Self {
-            toolchain: MediaToolchain::locate(&cfg.media).ok(),
+            toolchain: located.ok(),
+            toolchain_error,
             cfg,
             open: None,
             services: None,
@@ -475,6 +480,7 @@ impl Session {
                 let mut v = serde_json::to_value(engine_info())?;
                 v["media_available"] = json!(self.toolchain.is_some());
                 v["media_version"] = json!(self.toolchain.as_ref().map(|t| t.version.clone()));
+                v["media_error"] = json!(self.toolchain_error.clone());
                 Ok(Reply::Json(v))
             }
             "project.create" => {

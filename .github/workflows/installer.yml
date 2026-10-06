@@ -63,14 +63,30 @@ jobs:
       - name: Instalar FFmpeg (do CI, só para testes)
         run: ./tools/ci/install-ffmpeg-windows.ps1
 
-      - name: Copiar FFmpeg do CI para staging
+      - name: Copiar FFmpeg do CI para staging (binário REAL, nunca o shim do Chocolatey)
         shell: pwsh
         run: |
-          $dir = Split-Path (Get-Command ffprobe).Source
+          # `Get-Command ffprobe` pode apontar para um shim minúsculo do Chocolatey (só funciona com o
+          # caminho original): o bundle precisa do binário de verdade e das DLLs que ele carrega.
+          $cmd = Split-Path (Get-Command ffprobe).Source
+          $real = $null
+          foreach ($root in @($cmd, $env:ChocolateyInstall, 'C:\ProgramData\chocolatey', $env:RUNNER_TEMP)) {
+            if (-not $root -or -not (Test-Path $root)) { continue }
+            $f = Get-ChildItem $root -Recurse -Filter ffprobe.exe -ErrorAction SilentlyContinue |
+              Where-Object { $_.Length -gt 1MB } | Select-Object -First 1
+            if ($f) { $real = $f.DirectoryName; break }
+          }
+          if (-not $real) { throw "binário real do ffprobe não encontrado (shim em $cmd)" }
+          Write-Host "FFmpeg real em: $real"
           New-Item -ItemType Directory -Force -Path ffmpeg-ci | Out-Null
-          Copy-Item "$dir\ffmpeg.exe", "$dir\ffprobe.exe" ffmpeg-ci\
-          Get-ChildItem $dir -Filter *.dll | Copy-Item -Destination ffmpeg-ci\
-          if (Test-Path "$dir\..\LICENSE") { Copy-Item "$dir\..\LICENSE" ffmpeg-ci\LICENSE.txt } else { Set-Content ffmpeg-ci\LICENSE.txt 'CI-only FFmpeg build; see upstream license.' }
+          Copy-Item "$real\ffmpeg.exe", "$real\ffprobe.exe" ffmpeg-ci\
+          Get-ChildItem $real -Filter *.dll -ErrorAction SilentlyContinue | Copy-Item -Destination ffmpeg-ci\
+          foreach ($lic in "$real\..\LICENSE", "$real\..\..\LICENSE", "$real\LICENSE") { if (Test-Path $lic) { Copy-Item $lic ffmpeg-ci\LICENSE.txt; break } }
+          if (-not (Test-Path ffmpeg-ci\LICENSE.txt)) { Set-Content ffmpeg-ci\LICENSE.txt 'CI-only FFmpeg build; see upstream license.' }
+          # prova ANTES de empacotar: o binário copiado roda sozinho, fora do PATH e do diretório original
+          $v = & "$PWD\ffmpeg-ci\ffprobe.exe" -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0 -or -not $v) { throw 'o ffprobe copiado não roda fora do diretório original (faltam DLLs?)' }
+          Write-Host $v
 
       - name: Licença do FFmpeg (ADR-032) — relatório
         # O FFmpeg do CI normalmente é GPL (essentials): o relatório prova que o verificador REPROVA e o

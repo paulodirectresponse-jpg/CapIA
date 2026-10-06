@@ -189,7 +189,13 @@ pub fn run(opts: &SelfTestOptions) -> (bool, Value) {
             if media {
                 Ok(json!({"available": true}))
             } else {
-                Err("FFmpeg/ffprobe not found next to the executable (<install>/ffmpeg)".into())
+                let why = info
+                    .as_ref()
+                    .and_then(|i| i["media_error"].as_str().map(str::to_owned))
+                    .unwrap_or_else(|| "unknown".into());
+                Err(format!(
+                    "FFmpeg/ffprobe unusable next to the executable (<install>/ffmpeg): {why}"
+                ))
             }
         });
     }
