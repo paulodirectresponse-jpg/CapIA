@@ -20,6 +20,8 @@ pub struct OpenAiProvider {
     extra: Vec<(String, String)>,
     /// `api.openai.com` usa `max_completion_tokens`; os demais, `max_tokens`.
     new_token_param: bool,
+    /// OpenAI nativo (`api.openai.com`): `POST /v1/responses` em vez de `chat/completions`.
+    responses_api: bool,
 }
 
 impl core::fmt::Debug for OpenAiProvider {
@@ -47,6 +49,11 @@ impl OpenAiProvider {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             new_token_param,
+            responses_api: match cfg.api_style.as_deref() {
+                Some("responses") => true,
+                Some("chat_completions") => false,
+                _ => new_token_param,
+            },
         })
     }
 
@@ -385,6 +392,23 @@ impl ModelProvider for OpenAiProvider {
     }
 
     async fn chat(&self, req: &ChatRequest, ctx: &CallCtx) -> Result<ChatStream, ProviderError> {
+        if self.responses_api {
+            let body = self.build_responses_body(req)?;
+            let rb = self.headers(self.http.post("responses")?)?.json(&body);
+            let resp = self.http.send(rb, &ctx.cancel).await?;
+            return if resp.is_event_stream() {
+                Ok(super::openai_responses::sse_stream(
+                    resp,
+                    ctx.cancel.clone(),
+                ))
+            } else {
+                let v: Value = resp.json(&ctx.cancel).await?;
+                let events = super::openai_responses::events_from_response(&v)?;
+                Ok(Box::pin(futures_util::stream::iter(
+                    events.into_iter().map(Ok),
+                )))
+            };
+        }
         let body = self.build_body(req)?;
         let rb = self
             .headers(self.http.post("chat/completions")?)?

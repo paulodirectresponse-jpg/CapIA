@@ -14,6 +14,7 @@ use std::sync::Arc;
 pub mod anthropic;
 pub mod google;
 pub mod openai;
+mod openai_responses;
 pub mod replay;
 pub mod whisper;
 

@@ -77,6 +77,10 @@ pub struct ProviderConfig {
     /// Aceita URL `http://` em loopback (proxy/gateway local de um provider de nuvem). Opt-in explícito.
     #[serde(default)]
     pub allow_loopback: bool,
+    /// Força o estilo de API OpenAI: `"responses"` (`/v1/responses`) ou `"chat_completions"`.
+    /// Ausente: `api.openai.com` usa Responses; os demais endpoints, Chat Completions.
+    #[serde(default)]
+    pub api_style: Option<String>,
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
@@ -120,6 +124,7 @@ impl ProviderConfig {
             max_concurrency: default_concurrency(),
             rate_limit: None,
             allow_loopback: false,
+            api_style: None,
             enabled: false,
             created_at: 0,
         }
