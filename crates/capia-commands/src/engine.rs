@@ -1216,9 +1216,10 @@ fn resolve_refs(cmd: &mut Command, refs: &BTreeMap<String, String>) -> Result<()
         Command::AddTrack { sequence, .. } | Command::AddMarker { sequence, .. } => {
             sub(&mut sequence.0, refs)?
         }
-        Command::SetTrackFlags { track, .. } | Command::DeleteTrack { track } => {
-            sub(&mut track.0, refs)?
-        }
+        Command::SetTrackFlags { track, .. }
+        | Command::DeleteTrack { track }
+        | Command::RenameTrack { track, .. }
+        | Command::MoveTrack { track, .. } => sub(&mut track.0, refs)?,
         Command::DeleteSequence { sequence } | Command::RenameSequence { sequence, .. } => {
             sub(&mut sequence.0, refs)?
         }

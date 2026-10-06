@@ -217,6 +217,16 @@ pub enum Command {
     DeleteTrack {
         track: TrackId,
     },
+    /// Renomeia a track (nome livre do usuário; vazio volta ao nome automático).
+    RenameTrack {
+        track: TrackId,
+        name: String,
+    },
+    /// Reordena a track na pilha da sequence (`index` = nova posição, 0-based, na ordem do documento).
+    MoveTrack {
+        track: TrackId,
+        index: usize,
+    },
     /// Apaga a sequence (e seu conteúdo). Recusa com `IN_USE` se outra sequence a usa como nested.
     DeleteSequence {
         sequence: SequenceId,
@@ -500,6 +510,8 @@ impl Command {
             Self::AddTrack { .. } => "add_track",
             Self::SetTrackFlags { .. } => "set_track_flags",
             Self::DeleteTrack { .. } => "delete_track",
+            Self::RenameTrack { .. } => "rename_track",
+            Self::MoveTrack { .. } => "move_track",
             Self::DeleteSequence { .. } => "delete_sequence",
             Self::RenameSequence { .. } => "rename_sequence",
             Self::InsertNested { .. } => "insert_nested",

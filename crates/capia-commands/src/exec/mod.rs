@@ -173,6 +173,8 @@ pub(crate) fn execute_command(ctx: &mut Ctx, command: &Command) -> Result<Comman
             },
         ),
         Command::DeleteTrack { track } => structure::delete_track(ctx, track),
+        Command::RenameTrack { track, name } => structure::rename_track(ctx, track, name),
+        Command::MoveTrack { track, index } => structure::move_track(ctx, track, *index),
         Command::DeleteSequence { sequence } => structure::delete_sequence(ctx, sequence),
         Command::RenameSequence { sequence, name } => {
             structure::rename_sequence(ctx, sequence, name)

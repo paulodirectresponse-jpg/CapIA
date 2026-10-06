@@ -342,6 +342,60 @@ pub(crate) fn set_track_flags(
     Ok(ctx.take_output(None))
 }
 
+/// Nome livre da track: até 64 caracteres, sem controle; vazio = nome automático da UI.
+pub(crate) fn rename_track(ctx: &mut Ctx, track_id: &TrackId, name: &str) -> Result<CommandOutput> {
+    let name = name.trim();
+    if name.chars().count() > 64 || name.chars().any(char::is_control) {
+        return Err(CommandError::new(
+            ErrorCode::InvalidArgument,
+            "track name must have at most 64 characters and no control characters",
+        ));
+    }
+    let (seq_id, old) = ctx.locate_track(track_id)?;
+    if old.name == name {
+        return Ok(ctx.take_output(None));
+    }
+    let index = ctx.sequence(&seq_id)?.track_position(track_id).unwrap_or(0);
+    let mut new = old.clone();
+    name.clone_into(&mut new.name);
+    ctx.emit(PrimitiveOp::Track {
+        sequence: seq_id,
+        id: track_id.clone(),
+        old: Some(TrackSlot { index, track: old }),
+        new: Some(TrackSlot { index, track: new }),
+    })?;
+    Ok(ctx.take_output(None))
+}
+
+/// Reordena a track na pilha. Os clips acompanham a track (pertencem a ela por id).
+pub(crate) fn move_track(ctx: &mut Ctx, track_id: &TrackId, to: usize) -> Result<CommandOutput> {
+    let (seq_id, track) = ctx.locate_track(track_id)?;
+    track_locked(&track)?;
+    let (from, count) = {
+        let s = ctx.sequence(&seq_id)?;
+        (s.track_position(track_id).unwrap_or(0), s.tracks().len())
+    };
+    if to >= count {
+        return Err(CommandError::new(
+            ErrorCode::OutOfRange,
+            format!("index {to} >= {count}"),
+        ));
+    }
+    if to == from {
+        return Ok(ctx.take_output(None));
+    }
+    ctx.emit(PrimitiveOp::Track {
+        sequence: seq_id,
+        id: track_id.clone(),
+        old: Some(TrackSlot {
+            index: from,
+            track: track.clone(),
+        }),
+        new: Some(TrackSlot { index: to, track }),
+    })?;
+    Ok(ctx.take_output(None))
+}
+
 pub(crate) fn delete_track(ctx: &mut Ctx, track_id: &TrackId) -> Result<CommandOutput> {
     let (seq_id, track) = ctx.locate_track(track_id)?;
     track_locked(&track)?;

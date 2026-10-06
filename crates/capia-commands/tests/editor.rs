@@ -787,3 +787,116 @@ fn point_snap_prefers_the_playhead_then_markers_then_edges_and_respects_exclusio
     // fim do clip (20F) e marcador (30F) a 5F: o marcador tem prioridade maior
     assert_eq!((hit.kind, hit.t), (SnapTargetKind::Marker, frames(30)));
 }
+
+fn track_ids(w: &W) -> Vec<String> {
+    w.e.document()
+        .sequence(&"s".into())
+        .unwrap()
+        .tracks()
+        .iter()
+        .map(|t| t.id.0.clone())
+        .collect()
+}
+
+fn add_visual(w: &mut W, id: &str) {
+    w.cmd(Command::AddTrack {
+        sequence: "s".into(),
+        id: Some(id.into()),
+        kind: TrackKind::Visual,
+        name: None,
+        role: None,
+        magnetic: false,
+        index: None,
+    })
+    .unwrap();
+}
+
+#[test]
+fn tracks_can_be_renamed_and_reordered_and_clips_follow_their_track() {
+    let mut w = W::new();
+    add_visual(&mut w, "v2");
+    add_visual(&mut w, "v3");
+    w.media(0, 30, "c1", 0).unwrap(); // clip na track "v"
+    assert_eq!(track_ids(&w), ["v", "a", "v2", "v3"]);
+
+    // renomear (livre) e desfazer
+    w.cmd(Command::RenameTrack {
+        track: "v".into(),
+        name: "  B-roll do cliente ".into(),
+    })
+    .unwrap();
+    let name = |w: &W| {
+        w.e.document()
+            .sequence(&"s".into())
+            .unwrap()
+            .track(&"v".into())
+            .unwrap()
+            .name
+            .clone()
+    };
+    assert_eq!(name(&w), "B-roll do cliente");
+    w.e.undo(&Actor::user("t"), 0).unwrap();
+    assert_eq!(name(&w), "");
+    w.e.redo(&Actor::user("t"), 0).unwrap();
+    assert_eq!(name(&w), "B-roll do cliente");
+    // nome inválido
+    assert_eq!(
+        code(w.cmd(Command::RenameTrack {
+            track: "v".into(),
+            name: "x".repeat(65)
+        })),
+        ErrorCode::InvalidArgument
+    );
+
+    // reordenar: "v" vai para o fim; o clip continua na mesma track
+    w.cmd(Command::MoveTrack {
+        track: "v".into(),
+        index: 3,
+    })
+    .unwrap();
+    assert_eq!(track_ids(&w), ["a", "v2", "v3", "v"]);
+    let seq = w.e.document().sequence(&"s".into()).unwrap();
+    assert_eq!(seq.clip(&"c1".into()).unwrap().track.0, "v");
+    // desfazer/refazer restauram a ordem exata
+    w.e.undo(&Actor::user("t"), 0).unwrap();
+    assert_eq!(track_ids(&w), ["v", "a", "v2", "v3"]);
+    w.e.redo(&Actor::user("t"), 0).unwrap();
+    assert_eq!(track_ids(&w), ["a", "v2", "v3", "v"]);
+
+    // fora do intervalo; track travada não move
+    assert_eq!(
+        code(w.cmd(Command::MoveTrack {
+            track: "v".into(),
+            index: 9
+        })),
+        ErrorCode::OutOfRange
+    );
+    w.cmd(Command::SetTrackFlags {
+        track: "v2".into(),
+        locked: Some(true),
+        hidden: None,
+        muted: None,
+        solo: None,
+        magnetic: None,
+        sync_lock: None,
+        group: None,
+        clear_group: false,
+        compact: false,
+    })
+    .unwrap();
+    assert_eq!(
+        code(w.cmd(Command::MoveTrack {
+            track: "v2".into(),
+            index: 0
+        })),
+        ErrorCode::TrackLocked
+    );
+    // mover para onde já está não gera mudança
+    let before = track_ids(&w);
+    w.cmd(Command::MoveTrack {
+        track: "v".into(),
+        index: 3,
+    })
+    .unwrap();
+    assert_eq!(track_ids(&w), before);
+}
