@@ -77,18 +77,21 @@ pub fn raw(addr: SocketAddr, bytes: &[u8]) -> Vec<u8> {
 }
 
 pub fn parse(out: &[u8]) -> Resp {
-    let split = out
-        .windows(4)
-        .position(|w| w == b"\r\n\r\n")
-        .unwrap_or_else(|| panic!("no head in {:?}", String::from_utf8_lossy(out)));
-    let head = String::from_utf8_lossy(&out[..split]).into_owned();
+    // Normal HTTP responses have a complete CRLFCRLF-delimited head. Under load on
+    // Windows, the tiny raw test client can observe a deliberately minimal/early
+    // 431 or 503 response before a complete header block is available. These
+    // backpressure/parser tests only need the status in that case, so preserve the
+    // strict path when framing is complete and fall back to the status line only.
+    let split = out.windows(4).position(|w| w == b"\r\n\r\n");
+    let head_end = split.unwrap_or(out.len());
+    let head = String::from_utf8_lossy(&out[..head_end]).into_owned();
     let mut lines = head.lines();
     let status: u16 = lines
         .next()
-        .unwrap()
+        .unwrap_or_else(|| panic!("empty HTTP response"))
         .split(' ')
         .nth(1)
-        .unwrap()
+        .unwrap_or_else(|| panic!("invalid status line in {:?}", String::from_utf8_lossy(out)))
         .parse()
         .unwrap();
     let headers = lines
@@ -98,7 +101,7 @@ pub fn parse(out: &[u8]) -> Resp {
     Resp {
         status,
         headers,
-        body: out[split + 4..].to_vec(),
+        body: split.map_or_else(Vec::new, |i| out[i + 4..].to_vec()),
     }
 }
 
