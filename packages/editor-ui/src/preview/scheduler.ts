@@ -138,6 +138,34 @@ export function pickAutoHeight(
   return current;
 }
 
+/**
+ * Qualidade automática **estável**: um pico isolado de latência (abrir o decode do próximo clip num
+ * corte) nunca troca a resolução — troca recria o quadro e pisca. Exige a condição sustentada por
+ * `CONFIRM` avaliações seguidas e respeita um intervalo mínimo entre trocas.
+ */
+export class AutoQuality {
+  static readonly CONFIRM = 6;
+  static readonly COOLDOWN_MS = 4000;
+  private streak = 0;
+  private lastSwitch = Number.NEGATIVE_INFINITY;
+
+  constructor(private readonly now: () => number = () => performance.now()) {}
+
+  update(current: 540 | 720, avgLatencyMs: number, frameMs: number): 540 | 720 {
+    const want = pickAutoHeight(current, avgLatencyMs, frameMs);
+    if (want === current) {
+      this.streak = 0;
+      return current;
+    }
+    this.streak += 1;
+    if (this.streak < AutoQuality.CONFIRM || this.now() - this.lastSwitch < AutoQuality.COOLDOWN_MS)
+      return current;
+    this.streak = 0;
+    this.lastSwitch = this.now();
+    return want;
+  }
+}
+
 /** Resolução de saída do preview: altura escolhida (e metade em modo proxy), largura pela razão. */
 export function previewSize(
   seqW: number,

@@ -413,7 +413,8 @@ export const en = {
   "crash.saved": "Your project is safe: every edit is saved immediately.",
   "crash.retry": "Try again",
   "crash.reload": "Reload the editor",
-  "err.NO_CAPABLE_MODEL": "To do this, connect a compatible model (transcription: whisper-1). Open Connect AI.",
+  "err.NO_CAPABLE_MODEL":
+    "To do this, connect a compatible model (transcription: whisper-1). Open Connect AI.",
   "ai.settings.title": "AI providers and models",
   "ai.off.banner": "AI is off. Everything else in the editor keeps working.",
   "ai.enabled": "AI features enabled",

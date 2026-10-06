@@ -9,7 +9,7 @@ import { CanvasPresenter } from "../preview/presenter";
 import {
   EMPTY_METRICS,
   FrameScheduler,
-  pickAutoHeight,
+  AutoQuality,
   previewSize,
   type PreviewMetrics,
 } from "../preview/scheduler";
@@ -94,11 +94,11 @@ export function PreviewPanel() {
     };
   }, [c]);
 
-  // qualidade automática: ajusta pela latência média (histerese)
+  // qualidade automática: ajusta pela latência média, só quando a lentidão é sustentada
+  const autoQuality = useRef(new AutoQuality());
   useEffect(() => {
     if (quality !== "auto" || metrics.presented < 4) return;
-    const next = pickAutoHeight(autoH, metrics.avgLatencyMs, frameMs);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reação a métrica medida
+    const next = autoQuality.current.update(autoH, metrics.avgLatencyMs, frameMs);
     if (next !== autoH) setAutoH(next);
   }, [quality, autoH, metrics.avgLatencyMs, metrics.presented, frameMs]);
 
@@ -232,8 +232,6 @@ export function PreviewPanel() {
             data-mode={metrics.mode}
             data-presented={metrics.presented}
             data-transport={c.frames.kind}
-            width={size.width}
-            height={size.height}
           />
           {safeAreas && (
             <div className="ed-safe" data-testid="safe-areas" aria-hidden="true">

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { FrameScheduler, pickAutoHeight, previewSize, type FrameData } from "./scheduler";
+import {
+  AutoQuality,
+  FrameScheduler,
+  pickAutoHeight,
+  previewSize,
+  type FrameData,
+} from "./scheduler";
 
 function deferred() {
   let resolve!: (f: FrameData) => void;
@@ -104,5 +110,32 @@ describe("qualidade do preview", () => {
     expect(pickAutoHeight(720, 40, 33)).toBe(720);
     expect(pickAutoHeight(540, 20, 33)).toBe(720);
     expect(pickAutoHeight(540, 30, 33)).toBe(540);
+  });
+});
+
+describe("AutoQuality (sem piscar nos cortes)", () => {
+  it("um pico isolado de latência no corte não troca a resolução", () => {
+    let now = 0;
+    const q = new AutoQuality(() => now);
+    for (let i = 0; i < 20; i++) {
+      now += 33;
+      // 1 avaliação lenta no corte, o resto normal
+      const avg = i === 10 ? 120 : 20;
+      expect(q.update(720, avg, 33)).toBe(720);
+    }
+  });
+
+  it("lentidão sustentada reduz uma vez e respeita o intervalo mínimo", () => {
+    let now = 10_000;
+    const q = new AutoQuality(() => now);
+    let cur: 540 | 720 = 720;
+    for (let i = 0; i < AutoQuality.CONFIRM; i++) cur = q.update(cur, 120, 33);
+    expect(cur).toBe(540);
+    // logo depois, melhora sustentada NÃO volta antes do cooldown
+    for (let i = 0; i < AutoQuality.CONFIRM * 2; i++) cur = q.update(cur, 5, 33);
+    expect(cur).toBe(540);
+    now += AutoQuality.COOLDOWN_MS + 1;
+    for (let i = 0; i < AutoQuality.CONFIRM; i++) cur = q.update(cur, 5, 33);
+    expect(cur).toBe(720);
   });
 });
