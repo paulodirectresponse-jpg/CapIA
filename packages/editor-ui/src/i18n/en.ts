@@ -269,7 +269,7 @@ export const en = {
   "captions.merge": "Merge with next",
   "captions.style": "Caption style",
   "transitions.apply": "Apply to selected clip",
-  "transitions.needsCut": "Select a clip that has a previous clip on the same track",
+  "transitions.needsCut": "Place the transition between two clips that touch.",
   "audio.panelHint": "Audio-only clips and tracks appear here.",
   "audio.addTrack": "Add audio track",
 

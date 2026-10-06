@@ -271,7 +271,7 @@ export const ptBR: Record<MessageKey, string> = {
   "captions.merge": "Juntar com a próxima",
   "captions.style": "Estilo da legenda",
   "transitions.apply": "Aplicar ao clip selecionado",
-  "transitions.needsCut": "Selecione um clip que tenha um clip anterior na mesma track",
+  "transitions.needsCut": "Coloque a transição entre dois clipes encostados.",
   "audio.panelHint": "Clips e tracks só de áudio aparecem aqui.",
   "audio.addTrack": "Adicionar track de áudio",
 
@@ -376,7 +376,7 @@ export const ptBR: Record<MessageKey, string> = {
   "err.NOT_FRAME_ALIGNED": "Os tempos precisam estar alinhados a quadros inteiros.",
   "err.INSUFFICIENT_HANDLES":
     "Não há sobra de mídia suficiente para essa transição. Use mergulho ou uma duração menor.",
-  "err.NOT_ON_BOUNDARY": "Isso precisa acontecer na fronteira entre clips.",
+  "err.NOT_ON_BOUNDARY": "Coloque a transição entre dois clipes encostados.",
   "err.INVALID_SPLIT_POINT": "O playhead não está dentro de um clip.",
   "err.OUT_OF_CLIP_RANGE": "Esse instante está fora do clip.",
   "err.CONFLICT": "O projeto mudou nesse meio-tempo. Tente de novo.",

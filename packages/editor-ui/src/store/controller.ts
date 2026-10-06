@@ -1140,15 +1140,23 @@ export class EditorController {
     for (const id of this.state.selection) {
       const cl = seq.clips[id];
       if (!cl) continue;
-      const prev = Object.values(seq.clips).find(
-        (x) => x.track === cl.track && x.start + x.duration === cl.start,
-      );
+      const all = Object.values(seq.clips);
+      let prev = all.find((x) => x.track === cl.track && x.start + x.duration === cl.start);
+      let target = cl;
+      if (!prev) {
+        // clip selecionado é o da esquerda do corte: a transição vive no clip da direita
+        const next = all.find((x) => x.track === cl.track && x.start === cl.start + cl.duration);
+        if (next) {
+          prev = cl;
+          target = next;
+        }
+      }
       if (prev) {
         // meio segundo, mas nunca mais que a metade do menor dos dois clips (o engine valida o resto)
-        const cap = Math.floor(Math.min(prev.duration, cl.duration) / 2 / frame) * frame;
+        const cap = Math.floor(Math.min(prev.duration, target.duration) / 2 / frame) * frame;
         const duration = Math.min(Math.round(TICKS_PER_SECOND / 2 / frame) * frame, cap);
         if (duration >= frame)
-          cmds.push({ type: "set_transition", clip: id, transition: { kind, duration } });
+          cmds.push({ type: "set_transition", clip: target.id, transition: { kind, duration } });
       }
     }
     if (cmds.length === 0) {
