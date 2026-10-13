@@ -1,0 +1,157 @@
+[
+ {
+  "N": 100,
+  "loadMs": 787,
+  "dom": 1511,
+  "heapMB": 72,
+  "longTaskMaxMs": 330,
+  "longTasks": 3,
+  "nTracks": 2,
+  "idleFrame": {
+   "p50": 17,
+   "p95": 17,
+   "max": 17
+  },
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 83,
+   "max": 250
+  },
+  "zoomMs": null,
+  "zoomOutMs": 230,
+  "cmd": {
+   "split": 92.7,
+   "move": 138.5,
+   "trim": 88.4,
+   "del": 121.3,
+   "undo": 106.8,
+   "serializeMs": 1,
+   "jsonMB": 0.04
+  },
+  "saveMs": 17
+ },
+ {
+  "N": 500,
+  "loadMs": 1687,
+  "dom": 5647,
+  "heapMB": 155,
+  "longTaskMaxMs": 846,
+  "longTasks": 3,
+  "nTracks": 10,
+  "idleFrame": {
+   "p50": 17,
+   "p95": 17,
+   "max": 17
+  },
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 217,
+   "max": 500
+  },
+  "zoomMs": null,
+  "zoomOutMs": 663,
+  "cmd": {
+   "split": 323.6,
+   "move": 513.2,
+   "trim": 282.6,
+   "del": 266.6,
+   "undo": 271.1,
+   "serializeMs": 2,
+   "jsonMB": 0.2
+  },
+  "saveMs": 21
+ },
+ {
+  "N": 1000,
+  "loadMs": 2585,
+  "dom": 10817,
+  "heapMB": 235,
+  "longTaskMaxMs": 1510,
+  "longTasks": 4,
+  "nTracks": 20,
+  "idleFrame": {
+   "p50": 17,
+   "p95": 50,
+   "max": 67
+  },
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 400,
+   "max": 467
+  },
+  "zoomMs": null,
+  "zoomOutMs": 865,
+  "cmd": {
+   "split": 457.1,
+   "move": 1080.3,
+   "trim": 465,
+   "del": 500.4,
+   "undo": 463.9,
+   "serializeMs": 3,
+   "jsonMB": 0.41
+  },
+  "saveMs": 36
+ },
+ {
+  "N": 5000,
+  "loadMs": 11384,
+  "dom": 52156,
+  "heapMB": 959,
+  "longTaskMaxMs": 8210,
+  "longTasks": 5,
+  "nTracks": 100,
+  "idleFrame": {
+   "p50": 17,
+   "p95": 17,
+   "max": 67
+  },
+  "scrollFrame": {
+   "p50": 33,
+   "p95": 4050,
+   "max": 4267
+  },
+  "zoomMs": null,
+  "zoomOutMs": 4700,
+  "cmd": {
+   "split": 2601.8,
+   "move": 4522.6,
+   "trim": 3622.8,
+   "del": 2732.4,
+   "undo": 2721.9,
+   "serializeMs": 18,
+   "jsonMB": 2.04
+  },
+  "saveMs": 224
+ },
+ {
+  "N": 10000,
+  "loadMs": 22475,
+  "dom": 103856,
+  "heapMB": 1857,
+  "longTaskMaxMs": 16472,
+  "longTasks": 9,
+  "nTracks": 200,
+  "idleFrame": {
+   "p50": 17,
+   "p95": 17,
+   "max": 50
+  },
+  "scrollFrame": {
+   "p50": 33,
+   "p95": 6600,
+   "max": 8916
+  },
+  "zoomMs": null,
+  "zoomOutMs": 11304,
+  "cmd": {
+   "split": 4581.2,
+   "move": 9906,
+   "trim": 6200.5,
+   "del": 6397.3,
+   "undo": 6113,
+   "serializeMs": 39,
+   "jsonMB": 4.1
+  },
+  "saveMs": 228
+ }
+]

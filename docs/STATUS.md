@@ -1,5 +1,10 @@
 # STATUS
 
+> **ESTRATÉGIA EM AVALIAÇÃO (nova base open-source):** Fase 1 → `docs/research/open-source-base-evaluation.md` (Timeline Studio rejeitado). **Fase 1B → `docs/research/opencut-classic-validation.md`: decisão `ADOPT_OPENCUT_CLASSIC_WITH_MAJOR_CHANGES` (score 62,9/100; confiança 66/100)**; plano da Fase 2 em `docs/research/opencut-adoption-plan.md` — **não executado**. Branch `research/opencut-classic-validation`; `main` e o núcleo próprio permanecem intactos; nenhum código do OpenCut foi importado.
+
+
+**Última atualização:** 2026-10-02 · **Fase atual:** FASE 1 — Fundação (encerrada tecnicamente na M04; ver "Gates") · **Próxima:** FASE 2 — Motor
+
 > **RC3 (0.6.0-rc.3) — leia primeiro.** Candidata de correção depois de auditoria externa do RC2: executor de jobs com ordem `Queued → Running → terminal`, **timeline livre** (sem tracks fixas; comandos `rename_track`/`move_track`), **redesign** (rail de 5 itens, inspector contextual, Texto+Legendas, Sequências à vista), **export medido e ~2× mais rápido**, harness do **OpenAI real** (gate externo) e E2E de chat/erros pela interface. Evidências e o que foi de fato executado: [`RC3_TEST_REPORT.md`](RC3_TEST_REPORT.md); decisões: ADR-121..125. **Pendências externas continuam abertas** (OpenAI real com a chave do usuário, assinatura, Windows limpos, beta, H.264/AAC jurídico, pentest independente, endpoint de crash).
 
 **Última atualização:** 2026-10-05 · **Fase atual:** FASE 5 — Autonomia · **Estado: `PHASE 5 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING`** (branch `claude/phase5-autonomy`; seção "Fase 5" abaixo). Fase 4 permanece `PHASE 4 ENGINEERING COMPLETE — EXTERNAL ACCEPTANCE PENDING` e Fase 3 `PHASE 3 ENGINEERING COMPLETE — HUMAN ACCEPTANCE PENDING` (pendências **não marcadas**). **Fase 6 NÃO iniciada.**
