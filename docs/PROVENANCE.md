@@ -66,3 +66,4 @@ Candidatos já avaliados (decisão arquivo a arquivo **na Fase 2**, só após te
 - [ ] Dependências transitivas verificadas (`cargo-deny`/verificador JS)
 - [ ] Testes próprios cobrem o comportamento (não só os do terceiro)
 - [ ] Nenhum ativo/modelo/fonte sem licença individual
+| E1B-1 | github.com/OpenCut-app/opencut-classic | `cf5e79e9` (2026-05-17) | `apps/web/src/actions/{keybinding,index}.ts`, `services/storage/migrations/{runner,v1-to-v2}.ts`, `stickers/providers/index.ts` (+ novo `actions/guards.ts`) | `docs/research/evidence/opencut-classic/patches/upstream-validation-fixes.patch` (**evidência de pesquisa, não código de produto**) | MIT (© OpenCut) | 5 correções mínimas de build (hunks de diff, 136 linhas) | Sim — LICENSE do upstream citado no README da evidência | 2026-10-13 |

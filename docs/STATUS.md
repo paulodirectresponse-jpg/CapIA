@@ -1,6 +1,6 @@
 # STATUS
 
-> **ESTRATÉGIA EM AVALIAÇÃO (Fase 1 — base open-source):** ver `docs/research/open-source-base-evaluation.md`. Decisão provisória: `REJECT_TIMELINE_STUDIO_TEST_OPENCUT`; próximo passo = teste funcional do OpenCut classic. Branch de pesquisa `research/open-source-base-evaluation`; `main` e o núcleo próprio permanecem intactos.
+> **ESTRATÉGIA EM AVALIAÇÃO (nova base open-source):** Fase 1 → `docs/research/open-source-base-evaluation.md` (Timeline Studio rejeitado). **Fase 1B → `docs/research/opencut-classic-validation.md`: decisão `ADOPT_OPENCUT_CLASSIC_WITH_MAJOR_CHANGES` (score 62,9/100; confiança 66/100)**; plano da Fase 2 em `docs/research/opencut-adoption-plan.md` — **não executado**. Branch `research/opencut-classic-validation`; `main` e o núcleo próprio permanecem intactos; nenhum código do OpenCut foi importado.
 
 
 **Última atualização:** 2026-10-02 · **Fase atual:** FASE 1 — Fundação (encerrada tecnicamente na M04; ver "Gates") · **Próxima:** FASE 2 — Motor

@@ -1,0 +1,368 @@
+[
+ {
+  "n": "A create project",
+  "s": "PASS",
+  "d": "http://localhost:3100/editor/50a38586-4ce3-4135-af5c-2308bc3723cf",
+  "src": "p5-results.json"
+ },
+ {
+  "n": "B/C/D import video,image,audio",
+  "s": "PASS",
+  "d": "4 assets incl. thumbnails/durations",
+  "src": "p5-results.json"
+ },
+ {
+  "n": "E add video to timeline",
+  "s": "PASS",
+  "d": "[{\"z\":\"main0\",\"id\":\"9b83\",\"t\":\"video\",\"els\":[\"main.web|8a90|0.00+20.00\"]}]",
+  "src": "p5-results.json"
+ },
+ {
+  "n": "F1 overlay track by drop above main",
+  "s": "PASS",
+  "d": "[{\"z\":\"overlay0\",\"id\":\"bf87\",\"t\":\"video\",\"els\":[\"broll.we|17c9|1.20+6.00\"]},{\"z\":\"main0\",\"id\":\"9b83\",\"t\":\"video\",\"els\":[\"main.web|8a90|0.00+20.00\"]}]",
+  "src": "p5-results.json"
+ },
+ {
+  "n": "F2 audio track by drop below main",
+  "s": "PASS",
+  "d": "[{\"z\":\"overlay0\",\"id\":\"bf87\",\"t\":\"video\",\"els\":[\"broll.we|17c9|1.20+6.00\"]},{\"z\":\"main0\",\"id\":\"9b83\",\"t\":\"video\",\"els\":[\"main.web|8a90|0.00+20.00\"]},{\"z\":\"audio0\",\"id\":\"2d4d\",\"t\":\"audio\",\"els\":[\"music.og|79f1|0.43+40.00\"]}]",
+  "src": "p5-results.json"
+ },
+ {
+  "n": "F3 second overlay track (image)",
+  "s": "PASS",
+  "d": "[{\"z\":\"overlay0\",\"id\":\"6c9d\",\"t\":\"video\",\"els\":[\"img.png|59fa|2.00+5.00\"]},{\"z\":\"overlay1\",\"id\":\"bf87\",\"t\":\"video\",\"els\":[\"broll.we|17c9|1.20+6.00\"]},{\"z\":\"main0\",\"id\":\"9b83\",\"t\":\"video\",\"els\":[\"main.web|8a90|0.00+20.00\"]},{\"z\":\"audio0\",\"id\":\"2d4d\",\"t\":\"audio\",\"els\":[\"music.og|79f1|0.43+40.00\"]}]",
+  "src": "p5-results.json"
+ },
+ {
+  "n": "H move clip (drag, overlay)",
+  "s": "PASS",
+  "d": "img start 2.00 -> 2.50",
+  "src": "p6-results.json"
+ },
+ {
+  "n": "I trim start (drag left handle)",
+  "s": "PASS",
+  "d": "start 2.50->2.70 dur 5.00->4.80 trimStart 24000",
+  "src": "p6-results.json"
+ },
+ {
+  "n": "playhead seek via ruler click",
+  "s": "PASS",
+  "d": "t=1",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "K split at playhead (S key)",
+  "s": "PASS",
+  "d": "0.00+1.00 | 1.00+19.00",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "R undo (Ctrl+Z)",
+  "s": "PASS",
+  "d": "main clips=1",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "S redo (Ctrl+Y)",
+  "s": "PASS",
+  "d": "main clips=2",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "Q duplicate (Ctrl+D)",
+  "s": "PASS",
+  "d": "overlay0:0.00+1.00 | main0:0.00+1.00 | main0:1.00+19.00",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "O/P copy+paste (Ctrl+C/V)",
+  "s": "PASS",
+  "d": "overlay0:0.50+1.00 | main0:0.00+1.00 | main0:1.00+19.00",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "L delete (Delete key)",
+  "s": "PASS",
+  "d": "1.00+19.00 (ripple off: gap expected)",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "M ripple (toolbar toggle + delete)",
+  "s": "PASS",
+  "d": "ripple false->true; main left: 0.00+19.00; broll start 1.20 (was 1.20)",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "N snapping (clip edge to playhead within 3px)",
+  "s": "PASS",
+  "d": "img start=3.0000 expected 3.0000 (no-snap would be ~3.008)",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "N2 snapping off (N key)",
+  "s": "INFO",
+  "d": "img start=3.5000 (target 3.5; snapping candidates: playhead 3.0 not near)",
+  "src": "p7-results.json"
+ },
+ {
+  "n": "V position/scale/rotation (inspector)",
+  "s": "PASS",
+  "d": "{\"px\":40,\"py\":-25,\"sx\":1.5,\"sy\":1,\"r\":15}",
+  "src": "p15-results.json"
+ },
+ {
+  "n": "W opacity",
+  "s": "PASS",
+  "d": "{\"opacity\":0.6}",
+  "src": "p15-results.json"
+ },
+ {
+  "n": "X volume (inspector, dB?)",
+  "s": "PASS",
+  "d": "{\"volume\":-6,\"muted\":false}",
+  "src": "p15-results.json"
+ },
+ {
+  "n": "X2 mute toggle (inspector)",
+  "s": "PASS",
+  "d": "{\"muted\":true}",
+  "src": "p15-results.json"
+ },
+ {
+  "n": "Y speed / retime 1.5x",
+  "s": "PASS",
+  "d": "{\"retime\":{\"rate\":1.5,\"maintainPitch\":false},\"duration\":13.334,\"sourceDuration\":20.001}",
+  "src": "p15-results.json"
+ },
+ {
+  "n": "Z keyframes (scale X: diamond @2.5s then edit @3.2s)",
+  "s": "PASS",
+  "d": "{\"transform.scaleX\":{\"keys\":[{\"id\":\"8f871665-3d94-4ad9-97c3-7b3f2115713d\",\"time\":60000,\"value\":1,\"segmentToNext\":\"linear\",\"tangentMode\":\"flat\"},{\"id\":\"606ad0e1-8aeb-43cc-852d-293525476be3\",\"time\":144000,\"value\":2,\"segmentToNext\":\"linear\",\"tangentMode\":\"flat\"}]}}",
+  "src": "p15-results.json"
+ },
+ {
+  "n": "AA effects (Blur drag-drop on clip)",
+  "s": "PASS",
+  "d": "{\"effectsOnMain\":[{\"t\":\"blur\",\"p\":{\"intensity\":15}}],\"tracks\":[\"overlay:video:img.png\",\"overlay:video:broll.webm\",\"main:video:main.webm\",\"audio:audio:music.ogg\"]}",
+  "src": "p17-results.json"
+ },
+ {
+  "n": "AB masks (Ellipse)",
+  "s": "PASS",
+  "d": "[{\"type\":\"ellipse\",\"params\":{\"feather\":0,\"inverted\":false,\"strokeColor\":\"#ffffff\",\"strokeWidth\":0,\"strokeAlign\":\"center\",\"centerX\":0,\"centerY\":0,\"width\":0.3375,\"height\":0.6,\"rotation\":0,\"scale\":1}}]",
+  "src": "p17-results.json"
+ },
+ {
+  "n": "AD separate/detach source audio (toolbar)",
+  "s": "PASS",
+  "d": "overlay:1 overlay:1 main:1 audio:1 => overlay:img.png overlay:broll.webm main:main.webm audio:main.webm audio:music.ogg",
+  "src": "p17-results.json"
+ },
+ {
+  "n": "U captions/subtitles (SRT import -> text elements)",
+  "s": "PASS",
+  "d": "overlay:text:Caption 1@0.5,Caption 2@3.0 | overlay:video:img.png@2.0 | overlay:video:broll.webm@1.2 | main:video:main.webm@0.0 | audio:audio:main.webm@0.0 | audio:audio:music.ogg@0.4",
+  "src": "p17-results.json"
+ },
+ {
+  "n": "MINI: >=3 cuts on main video",
+  "s": "PASS",
+  "d": "0.00+4.00 | 4.00+5.00 | 9.00+5.00 | 14.00+6.00",
+  "src": "p20-results.json"
+ },
+ {
+  "n": "MINI: ripple delete middle segment",
+  "s": "PARTIAL",
+  "d": "0.00+4.00 | 4.00+5.00 | 9.00+5.00 | 14.00+6.00",
+  "src": "p20-results.json"
+ },
+ {
+  "n": "MINI: B-roll/image/music placed",
+  "s": "PASS",
+  "d": "overlay0:img.png@6.0+5.0 | overlay1:broll.webm@2.0+6.0 | main0:main.webm (left)@0.0+4.0 | main0:main.webm (right) (left)@4.0+5.0 | main0:main.webm (right) (right) (left)@9.0+5.0 | main0:main.webm (right) (right) (right)@14.0+6.0 | audio0:music.ogg@0.7+40.0",
+  "src": "p20-results.json"
+ },
+ {
+  "n": "MINI: music split+delete tail (cross-track op)",
+  "s": "PASS",
+  "d": "0.7+13.3",
+  "src": "p20-results.json"
+ },
+ {
+  "n": "AH/AI close + reopen (full browser restart, persistent profile)",
+  "s": "PASS",
+  "d": "overlay0:img.png@6.0+5.0 | overlay1:broll.webm@2.0+6.0 | main0:main.webm (left)@0.0+4.0 | main0:main.webm (right) (left)@4.0+5.0 | main0:main.webm (right) (right) (left)@9.0+5.0 | main0:main.webm (right) (right) (right)@14.0+6.0 | audio0:music.ogg (left)@0.7+13.3",
+  "src": "p21-results.json"
+ },
+ {
+  "n": "AJ reopen: media assets still decodable + preview renders",
+  "s": "PASS",
+  "d": "[[191,191,191,255],[0,191,0,255],[0,0,0,255]]",
+  "src": "p21-results.json"
+ },
+ {
+  "n": "AJ continue editing after reopen (UI split + undo)",
+  "s": "PARTIAL",
+  "d": "elements 7 -> 7 -> undo 7",
+  "src": "p23-results.json"
+ },
+ {
+  "n": "AK export webm",
+  "s": "PASS",
+  "d": "size=2671214 bytes in 217444 ms (content 20.0s)",
+  "src": "p23-results.json"
+ },
+ {
+  "n": "AK export mp4",
+  "s": "FAIL(env: no H.264 encoder in this Chromium)",
+  "d": "This specific encoder configuration (avc1.64001f, 2778000 bps, 1280x720, hardware acceleration: no-preference) is not supported by this browser. Consider using another codec or changing your video parameters. (947 ms)",
+  "src": "p23-results.json"
+ },
+ {
+  "n": "PARITY-1 UI inserts clip",
+  "s": "PASS",
+  "d": "[\"main.webm@0.00+20.00\"]",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-1b PROGRAM inspect sees UI-created clip",
+  "s": "PASS",
+  "d": "rev 3; tracks=1",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-2 PROGRAM split_clip @2s",
+  "s": "PASS",
+  "d": "{\"ok\":true,\"applied\":1,\"diff\":{\"added\":1,\"changed\":1}}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-3 PROGRAM move_clip right part -> 4s",
+  "s": "PASS",
+  "d": "{\"ok\":true,\"after\":[\"main.webm (left)@0.00+2.00\",\"main.webm (right)@4.00+18.00\"]}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-4 UI observes programmatic change (DOM clip labels)",
+  "s": "PASS",
+  "d": "[\"main.webm\",\"main.webm\"]",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-5 UI trim end of left part (drag handle)",
+  "s": "PASS",
+  "d": "dur 2.00 -> 1.70",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-6 PROGRAM inspect sees UI trim",
+  "s": "PASS",
+  "d": "inspect durSec=1.700 trimEndTicks=2196120",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-7 UI Ctrl+Z x2 undoes UI trim THEN PROGRAM move (single shared history)",
+  "s": "PASS",
+  "d": "{\"starts\":[\"0.00\",\"2.00\"]}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-8 PROGRAM undo reverts PROG split; UI state follows",
+  "s": "PASS",
+  "d": "main clips now 1",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "PARITY-9 PROGRAM delete_clip; UI observes final state",
+  "s": "PASS",
+  "d": "{\"ok\":true,\"remaining\":[\"main.webm (left)@0.00+2.00\"]}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "CONTRACT stale baseRevision rejected",
+  "s": "PASS",
+  "d": "{\"ok\":false,\"error\":{\"code\":\"STALE_REVISION\",\"expected\":11,\"got\":10}}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "CONTRACT preview_plan returns diff, leaves doc+history untouched",
+  "s": "PASS",
+  "d": "{\"added\":1,\"elementsAfterPreview\":1,\"revision\":11}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "CONTRACT atomic: plan with invalid 2nd op applies nothing",
+  "s": "PASS",
+  "d": "{\"ok\":false,\"error\":{\"code\":\"VALIDATION\",\"message\":\"element not found: does-not-exist\"}}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "CONTRACT idempotent operationId (replay is no-op)",
+  "s": "PASS",
+  "d": "{\"first\":1,\"replay\":{\"ok\":true,\"idempotent\":true,\"applied\":0,\"revision\":12}}",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "CONTRACT plan = single undo entry (UI Ctrl+Z)",
+  "s": "PASS",
+  "d": "elements 1",
+  "src": "p24-results.json"
+ },
+ {
+  "n": "AF1 create multiple scenes (API only; UI has no create control)",
+  "s": "PARTIAL",
+  "d": "{\"a\":\"e24307bd-d83a-4f32-a9fd-1e647e30c0dd\",\"c\":\"f457bc2b-d3dc-4b33-bba6-61d4196ca8dd\"} (scenes-view.tsx exposes only switch+delete)",
+  "src": "p25-results.json"
+ },
+ {
+  "n": "AF2 rename + switch + edit scenes independently, shared assets",
+  "s": "PASS",
+  "d": "[{\"n\":\"Main scene\",\"main\":true,\"els\":[]},{\"n\":\"AD1_renamed\",\"main\":false,\"els\":[\"main.webm\"]},{\"n\":\"AD2\",\"main\":false,\"els\":[\"broll.webm\"]}]",
+  "src": "p25-results.json"
+ },
+ {
+  "n": "AF3 UI scenes panel lists scenes (switch/delete)",
+  "s": "FAIL",
+  "d": "",
+  "src": "p25-results.json"
+ },
+ {
+  "n": "AF4 scenes persist across full browser restart",
+  "s": "PASS",
+  "d": "{\"active\":\"AD2\",\"all\":[\"Main scene:0\",\"AD1_renamed:1\",\"AD2:1\"]}",
+  "src": "p25-results.json"
+ },
+ {
+  "n": "AF5 export specific scene (switch active scene + export)",
+  "s": "PASS",
+  "d": "{\"ok\":true,\"size\":83418} 72680ms",
+  "src": "p25-results.json"
+ },
+ {
+  "n": "AF6 duplicate scene",
+  "s": "FAIL(NOT IMPLEMENTED)",
+  "d": "no DuplicateSceneCommand / manager API (grep)",
+  "src": "p25-results.json"
+ },
+ {
+  "n": "AF7 nested scene as clip / scene reference",
+  "s": "FAIL(NOT IMPLEMENTED)",
+  "d": "TrackType/Element types have no scene reference",
+  "src": "p25-results.json"
+ },
+ {
+  "n": "N snapping on: left edge dropped at ~3.0205s with playhead at 3.0s",
+  "s": "INFO",
+  "d": "start=3.0333",
+  "src": "p27-results.json"
+ },
+ {
+  "n": "N snapping off: left edge dropped at ~3.0205s with playhead at 3.0s",
+  "s": "INFO",
+  "d": "start=3.0333",
+  "src": "p27-results.json"
+ }
+]
