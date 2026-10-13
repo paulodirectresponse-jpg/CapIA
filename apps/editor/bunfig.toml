@@ -1,0 +1,3 @@
+# CapIA harness: see apps/web/test-setup/*.ts (no product code, no test changes)
+[test]
+preload = ["./apps/web/test-setup/wasm-esm-shim.ts", "./apps/web/test-setup/canvas-shim.ts"]

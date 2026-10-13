@@ -563,20 +563,22 @@ describe("resolveTrackPlacement", () => {
 					id: "audio-1",
 					type: "audio",
 					elements: [
-						buildElement({ id: "a", type: "audio", startTime: 0, duration: 2 }),
-						buildElement({ id: "b", type: "audio", startTime: 5, duration: 2 }),
+						buildElement({ id: "a", type: "audio", startTime: 0, duration: 20 }),
+						buildElement({ id: "b", type: "audio", startTime: 50, duration: 20 }),
 					],
 				}),
 			],
 		});
 
+		// MediaTime is an integer tick count: scale the fixture (x10) instead of
+		// passing fractional ticks (the previous 2.5/5.5 literals are rejected).
 		expect(
 			resolveTrackPlacement({
 				tracks,
 				elementType: "audio",
 				timeSpans: [
-					buildTimeSpan({ startTime: 2.5, duration: 1 }),
-					buildTimeSpan({ startTime: 5.5, duration: 1 }),
+					buildTimeSpan({ startTime: 25, duration: 10 }),
+					buildTimeSpan({ startTime: 55, duration: 10 }),
 				],
 				strategy: { type: "firstAvailable" },
 			}),
@@ -648,7 +650,7 @@ describe("resolveTrackPlacement", () => {
 			trackId: "video-main",
 			trackIndex: 0,
 			trackType: "video",
-			adjustedStartTime: 0,
+			adjustedStartTime: ZERO_MEDIA_TIME,
 		});
 	});
 
