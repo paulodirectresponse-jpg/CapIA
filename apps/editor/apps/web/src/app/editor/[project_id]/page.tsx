@@ -22,7 +22,6 @@ import { useEditor } from "@/editor/use-editor";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
-import { ChangelogNotification } from "@/changelog/components/changelog-notification";
 import {
 	createPreviewOverlayControl,
 	isPreviewOverlayVisible,
@@ -50,7 +49,6 @@ export default function Editor() {
 					</div>
 					<Onboarding />
 					<MigrationDialog />
-					<ChangelogNotification />
 				</div>
 			</EditorProvider>
 		</MobileGate>
