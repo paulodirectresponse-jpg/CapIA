@@ -6,6 +6,11 @@ import type { TimelineTrack } from "@/timeline";
 import type { TimelineElement as TimelineElementType } from "@/timeline";
 import { TIMELINE_LAYERS } from "./layers";
 import type { ElementDragView } from "@/timeline";
+import {
+	selectVisibleElements,
+	type VisibleTimeWindow,
+} from "@/timeline/virtualization";
+import { memo } from "react";
 
 interface TimelineTrackContentProps {
 	track: TimelineTrack;
@@ -31,9 +36,11 @@ interface TimelineTrackContentProps {
 	onTrackMouseUp?: (event: React.MouseEvent) => void;
 	shouldIgnoreClick?: () => boolean;
 	targetElementId?: string | null;
+	/** CapIA: janela temporal visível (null = renderizar tudo). */
+	visibleWindow?: VisibleTimeWindow | null;
 }
 
-export function TimelineTrackContent({
+function TimelineTrackContentImpl({
 	track,
 	zoomLevel,
 	dragView,
@@ -44,8 +51,20 @@ export function TimelineTrackContent({
 	onTrackMouseUp,
 	shouldIgnoreClick,
 	targetElementId = null,
+	visibleWindow = null,
 }: TimelineTrackContentProps) {
 	const { isElementSelected } = useElementSelection();
+	const draggedIds =
+		dragView.kind === "dragging" ? dragView.memberTimeOffsets : null;
+	const allElements: readonly TimelineElementType[] = track.elements;
+	const visibleElements = selectVisibleElements({
+		elements: allElements,
+		window: visibleWindow,
+		keep: (id) =>
+			id === targetElementId ||
+			(draggedIds?.has(id) ?? false) ||
+			isElementSelected({ trackId: track.id, elementId: id }),
+	});
 
 	return (
 		<div className="relative size-full">
@@ -80,7 +99,7 @@ export function TimelineTrackContent({
 				{track.elements.length === 0 ? (
 					<div className="text-muted-foreground border-muted/30 pointer-events-none flex size-full items-center justify-center rounded-sm border-2 border-dashed text-xs" />
 				) : (
-					track.elements.map((element) => {
+					visibleElements.map((element) => {
 						const isSelected = isElementSelected({
 							trackId: track.id,
 							elementId: element.id,
@@ -112,3 +131,5 @@ export function TimelineTrackContent({
 		</div>
 	);
 }
+
+export const TimelineTrackContent = memo(TimelineTrackContentImpl);

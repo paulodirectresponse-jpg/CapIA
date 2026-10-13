@@ -1,0 +1,278 @@
+[
+ {
+  "N": 100,
+  "mode": "baseline",
+  "loadMs": 1120,
+  "dom": 1487,
+  "heapMB": 72,
+  "longTaskMaxMs": 236,
+  "nTracks": 2,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 83,
+   "max": 517
+  },
+  "zoomOutMs": 296,
+  "cmd": {
+   "split": 91.1,
+   "move": 121,
+   "trim": 121.6,
+   "undo": 92.6
+  },
+  "domAfterInteractions": 1604,
+  "layout": "dense"
+ },
+ {
+  "N": 100,
+  "mode": "virtualized",
+  "loadMs": 875,
+  "dom": 707,
+  "heapMB": 58,
+  "longTaskMaxMs": 202,
+  "nTracks": 2,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 83,
+   "max": 217
+  },
+  "zoomOutMs": 325,
+  "cmd": {
+   "split": 83.5,
+   "move": 119.7,
+   "trim": 147.9,
+   "undo": 89.6
+  },
+  "domAfterInteractions": 1084,
+  "layout": "dense"
+ },
+ {
+  "N": 1000,
+  "mode": "baseline",
+  "loadMs": 2666,
+  "dom": 10793,
+  "heapMB": 244,
+  "longTaskMaxMs": 1634,
+  "nTracks": 20,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 533,
+   "max": 817
+  },
+  "zoomOutMs": 1200,
+  "cmd": {
+   "split": 715.5,
+   "move": 902.7,
+   "trim": 481.8,
+   "undo": 567.2
+  },
+  "domAfterInteractions": 10889,
+  "layout": "dense"
+ },
+ {
+  "N": 1000,
+  "mode": "virtualized",
+  "loadMs": 1258,
+  "dom": 2991,
+  "heapMB": 95,
+  "longTaskMaxMs": 595,
+  "nTracks": 20,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 267,
+   "max": 500
+  },
+  "zoomOutMs": 980,
+  "cmd": {
+   "split": 279.3,
+   "move": 577.4,
+   "trim": 267,
+   "undo": 260.2
+  },
+  "domAfterInteractions": 5689,
+  "layout": "dense"
+ },
+ {
+  "N": 5000,
+  "mode": "baseline",
+  "loadMs": 11730,
+  "dom": 52153,
+  "heapMB": 964,
+  "longTaskMaxMs": 8372,
+  "nTracks": 100,
+  "scrollFrame": {
+   "p50": 33,
+   "p95": 3917,
+   "max": 3950
+  },
+  "zoomOutMs": 4565,
+  "cmd": {
+   "split": 2229,
+   "move": 4686.3,
+   "trim": 2484,
+   "undo": 2335.2
+  },
+  "domAfterInteractions": 52249,
+  "layout": "dense"
+ },
+ {
+  "N": 5000,
+  "mode": "virtualized",
+  "loadMs": 3159,
+  "dom": 13153,
+  "heapMB": 260,
+  "longTaskMaxMs": 2026,
+  "nTracks": 100,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 717,
+   "max": 817
+  },
+  "zoomOutMs": 3484,
+  "cmd": {
+   "split": 1221.9,
+   "move": 2536.9,
+   "trim": 1152.8,
+   "undo": 1212.6
+  },
+  "domAfterInteractions": 26249,
+  "layout": "dense"
+ },
+ {
+  "N": 1000,
+  "layout": "sequential",
+  "mode": "baseline",
+  "loadMs": 2723,
+  "dom": 10623,
+  "heapMB": 233,
+  "longTaskMaxMs": 1681,
+  "nTracks": 10,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 417,
+   "max": 517
+  },
+  "zoomOutMs": 1100,
+  "cmd": {
+   "split": 515.4,
+   "move": 951.5,
+   "trim": 420,
+   "undo": 461.7
+  },
+  "domAfterInteractions": 10719
+ },
+ {
+  "N": 1000,
+  "layout": "sequential",
+  "mode": "virtualized",
+  "loadMs": 1055,
+  "dom": 1723,
+  "heapMB": 76,
+  "longTaskMaxMs": 335,
+  "nTracks": 10,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 233,
+   "max": 400
+  },
+  "zoomOutMs": 708,
+  "cmd": {
+   "split": 160.9,
+   "move": 313.7,
+   "trim": 166.7,
+   "undo": 164.9
+  },
+  "domAfterInteractions": 3119
+ },
+ {
+  "N": 5000,
+  "layout": "sequential",
+  "mode": "baseline",
+  "loadMs": 10746,
+  "dom": 50623,
+  "heapMB": 962,
+  "longTaskMaxMs": 8061,
+  "nTracks": 10,
+  "scrollFrame": {
+   "p50": 33,
+   "p95": 2000,
+   "max": 3833
+  },
+  "zoomOutMs": 4645,
+  "cmd": {
+   "split": 2159.8,
+   "move": 4718.3,
+   "trim": 2449.1,
+   "undo": 2178.9
+  },
+  "domAfterInteractions": 50719
+ },
+ {
+  "N": 5000,
+  "layout": "sequential",
+  "mode": "virtualized",
+  "loadMs": 990,
+  "dom": 1723,
+  "heapMB": 78,
+  "longTaskMaxMs": 355,
+  "nTracks": 10,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 217,
+   "max": 417
+  },
+  "zoomOutMs": 648,
+  "cmd": {
+   "split": 194.8,
+   "move": 304.4,
+   "trim": 212.7,
+   "undo": 129.5
+  },
+  "domAfterInteractions": 3119
+ },
+ {
+  "N": 10000,
+  "layout": "sequential",
+  "mode": "baseline",
+  "loadMs": 23782,
+  "dom": 100623,
+  "heapMB": 1842,
+  "longTaskMaxMs": 17378,
+  "nTracks": 10,
+  "scrollFrame": {
+   "p50": 50,
+   "p95": 5317,
+   "max": 7100
+  },
+  "zoomOutMs": 11188,
+  "cmd": {
+   "split": 6203,
+   "move": 6381,
+   "trim": 4750,
+   "undo": 5980.8
+  },
+  "domAfterInteractions": 100719
+ },
+ {
+  "N": 10000,
+  "layout": "sequential",
+  "mode": "virtualized",
+  "loadMs": 1247,
+  "dom": 1721,
+  "heapMB": 86,
+  "longTaskMaxMs": 646,
+  "nTracks": 10,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 217,
+   "max": 467
+  },
+  "zoomOutMs": 632,
+  "cmd": {
+   "split": 226.8,
+   "move": 201.5,
+   "trim": 183.1,
+   "undo": 190.7
+  },
+  "domAfterInteractions": 3140
+ }
+]

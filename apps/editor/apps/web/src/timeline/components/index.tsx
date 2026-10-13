@@ -25,6 +25,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	memo,
 	useRef,
 	useState,
 	type ReactNode,
@@ -33,6 +34,11 @@ import { useContainerSize } from "@/hooks/use-container-size";
 import type { MediaTime } from "@/wasm";
 import type { ElementDragView, DropTarget } from "@/timeline";
 import { TimelineTrackContent } from "./timeline-track";
+import {
+	computeVisibleTimeWindow,
+	isVirtualizationEnabled,
+	type VisibleTimeWindow,
+} from "@/timeline/virtualization";
 import { TimelinePlayhead } from "./timeline-playhead";
 import { SelectionBox } from "@/selection/selection-box";
 import { useBoxSelect } from "@/selection/hooks/use-box-select";
@@ -156,9 +162,10 @@ export function Timeline() {
 	const { height: timelineHeaderHeightValue } = useContainerSize({
 		containerRef: timelineHeaderRef,
 	});
-	const { viewportWidth: tracksViewportWidth } = useScrollPosition({
-		scrollRef: tracksScrollRef,
-	});
+	const { viewportWidth: tracksViewportWidth, scrollLeft: tracksScrollLeft } =
+		useScrollPosition({
+			scrollRef: tracksScrollRef,
+		});
 
 	const handleSnapPointChange = useCallback((snapPoint: SnapPoint | null) => {
 		setCurrentSnapPoint(snapPoint);
@@ -183,6 +190,20 @@ export function Timeline() {
 			tracksScrollRef,
 			rulerScrollRef,
 		});
+
+	const rawWindow = computeVisibleTimeWindow({
+		scrollLeft: tracksScrollLeft,
+		viewportWidth: tracksViewportWidth || FALLBACK_CONTAINER_WIDTH,
+		zoomLevel,
+	});
+	const virtualizationEnabled = isVirtualizationEnabled();
+	const visibleWindow = useMemo<VisibleTimeWindow | null>(
+		() =>
+			virtualizationEnabled
+				? { start: rawWindow.start, end: rawWindow.end }
+				: null,
+		[virtualizationEnabled, rawWindow.start, rawWindow.end],
+	);
 	const { isResizing, handleResizeStart } = useTimelineResize({
 		zoomLevel,
 		onSnapPointChange: handleSnapPointChange,
@@ -545,6 +566,7 @@ export function Timeline() {
 							>
 								{tracks.length > 0 && (
 									<TimelineTrackRows
+										visibleWindow={visibleWindow}
 										mainTrackId={mainTrackId}
 										zoomLevel={zoomLevel}
 										dragView={dragView}
@@ -720,7 +742,8 @@ function TrackLabelsPanel({
 	);
 }
 
-function TimelineTrackRows({
+const TimelineTrackRows = memo(function TimelineTrackRows({
+	visibleWindow,
 	mainTrackId,
 	zoomLevel,
 	dragView,
@@ -750,6 +773,7 @@ function TimelineTrackRows({
 	shouldIgnoreClick: () => boolean;
 	isDragOver: boolean;
 	dropTarget: DropTarget | null;
+	visibleWindow: VisibleTimeWindow | null;
 }) {
 	const timeline = useEditor((e) => e.timeline);
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
@@ -818,6 +842,7 @@ function TimelineTrackRows({
 							}}
 						>
 							<TimelineTrackContent
+								visibleWindow={visibleWindow}
 								track={track}
 								zoomLevel={zoomLevel}
 								dragView={dragView}
@@ -884,7 +909,7 @@ function TimelineTrackRows({
 			))}
 		</>
 	);
-}
+});
 
 function TimelineGutter({
 	onMouseDown,
