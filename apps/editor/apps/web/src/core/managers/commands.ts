@@ -1,13 +1,33 @@
 import type { EditorCore } from "@/core";
+import { CommandError, runExecute, runRedo } from "@/commands/base-command";
+import {
+	fingerprintsEqual,
+	takeFingerprint,
+	type DocumentFingerprint,
+} from "./document-fingerprint";
 import type { Command, CommandResult } from "@/commands";
 import type { EditorSelectionSnapshot } from "@/selection/editor-selection";
 import { applyRippleAdjustments, computeRippleAdjustments } from "@/ripple";
 import type { SceneTracks } from "@/timeline/types";
 
+/** Who/what produced a history entry (CapIA: shared human + agent history). */
+export interface HistoryMeta {
+	actor: string;
+	planId?: string;
+	operationIds?: string[];
+}
+
 interface CommandHistoryEntry {
 	command: Command;
 	previousSelection: EditorSelectionSnapshot;
 	selectionOverride?: EditorSelectionSnapshot;
+	meta?: HistoryMeta;
+}
+
+export interface HistoryItem {
+	index: number;
+	command: string;
+	meta?: HistoryMeta;
 }
 
 export class CommandManager {
@@ -18,28 +38,109 @@ export class CommandManager {
 
 	constructor(private editor: EditorCore) {}
 
-	execute({ command }: { command: Command }): Command {
+	private fingerprint(): DocumentFingerprint {
+		return takeFingerprint(this.editor);
+	}
+
+	private static sameFingerprint({
+		a,
+		b,
+	}: {
+		a: DocumentFingerprint;
+		b: DocumentFingerprint;
+	}): boolean {
+		return fingerprintsEqual({ a, b });
+	}
+
+	/**
+	 * Executes a command and records it in the shared history.
+	 * - A command that changed nothing is NOT recorded (and throws NO_EFFECT when `strict`).
+	 * - A command that throws is rolled back (best effort) and the error is rethrown.
+	 */
+	execute({
+		command,
+		meta,
+		strict = false,
+	}: {
+		command: Command;
+		meta?: HistoryMeta;
+		strict?: boolean;
+	}): Command {
 		const beforeTracks = this.isRippleEnabled
 			? (this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null)
 			: null;
 		const previousSelection = this.getSelectionSnapshot();
-		const result = command.execute();
+		const stateBefore = this.fingerprint();
+		let result: CommandResult | undefined;
+		try {
+			result = runExecute(command);
+		} catch (error) {
+			if (
+				!CommandManager.sameFingerprint({
+					a: stateBefore,
+					b: this.fingerprint(),
+				})
+			) {
+				try {
+					command.undo();
+				} catch {
+					// best effort: keep the original error
+				}
+			}
+			throw error;
+		}
+		const hadEffect = !CommandManager.sameFingerprint({
+			a: stateBefore,
+			b: this.fingerprint(),
+		});
 		this.applyRippleIfEnabled({ beforeTracks });
 		const selectionOverride = this.applySelectionOverride(result);
 		this.runReactors();
+		if (!hadEffect) {
+			if (strict) {
+				throw new CommandError({
+					code: "NO_EFFECT",
+					message: "command completed without changing the document",
+					details: { command: command.constructor.name },
+				});
+			}
+			return command;
+		}
 		this.history.push({
 			command,
 			previousSelection,
 			selectionOverride,
+			meta,
 		});
 		this.redoStack = [];
 		return command;
 	}
 
-	push({ command }: { command: Command }): void {
+	/** Read-only view of the shared history (oldest first). */
+	getHistory(): HistoryItem[] {
+		return this.history.map((entry, index) => ({
+			index,
+			command: entry.command.constructor.name,
+			meta: entry.meta,
+		}));
+	}
+
+	peekUndo(): HistoryItem | null {
+		const entry = this.history[this.history.length - 1];
+		return entry
+			? {
+					index: this.history.length - 1,
+					command: entry.command.constructor.name,
+					meta: entry.meta,
+				}
+			: null;
+	}
+
+	push({ command, meta }: { command: Command; meta?: HistoryMeta }): void {
 		this.history.push({
 			command,
 			previousSelection: this.getSelectionSnapshot(),
+			meta,
 		});
 		this.redoStack = [];
 	}
@@ -78,7 +179,7 @@ export class CommandManager {
 			? (this.editor.scenes.getActiveSceneOrNull()?.tracks ?? null)
 			: null;
 		const previousSelection = this.getSelectionSnapshot();
-		const result = entry.command.redo();
+		const result = runRedo(entry.command);
 		this.applyRippleIfEnabled({ beforeTracks });
 		const selectionOverride = this.applySelectionOverride(result);
 		this.runReactors();
@@ -87,6 +188,7 @@ export class CommandManager {
 			command: entry.command,
 			previousSelection,
 			selectionOverride,
+			meta: entry.meta,
 		});
 	}
 
