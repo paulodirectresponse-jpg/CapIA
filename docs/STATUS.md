@@ -1,5 +1,8 @@
 # STATUS
 
+> **ESTRATÉGIA EM AVALIAÇÃO (Fase 1 — base open-source):** ver `docs/research/open-source-base-evaluation.md`. Decisão provisória: `REJECT_TIMELINE_STUDIO_TEST_OPENCUT`; próximo passo = teste funcional do OpenCut classic. Branch de pesquisa `research/open-source-base-evaluation`; `main` e o núcleo próprio permanecem intactos.
+
+
 **Última atualização:** 2026-10-02 · **Fase atual:** FASE 1 — Fundação (encerrada tecnicamente na M04; ver "Gates") · **Próxima:** FASE 2 — Motor
 
 ## Gates de fase (decisão do Product Owner, ADR-037)
