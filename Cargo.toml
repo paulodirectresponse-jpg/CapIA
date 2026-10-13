@@ -31,7 +31,7 @@ members = [
     "apps/desktop/src-tauri",
 ]
 # Experimentos descartáveis e ferramentas com workspace próprio: fora do build principal.
-exclude = ["spikes", "tools/s1-preview-spike"]
+exclude = ["spikes", "tools/s1-preview-spike", "apps/editor"]
 
 [workspace.package]
 version = "0.6.0-rc.3"

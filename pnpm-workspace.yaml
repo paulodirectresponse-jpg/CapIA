@@ -1,6 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
+  # apps/editor = OpenCut classic (bun workspace próprio, git subtree); fora do workspace pnpm
+  - "!apps/editor"
 
 # Uma versão por dependência compartilhada em todo o workspace.
 catalog:
