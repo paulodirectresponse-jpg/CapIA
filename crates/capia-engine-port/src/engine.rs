@@ -1,6 +1,6 @@
 use crate::PortError;
 use crate::Transport;
-use crate::translate::{AssetFacts, TranslateCtx, translate};
+use crate::translate::{AssetFacts, ClipFacts, TranslateCtx, translate};
 use crate::units::{LEGACY_TICKS_PER_SECOND, seconds_to_editor_ticks, to_legacy_ticks};
 use capia_actor::{Actor, ActorKind};
 use capia_intelligence::engine::{Engine, READ_METHODS};
@@ -101,6 +101,21 @@ impl<T: Transport> AgentSurfaceEngine<T> {
             }
         }
         let tracks = surface_result(self.call("inspect_tracks", json!({}))?)?;
+        for t in tracks["tracks"].as_array().into_iter().flatten() {
+            for c in t["clips"].as_array().into_iter().flatten() {
+                if let Some(id) = c["id"].as_str() {
+                    ctx.clips.insert(
+                        id.to_owned(),
+                        ClipFacts {
+                            start: c["startTicks"].as_i64().unwrap_or(0),
+                            duration: c["durationTicks"].as_i64().unwrap_or(0),
+                            trim_start: c["trimStartTicks"].as_i64().unwrap_or(0),
+                            trim_end: c["trimEndTicks"].as_i64().unwrap_or(0),
+                        },
+                    );
+                }
+            }
+        }
         ctx.main_track_id = tracks["tracks"]
             .as_array()
             .into_iter()

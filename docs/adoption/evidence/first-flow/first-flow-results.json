@@ -1,0 +1,85 @@
+{
+ "base": "http://127.0.0.1:3100",
+ "steps": [
+  {
+   "name": "UI: criar projeto",
+   "status": "PASS",
+   "detail": "http://127.0.0.1:3100/editor/adee1f71-37a2-4000-aef1-e7eb20e58ac6"
+  },
+  {
+   "name": "UI: importar vídeo",
+   "status": "PASS",
+   "detail": "main.webm"
+  },
+  {
+   "name": "UI: inserir vídeo na timeline",
+   "status": "PASS",
+   "detail": "[[0,1440120]]"
+  },
+  {
+   "name": "CAPIA(EnginePort): inspect vê o clip da UI",
+   "status": "PASS",
+   "detail": "5"
+  },
+  {
+   "name": "CAPIA: split @4s",
+   "status": "PASS",
+   "detail": "1"
+  },
+  {
+   "name": "CAPIA: inspect após split",
+   "status": "PASS",
+   "detail": "[[0,480000],[480000,960120]]"
+  },
+  {
+   "name": "CAPIA: move (parte direita → 8s)",
+   "status": "PASS",
+   "detail": "\"\""
+  },
+  {
+   "name": "CAPIA: trim (borda out da parte esquerda → 3s)",
+   "status": "PASS",
+   "detail": "\"\""
+  },
+  {
+   "name": "UI: vê as mudanças do CAPIA (estado vivo)",
+   "status": "PASS",
+   "detail": "[[0,360000],[960000,960120]]"
+  },
+  {
+   "name": "UI: DOM da timeline mostra os 2 clips",
+   "status": "PASS",
+   "detail": "labels=3"
+  },
+  {
+   "name": "UI: Ctrl+Z desfaz o trim do CAPIA → CAPIA inspect vê o estado desfeito",
+   "status": "PASS",
+   "detail": "[[0,480000],[960000,960120]]"
+  },
+  {
+   "name": "CAPIA: plano atômico inválido não aplica nada",
+   "status": "PASS",
+   "detail": "{\"code\":\"NOT_FOUND\",\"message\":\"clip not found: does-not-exist\"}"
+  },
+  {
+   "name": "CAPIA: plano atômico (split + move)",
+   "status": "PASS",
+   "detail": "3"
+  },
+  {
+   "name": "UI: vê o resultado do plano atômico",
+   "status": "PASS",
+   "detail": "[[0,240000],[240000,240000],[600000,960120]]"
+  },
+  {
+   "name": "histórico único contém entradas do agente (ator/plan)",
+   "status": "PASS",
+   "detail": "[\"ui\",\"agent:run:first-flow\",\"agent:run:first-flow\",\"agent:run:first-flow\"]"
+  },
+  {
+   "name": "UI: um Ctrl+Z desfaz o plano atômico inteiro (1 entrada)",
+   "status": "PASS",
+   "detail": "clips=2"
+  }
+ ]
+}

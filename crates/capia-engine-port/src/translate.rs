@@ -13,8 +13,19 @@ pub struct AssetFacts {
     pub duration_editor_ticks: Option<i64>,
 }
 
+/// Estado atual de um clip da timeline (ticks do editor), lido por `inspect_tracks`.
+#[derive(Clone, Debug, Default)]
+pub struct ClipFacts {
+    pub start: i64,
+    pub duration: i64,
+    pub trim_start: i64,
+    pub trim_end: i64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct TranslateCtx {
+    /// Clips já existentes na timeline (edição de clips por id do editor).
+    pub clips: HashMap<String, ClipFacts>,
     /// Id da track principal da sequence ativa (colocação explícita dos beats `Main`).
     pub main_track_id: Option<String>,
     pub assets: HashMap<String, AssetFacts>,
@@ -114,11 +125,63 @@ pub fn translate(commands: &[Value], ctx: &TranslateCtx) -> Result<Translated, P
                     out.operations.push(trim);
                 }
             }
-            "split_clip" | "move_clip" | "trim_clip" | "delete_clip" => {
-                return Err(unsupported(
-                    kind,
-                    "direct clip edits use legacy clip ids; map them with clipRef in a Phase 2B translator",
-                ));
+            "split_clip" => {
+                let clip = cmd["clip"].as_str().unwrap_or("");
+                let mut op = json!({
+                    "type": "split_clip", "operationId": op_id, "clipId": clip,
+                    "atTicks": to_editor_ticks(int(&cmd["at"], "at")?)?,
+                });
+                if let Some(new_id) = cmd["new_id"].as_str() {
+                    op["rightRef"] = json!(new_id);
+                }
+                out.operations.push(op);
+            }
+            "move_clips" => {
+                for (i, m) in cmd["moves"].as_array().into_iter().flatten().enumerate() {
+                    let mut op = json!({
+                        "type": "move_clip", "operationId": format!("{op_id}:{i}"),
+                        "clipId": m["clip"].as_str().unwrap_or(""),
+                        "newStartTicks": to_editor_ticks(int(&m["start"], "moves[].start")?)?,
+                    });
+                    if let Some(track) = m["track"].as_str() {
+                        op["targetTrackId"] = json!(track);
+                    }
+                    out.operations.push(op);
+                }
+            }
+            "delete_clip" => {
+                out.operations.push(json!({
+                    "type": "delete_clip", "operationId": op_id,
+                    "clipId": cmd["clip"].as_str().unwrap_or(""),
+                }));
+            }
+            "trim_clip" => {
+                let clip = cmd["clip"].as_str().unwrap_or("");
+                let facts = ctx.clips.get(clip).ok_or_else(|| {
+                    PortError::new("NOT_FOUND", format!("clip `{clip}` is not on the timeline"))
+                })?;
+                let to = to_editor_ticks(int(&cmd["to"], "to")?)?;
+                let end = facts.start + facts.duration;
+                let mut op = json!({"type": "trim_clip", "operationId": op_id, "clipId": clip});
+                match cmd["edge"].as_str() {
+                    Some("in") => {
+                        let delta = to - facts.start;
+                        op["startTicks"] = json!(to);
+                        op["durationTicks"] = json!(end - to);
+                        op["trimStartTicks"] = json!((facts.trim_start + delta).max(0));
+                    }
+                    Some("out") => {
+                        op["durationTicks"] = json!(to - facts.start);
+                        op["trimEndTicks"] = json!((facts.trim_end + (end - to)).max(0));
+                    }
+                    other => {
+                        return Err(PortError::new(
+                            "INVALID_COMMAND",
+                            format!("trim_clip edge must be `in` or `out`, got {other:?}"),
+                        ));
+                    }
+                }
+                out.operations.push(op);
             }
             other => {
                 return Err(unsupported(
@@ -145,6 +208,7 @@ mod tests {
             },
         );
         TranslateCtx {
+            clips: HashMap::new(),
             main_track_id: Some("main-id".into()),
             assets,
         }
@@ -155,7 +219,7 @@ mod tests {
         let cmds = vec![
             json!({"type":"add_track","id":"t1","role":"main","operation_id":"o0"}),
             json!({"type":"insert_clip","track":"t1","start":705_600_000,
-                   "clip":{"id":"c1","duration":2*705_600_000,"source_in":705_600_000,
+                   "clip":{"id":"c1","duration":2_i64*705_600_000,"source_in":705_600_000,
                            "content":{"type":"media","asset":"a1"}},"operation_id":"o1"}),
         ];
         let t = translate(&cmds, &ctx()).unwrap();
@@ -168,6 +232,44 @@ mod tests {
             t.operations[1]["trimEndTicks"],
             10 * 120_000 - 120_000 - 240_000
         );
+    }
+
+    #[test]
+    fn edits_existing_clips_by_editor_id() {
+        let mut c = ctx();
+        c.clips.insert(
+            "k1".into(),
+            ClipFacts {
+                start: 120_000,
+                duration: 480_000,
+                trim_start: 0,
+                trim_end: 0,
+            },
+        );
+        let cmds = vec![
+            json!({"type":"split_clip","clip":"k1","at":2_i64*705_600_000,"operation_id":"s"}),
+            json!({"type":"move_clips","moves":[{"clip":"k1","start":3_i64*705_600_000}],"operation_id":"m"}),
+            json!({"type":"trim_clip","clip":"k1","edge":"out","to":4_i64*705_600_000,"operation_id":"t"}),
+            json!({"type":"trim_clip","clip":"k1","edge":"in","to":2_i64*705_600_000,"operation_id":"ti"}),
+            json!({"type":"delete_clip","clip":"k1","operation_id":"d"}),
+        ];
+        let t = translate(&cmds, &c).unwrap();
+        assert_eq!(t.operations[0]["atTicks"], 240_000);
+        assert_eq!(t.operations[1]["newStartTicks"], 360_000);
+        // out: start 1s, end -> 4s => duration 3s, trimEnd grows by (old end 5s - 4s)
+        assert_eq!(t.operations[2]["durationTicks"], 360_000);
+        assert_eq!(t.operations[2]["trimEndTicks"], 120_000);
+        // in: new start 2s => duration (5s-2s), trimStart += 1s
+        assert_eq!(t.operations[3]["startTicks"], 240_000);
+        assert_eq!(t.operations[3]["durationTicks"], 360_000);
+        assert_eq!(t.operations[3]["trimStartTicks"], 120_000);
+        assert_eq!(t.operations[4]["type"], "delete_clip");
+        let missing = translate(
+            &[json!({"type":"trim_clip","clip":"zz","edge":"out","to":0})],
+            &c,
+        )
+        .unwrap_err();
+        assert_eq!(missing.code, "NOT_FOUND");
     }
 
     #[test]
