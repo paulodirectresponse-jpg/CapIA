@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>CapIA codec spike (H.264 + AAC via WebCodecs + mediabunny)</title>
+<body>
+<pre id="log">running…</pre>
+<script type="module">
+// Reproduz o caminho de export do editor (services/renderer/scene-exporter.ts):
+//   CanvasSource codec "avc"  +  AudioBufferSource codec "aac"  ->  Mp4OutputFormat.
+import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource } from "./mediabunny.min.mjs";
+
+const log = (m) => { document.getElementById("log").textContent += `\n${m}`; };
+const report = { userAgent: navigator.userAgent, probes: {}, steps: [] };
+
+async function probe() {
+  if (typeof VideoEncoder === "undefined") { report.probes.videoEncoderApi = false; return; }
+  report.probes.videoEncoderApi = true;
+  for (const codec of ["avc1.42001f", "avc1.4d401f", "avc1.640028"]) {
+    for (const hw of ["no-preference", "prefer-hardware", "prefer-software"]) {
+      try {
+        const r = await VideoEncoder.isConfigSupported({ codec, width: 1280, height: 720, bitrate: 2_000_000, framerate: 30, hardwareAcceleration: hw });
+        report.probes[`video:${codec}:${hw}`] = r.supported;
+      } catch (e) { report.probes[`video:${codec}:${hw}`] = `error: ${e}`; }
+    }
+  }
+  report.probes.audioEncoderApi = typeof AudioEncoder !== "undefined";
+  if (typeof AudioEncoder !== "undefined") {
+    for (const codec of ["mp4a.40.2", "opus"]) {
+      try {
+        const r = await AudioEncoder.isConfigSupported({ codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 128000 });
+        report.probes[`audio:${codec}`] = r.supported;
+      } catch (e) { report.probes[`audio:${codec}`] = `error: ${e}`; }
+    }
+  }
+}
+
+async function encode() {
+  const W = 640, H = 360, FPS = 30, SECONDS = 2;
+  const canvas = new OffscreenCanvas(W, H);
+  const ctx = canvas.getContext("2d");
+  const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
+  const video = new CanvasSource(canvas, { codec: "avc", bitrate: 2_000_000 });
+  output.addVideoTrack(video, { frameRate: FPS });
+  const audio = new AudioBufferSource({ codec: "aac", bitrate: 128_000 });
+  output.addAudioTrack(audio);
+  await output.start();
+  const sampleRate = 48000;
+  const buffer = new AudioBuffer({ length: sampleRate * SECONDS, numberOfChannels: 2, sampleRate });
+  for (let c = 0; c < 2; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < data.length; i++) data[i] = 0.25 * Math.sin((2 * Math.PI * 440 * i) / sampleRate);
+  }
+  await audio.add(buffer);
+  audio.close();
+  for (let i = 0; i < FPS * SECONDS; i++) {
+    ctx.fillStyle = `hsl(${(i * 6) % 360} 80% 50%)`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fff";
+    ctx.font = "48px sans-serif";
+    ctx.fillText(`frame ${i}`, 40, 200);
+    await video.add(i / FPS, 1 / FPS);
+  }
+  video.close();
+  await output.finalize();
+  return output.target.buffer;
+}
+
+function toBase64(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+try {
+  await probe();
+  log(JSON.stringify(report.probes, null, 1));
+  const t0 = performance.now();
+  const buf = await encode();
+  report.encodeMs = Math.round(performance.now() - t0);
+  report.mp4Bytes = buf.byteLength;
+  report.mp4Base64 = toBase64(new Uint8Array(buf));
+  report.ok = true;
+} catch (e) {
+  report.ok = false;
+  report.error = String(e && e.message ? e.message : e);
+}
+log(`ok=${report.ok} ${report.error ?? ""}`);
+await fetch("/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
+document.title = "DONE";
+</script>
