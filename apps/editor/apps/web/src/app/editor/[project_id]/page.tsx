@@ -17,7 +17,8 @@ import { MigrationDialog } from "@/project/components/migration-dialog";
 import { usePanelStore } from "@/editor/panel-store";
 import { usePasteMedia } from "@/media/use-paste-media";
 import { MobileGate } from "@/components/editor/mobile-gate";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { installPageBridge } from "@/agent-surface/bridge/page-bridge";
 import { useEditor } from "@/editor/use-editor";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -36,7 +37,10 @@ import {
 
 export default function Editor() {
 	const params = useParams();
-	const projectId = params.project_id as string;
+	const projectId = String(params.project_id);
+	useEffect(() => {
+		installPageBridge();
+	}, []);
 
 	return (
 		<MobileGate>

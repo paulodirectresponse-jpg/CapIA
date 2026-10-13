@@ -5,7 +5,7 @@ import type { SceneTracks, TimelineElement, TimelineTrack } from "@/timeline";
 import { calculateTotalDuration } from "@/timeline";
 import { deriveExecutionIds, withIdSeed } from "@/utils/id";
 import { TICKS_PER_SECOND } from "@/wasm";
-import { PlannedOperation, locateClip } from "./operations";
+import { PlannedOperation, type PlanRefs, locateClip } from "./operations";
 import {
 	AGENT_SURFACE_SCHEMA_VERSION,
 	type ApplyReport,
@@ -205,13 +205,11 @@ export class AgentSurface {
 				fps: { ...project.settings.fps },
 				canvas: { ...project.settings.canvasSize },
 				activeSequenceId: active.id,
-				sequences: this.editor.scenes
-					.getScenes()
-					.map((scene) => ({
-						id: scene.id,
-						name: scene.name,
-						isMain: scene.isMain,
-					})),
+				sequences: this.editor.scenes.getScenes().map((scene) => ({
+					id: scene.id,
+					name: scene.name,
+					isMain: scene.isMain,
+				})),
 				assets: this.editor.media.getAssets().map((asset) => ({
 					id: asset.id,
 					name: asset.name,
@@ -390,12 +388,13 @@ export class AgentSurface {
 	}
 
 	private buildBatch(plan: Plan): BatchCommand {
+		const refs: PlanRefs = new Map();
 		return new BatchCommand(
 			plan.operations.map((operation) =>
 				withIdSeed({
 					seed: seedFor({ plan, operation }),
 					phase: "c",
-					fn: () => new PlannedOperation(operation),
+					fn: () => new PlannedOperation({ operation, refs }),
 				}),
 			),
 		);

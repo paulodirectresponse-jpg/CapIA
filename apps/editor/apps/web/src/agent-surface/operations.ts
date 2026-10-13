@@ -13,7 +13,7 @@ import {
 } from "@/commands/timeline";
 import { buildElementFromMedia } from "@/timeline/element-utils";
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/timeline/creation";
-import type { TimelineElement } from "@/timeline";
+import type { SceneTracks, TimelineElement } from "@/timeline";
 import {
 	fingerprintsEqual,
 	takeFingerprint,
@@ -54,6 +54,37 @@ export function locateClip(clipId: string): {
 	return null;
 }
 
+/** Plan-scoped names → clip ids (created by earlier operations of the same plan). */
+export type PlanRefs = Map<string, string>;
+
+function resolveClipId({
+	clipId,
+	clipRef,
+	refs,
+}: {
+	clipId?: string;
+	clipRef?: string;
+	refs: PlanRefs;
+}): string {
+	if ((clipId === undefined) === (clipRef === undefined)) {
+		throw new CommandError({
+			code: "INVALID_OPERATION",
+			message: "exactly one of clipId or clipRef is required",
+			details: {},
+		});
+	}
+	if (clipId !== undefined) return clipId;
+	const resolved = clipRef === undefined ? undefined : refs.get(clipRef);
+	if (resolved === undefined) {
+		throw new CommandError({
+			code: "NOT_FOUND",
+			message: `unknown clipRef: ${String(clipRef)}`,
+			details: { clipRef },
+		});
+	}
+	return resolved;
+}
+
 function requireClip(clipId: string): {
 	trackId: string;
 	element: TimelineElement;
@@ -69,7 +100,13 @@ function requireClip(clipId: string): {
 	return found;
 }
 
-function buildInner(operation: Operation): Command {
+function buildInner({
+	operation,
+	refs,
+}: {
+	operation: Operation;
+	refs: PlanRefs;
+}): Command {
 	const editor = EditorCore.getInstance();
 	switch (operation.type) {
 		case "insert_clip": {
@@ -103,21 +140,31 @@ function buildInner(operation: Operation): Command {
 			});
 		}
 		case "split_clip": {
-			const { trackId } = requireClip(operation.clipId);
+			const clipId = resolveClipId({
+				clipId: operation.clipId,
+				clipRef: operation.clipRef,
+				refs,
+			});
+			const { trackId } = requireClip(clipId);
 			return new SplitElementsCommand({
-				elements: [{ trackId, elementId: operation.clipId }],
+				elements: [{ trackId, elementId: clipId }],
 				splitTime: ticks({ value: operation.atTicks, field: "atTicks" }),
 				retainSide: operation.retainSide ?? "both",
 			});
 		}
 		case "move_clip": {
-			const { trackId } = requireClip(operation.clipId);
+			const clipId = resolveClipId({
+				clipId: operation.clipId,
+				clipRef: operation.clipRef,
+				refs,
+			});
+			const { trackId } = requireClip(clipId);
 			return new MoveElementCommand({
 				moves: [
 					{
 						sourceTrackId: trackId,
 						targetTrackId: operation.targetTrackId ?? trackId,
-						elementId: operation.clipId,
+						elementId: clipId,
 						newStartTime: ticks({
 							value: operation.newStartTicks,
 							field: "newStartTicks",
@@ -127,7 +174,12 @@ function buildInner(operation: Operation): Command {
 			});
 		}
 		case "trim_clip": {
-			const { trackId, element } = requireClip(operation.clipId);
+			const clipId = resolveClipId({
+				clipId: operation.clipId,
+				clipRef: operation.clipRef,
+				refs,
+			});
+			const { trackId, element } = requireClip(clipId);
 			const patch: Partial<TimelineElement> = {
 				trimStart:
 					operation.trimStartTicks !== undefined
@@ -154,13 +206,18 @@ function buildInner(operation: Operation): Command {
 				});
 			}
 			return new UpdateElementsCommand({
-				updates: [{ trackId, elementId: operation.clipId, patch }],
+				updates: [{ trackId, elementId: clipId, patch }],
 			});
 		}
 		case "delete_clip": {
-			const { trackId } = requireClip(operation.clipId);
+			const clipId = resolveClipId({
+				clipId: operation.clipId,
+				clipRef: operation.clipRef,
+				refs,
+			});
+			const { trackId } = requireClip(clipId);
 			return new DeleteElementsCommand({
-				elements: [{ trackId, elementId: operation.clipId }],
+				elements: [{ trackId, elementId: clipId }],
 			});
 		}
 	}
@@ -174,16 +231,23 @@ function buildInner(operation: Operation): Command {
 export class PlannedOperation extends Command {
 	private inner: Command | null = null;
 
-	constructor(readonly operation: Operation) {
+	readonly operation: Operation;
+	private readonly refs: PlanRefs;
+
+	constructor({ operation, refs }: { operation: Operation; refs: PlanRefs }) {
 		super();
+		this.operation = operation;
+		this.refs = refs;
 	}
 
 	execute(): CommandResult | undefined {
 		const editor = EditorCore.getInstance();
 		const before = takeFingerprint(editor);
 		try {
-			this.inner = buildInner(this.operation);
+			const tracksBefore = editor.scenes.getActiveScene().tracks;
+			this.inner = buildInner({ operation: this.operation, refs: this.refs });
 			const result = this.inner.execute();
+			this.registerRefs(tracksBefore);
 			if (fingerprintsEqual({ a: before, b: takeFingerprint(editor) })) {
 				throw new CommandError({
 					code: "NO_EFFECT",
@@ -204,6 +268,33 @@ export class PlannedOperation extends Command {
 				});
 			}
 			throw error;
+		}
+	}
+
+	/** Names clips created by this operation (insert → ref, split → rightRef). */
+	private registerRefs(before: SceneTracks): void {
+		const op = this.operation;
+		const name =
+			op.type === "insert_clip"
+				? op.ref
+				: op.type === "split_clip"
+					? op.rightRef
+					: undefined;
+		if (name === undefined) return;
+		const known = new Set(
+			[...before.overlay, before.main, ...before.audio].flatMap((track) =>
+				(track.elements as TimelineElement[]).map((element) => element.id),
+			),
+		);
+		const after = EditorCore.getInstance().scenes.getActiveScene().tracks;
+		for (const track of [...after.overlay, after.main, ...after.audio]) {
+			const created = (track.elements as TimelineElement[]).find(
+				(element) => !known.has(element.id),
+			);
+			if (created) {
+				this.refs.set(name, created.id);
+				return;
+			}
 		}
 	}
 

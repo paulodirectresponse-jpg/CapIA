@@ -20,18 +20,24 @@ export type Operation =
 			mediaId: string;
 			startTicks: number;
 			trackId?: string;
+			/** Names the created clip so later operations of the same plan can target it. */
+			ref?: string;
 	  }
 	| {
 			type: "move_clip";
 			operationId: string;
-			clipId: string;
+			clipId?: string;
+			/** Alternative to clipId: a ref created earlier in the same plan. */
+			clipRef?: string;
 			newStartTicks: number;
 			targetTrackId?: string;
 	  }
 	| {
 			type: "trim_clip";
 			operationId: string;
-			clipId: string;
+			clipId?: string;
+			/** Alternative to clipId: a ref created earlier in the same plan. */
+			clipRef?: string;
 			trimStartTicks?: number;
 			trimEndTicks?: number;
 			startTicks?: number;
@@ -40,11 +46,20 @@ export type Operation =
 	| {
 			type: "split_clip";
 			operationId: string;
-			clipId: string;
+			clipId?: string;
+			/** Alternative to clipId: a ref created earlier in the same plan. */
+			clipRef?: string;
 			atTicks: number;
 			retainSide?: "both" | "left" | "right";
+			/** Names the right-hand clip created by the split. */
+			rightRef?: string;
 	  }
-	| { type: "delete_clip"; operationId: string; clipId: string };
+	| {
+			type: "delete_clip";
+			operationId: string;
+			clipId?: string;
+			clipRef?: string;
+	  };
 
 export type OperationType = Operation["type"];
 

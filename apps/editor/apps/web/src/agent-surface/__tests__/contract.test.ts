@@ -232,6 +232,54 @@ describe("AgentSurface v1 contract (real domain, headless)", () => {
 		);
 	});
 
+	test("refs: a plan can insert, split and move clips it created itself", () => {
+		const { editor, surface } = createFixture();
+		const plan = makePlan({
+			revision: editor.revision.get(),
+			planId: "refs",
+			operations: [
+				{
+					type: "insert_clip",
+					operationId: "a",
+					mediaId: "asset-video",
+					startTicks: 0,
+					ref: "clip",
+				},
+				{
+					type: "split_clip",
+					operationId: "b",
+					clipRef: "clip",
+					atTicks: 4 * T,
+					rightRef: "right",
+				},
+				{
+					type: "move_clip",
+					operationId: "c",
+					clipRef: "right",
+					newStartTicks: 8 * T,
+				},
+			],
+		});
+		const applied = surface.apply_plan(plan);
+		expect(applied.ok).toBe(true);
+		const starts = allClips(surface)
+			.map((clip) => clip.startTicks)
+			.sort((a, b) => a - b);
+		expect(starts).toEqual([0, 8 * T]);
+		expect(editor.command.getHistory().length).toBe(1);
+		const unknown = surface.preview_plan(
+			makePlan({
+				revision: editor.revision.get(),
+				planId: "refs-bad",
+				operations: [
+					{ type: "delete_clip", operationId: "z", clipRef: "nope" },
+				],
+			}),
+		);
+		expect(unknown.valid).toBe(false);
+		expect(unknown.errors[0].code).toBe("NOT_FOUND");
+	});
+
 	test("BatchCommand is atomic at domain level", () => {
 		const { editor } = createFixture();
 		let undone = 0;
