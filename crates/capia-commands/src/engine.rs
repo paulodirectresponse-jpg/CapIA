@@ -16,50 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ActorKind {
-    User,
-    Agent,
-    Api,
-    System,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Actor {
-    pub kind: ActorKind,
-    pub id: String,
-}
-
-impl Actor {
-    pub fn new(kind: ActorKind, id: impl Into<String>) -> Self {
-        Self {
-            kind,
-            id: id.into(),
-        }
-    }
-
-    pub fn user(id: impl Into<String>) -> Self {
-        Self::new(ActorKind::User, id)
-    }
-
-    pub fn agent(id: impl Into<String>) -> Self {
-        Self::new(ActorKind::Agent, id)
-    }
-
-    pub fn api(id: impl Into<String>) -> Self {
-        Self::new(ActorKind::Api, id)
-    }
-
-    pub fn system() -> Self {
-        Self::new(ActorKind::System, "system")
-    }
-
-    /// `Agent` e `Api` só escrevem por `preview → apply_plan` (ADR-030).
-    pub fn requires_preview(&self) -> bool {
-        matches!(self.kind, ActorKind::Agent | ActorKind::Api)
-    }
-}
+// Ator: tipo neutro em `capia-actor` (re-exportado: API pública inalterada).
+pub use capia_actor::{Actor, ActorKind};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandSummary {

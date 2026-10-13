@@ -9,10 +9,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** Matriz Rust: dependências permitidas por crate (normal / build / dev). Tudo fora disso é violação. */
 export const RUST_RULES = {
+  // Ator de uma escrita (usuário/agente/API/sistema): folha neutra (Fase 2A, ADR EnginePort).
+  // Re-exportado por capia-commands; a inteligência depende dele em vez do Command Engine legado.
+  "capia-actor": { workspace: [], normal: ["serde"], build: [], dev: ["serde_json"] },
   "capia-time": { workspace: [], normal: ["serde"], build: [], dev: ["serde_json"] },
   "capia-model": { workspace: ["capia-time"], normal: ["serde"], build: [], dev: ["serde_json"] },
   "capia-commands": {
-    workspace: ["capia-time", "capia-model"],
+    workspace: ["capia-actor", "capia-time", "capia-model"],
     normal: ["serde", "serde_json"],
     build: [],
     dev: [],
@@ -91,7 +94,10 @@ export const RUST_RULES = {
   // Reference Analyzer, Demand Interpreter) e assistente. Cliente do Engine API: escreve só por
   // preview → apply_plan com ator Agent. Roda sem rede (providers off) quando a tarefa é local.
   "capia-intelligence": {
+    // Fase 2A: capia-model/commands/assets/project e capia-editor-api só atrás da feature
+    // `session-engine` e/ou como dev-dependency (testes legados). O resto fala com o trait `Engine`.
     workspace: [
+      "capia-actor",
       "capia-time",
       "capia-model",
       "capia-commands",
@@ -197,6 +203,14 @@ export const RUST_RULES = {
     dev: [],
   },
   // Servidor HTTP local SÓ para desenvolvimento/E2E (não distribuído): adaptador fino da editor-api.
+  // EnginePort (Fase 2A, ADR-110): `Engine` da inteligência sobre a AgentSurface do editor OpenCut.
+  // Não conhece modelo/Command Engine Rust nem Session; transporte stdio/HTTP loopback (std::net).
+  "capia-engine-port": {
+    workspace: ["capia-actor", "capia-intelligence", "capia-media"],
+    normal: ["serde", "serde_json", "sha2"],
+    build: [],
+    dev: [],
+  },
   "capia-devserver": {
     // composition root: hospeda o serviço `ai.*` (cofre em memória; roteiros Replay só de E2E)
     workspace: ["capia-editor-api", "capia-intelligence", "capia-secrets"],
@@ -513,6 +527,8 @@ function main() {
     const base = join(root, group);
     if (!existsSync(base)) continue;
     for (const dir of readdirSync(base)) {
+      // apps/editor = OpenCut classic (bun workspace próprio, git subtree): regras em check-editor-architecture.mjs
+      if (group === "apps" && dir === "editor") continue;
       const manifest = join(base, dir, "package.json");
       if (existsSync(manifest)) jsPackages.push(JSON.parse(readFileSync(manifest, "utf8")));
     }

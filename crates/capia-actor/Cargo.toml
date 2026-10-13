@@ -1,0 +1,16 @@
+[package]
+name = "capia-actor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Quem escreve no documento (usuário, agente, API, sistema): tipo neutro compartilhado pelo Command Engine legado e pela inteligência"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

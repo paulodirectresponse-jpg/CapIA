@@ -4,11 +4,11 @@
 use crate::engine::Engine;
 use crate::error::IntelResult;
 use crate::records::Records;
+use capia_actor::Actor;
 use capia_ai::brain::{BrainProfile, DataClass};
 use capia_ai::capability::Capability;
 use capia_ai::dispatcher::AiRuntime;
 use capia_ai::router::RouteRequest;
-use capia_commands::Actor;
 use std::sync::Arc;
 
 #[derive(Clone)]

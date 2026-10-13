@@ -1,0 +1,20 @@
+[package]
+name = "capia-engine-port"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "EnginePort: implementação do trait Engine da inteligência sobre a AgentSurface do editor OpenCut (transporte stdio/HTTP, tradução do vocabulário legado, timebase)"
+
+[lints]
+workspace = true
+
+[dependencies]
+capia-actor.workspace = true
+capia-intelligence = { path = "../capia-intelligence", default-features = false }
+capia-media.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+
+[dev-dependencies]

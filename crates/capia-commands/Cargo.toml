@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+capia-actor.workspace = true
 capia-time.workspace = true
 capia-model.workspace = true
 serde.workspace = true

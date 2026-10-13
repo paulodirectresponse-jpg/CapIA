@@ -10,14 +10,13 @@ description = "Fase 4: inteligência assistida — transcrição, legendas autom
 workspace = true
 
 [dependencies]
+capia-actor.workspace = true
 capia-time.workspace = true
-capia-model.workspace = true
-capia-commands.workspace = true
 capia-media.workspace = true
-capia-assets.workspace = true
 capia-store.workspace = true
-capia-project.workspace = true
-capia-editor-api.workspace = true
+# só o `SessionEngine` legado (feature `session-engine`); o resto da inteligência fala com o
+# trait `Engine` e NÃO conhece capia-model/capia-commands/Session (EnginePort, Fase 2A)
+capia-editor-api = { workspace = true, optional = true }
 capia-ai.workspace = true
 capia-secrets.workspace = true
 serde.workspace = true
@@ -32,11 +31,19 @@ async-trait = "0.1"
 png = "0.18"
 
 [features]
+default = ["session-engine"]
+# adaptador sobre a `Session` Rust legada (Command Engine Rust); desligar para usar outro motor
+session-engine = ["dep:capia-editor-api"]
 # pontos de falha para testes de crash/resume da autonomia — SÓ testes
 failpoints = []
 # geradores de DOCX/PDF para testes de integração (sem binários versionados)
 testkit = []
 
 [dev-dependencies]
+capia-model.workspace = true
+capia-commands.workspace = true
+capia-assets.workspace = true
+capia-project.workspace = true
+capia-editor-api.workspace = true
 capia-ai = { workspace = true, features = ["testkit"] }
 capia-intelligence = { path = ".", features = ["testkit", "failpoints"] }

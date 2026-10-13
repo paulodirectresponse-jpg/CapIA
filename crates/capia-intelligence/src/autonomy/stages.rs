@@ -215,8 +215,8 @@ impl Orchestrator {
         }
     }
 
-    fn actor(run: &AiRun) -> capia_commands::Actor {
-        capia_commands::Actor::agent(run.actor_id())
+    fn actor(run: &AiRun) -> capia_actor::Actor {
+        capia_actor::Actor::agent(run.actor_id())
     }
 
     // ---- UNDERSTAND ----------------------------------------------------------------------------

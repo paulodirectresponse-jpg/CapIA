@@ -340,6 +340,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-actor"
+version = "0.6.0-rc.3"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "capia-ai"
 version = "0.6.0-rc.3"
 dependencies = [
@@ -389,6 +397,7 @@ dependencies = [
 name = "capia-commands"
 version = "0.6.0-rc.3"
 dependencies = [
+ "capia-actor",
  "capia-model",
  "capia-time",
  "serde",
@@ -447,6 +456,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "capia-engine-port"
+version = "0.6.0-rc.3"
+dependencies = [
+ "capia-actor",
+ "capia-intelligence",
+ "capia-media",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "capia-fixtures"
 version = "0.6.0-rc.3"
 dependencies = [
@@ -468,6 +489,7 @@ version = "0.6.0-rc.3"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "capia-actor",
  "capia-ai",
  "capia-assets",
  "capia-commands",

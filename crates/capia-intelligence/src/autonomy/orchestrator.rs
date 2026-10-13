@@ -700,7 +700,7 @@ impl Orchestrator {
                 self.deps.ai.clone(),
                 self.profile_for(&run),
             );
-            ic.actor = capia_commands::Actor::agent(run.actor_id());
+            ic.actor = capia_actor::Actor::agent(run.actor_id());
             ic
         };
         let mut task = TaskCtx::new(format!("{}:{}", run.id, stage.as_str()), &ic.profile);

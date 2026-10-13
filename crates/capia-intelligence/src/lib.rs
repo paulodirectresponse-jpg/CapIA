@@ -23,7 +23,10 @@ pub mod silence;
 pub mod tools_exec;
 pub mod transcript;
 
+pub use capia_actor::{Actor, ActorKind};
 pub use ctx::IntelCtx;
-pub use engine::{Engine, SessionEngine};
+#[cfg(feature = "session-engine")]
+pub use engine::SessionEngine;
+pub use engine::{Engine, RawFrame};
 pub use error::{IntelError, IntelResult};
 pub use service::{IntelligenceService, ServiceConfig};
