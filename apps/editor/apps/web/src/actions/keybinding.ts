@@ -41,3 +41,13 @@ export type ShortcutKey = ModifierBasedShortcutKey | SingleCharacterShortcutKey;
 export type KeybindingConfig = {
 	[key in ShortcutKey]?: TActionWithOptionalArgs;
 };
+
+const MODIFIER_SET: ReadonlySet<string> = new Set(["ctrl", "alt", "shift"]);
+
+// VALIDATION PATCH: upstream persistence.ts imports this but it was never defined.
+export function isShortcutKey(value: string): value is ShortcutKey {
+	const parts = value.split("+");
+	const key = parts.pop();
+	if (!key || !isKey(key)) return false;
+	return parts.every((part) => MODIFIER_SET.has(part));
+}
