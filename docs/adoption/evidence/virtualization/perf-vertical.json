@@ -1,0 +1,48 @@
+[
+ {
+  "N": 1000,
+  "layout": "dense",
+  "mode": "virtualized",
+  "loadMs": 931,
+  "dom": 2646,
+  "heapMB": 83,
+  "longTaskMaxMs": 185,
+  "nTracks": 20,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 300,
+   "max": 383
+  },
+  "zoomOutMs": 601,
+  "cmd": {
+   "split": 221.4,
+   "move": 356.4,
+   "trim": 264.3,
+   "undo": 184.3
+  },
+  "domAfterInteractions": 4952
+ },
+ {
+  "N": 5000,
+  "layout": "dense",
+  "mode": "virtualized",
+  "loadMs": 1711,
+  "dom": 3686,
+  "heapMB": 90,
+  "longTaskMaxMs": 1162,
+  "nTracks": 100,
+  "scrollFrame": {
+   "p50": 17,
+   "p95": 283,
+   "max": 400
+  },
+  "zoomOutMs": 668,
+  "cmd": {
+   "split": 208.2,
+   "move": 366.1,
+   "trim": 235.2,
+   "undo": 223.4
+  },
+  "domAfterInteractions": 5992
+ }
+]

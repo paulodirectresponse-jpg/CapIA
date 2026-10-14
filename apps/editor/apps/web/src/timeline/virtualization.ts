@@ -90,3 +90,53 @@ export function isVirtualizationEnabled(): boolean {
 	}
 	return true;
 }
+
+/**
+ * Virtualização VERTICAL de faixas (2B). Linhas são posicionadas em absoluto (top/height em px), então
+ * basta decidir quais montar. A janela é quantizada em blocos (menos re-render ao rolar).
+ */
+export interface VisibleRowWindow {
+	top: number;
+	bottom: number;
+}
+
+export const ROW_WINDOW_CHUNK_PX = 120;
+export const ROW_WINDOW_OVERSCAN_PX = 300;
+
+export function computeVisibleRowWindow({
+	scrollTop,
+	viewportHeight,
+	overscanPx = ROW_WINDOW_OVERSCAN_PX,
+	chunkPx = ROW_WINDOW_CHUNK_PX,
+}: {
+	scrollTop: number;
+	viewportHeight: number;
+	overscanPx?: number;
+	chunkPx?: number;
+}): VisibleRowWindow {
+	const top = Math.max(0, scrollTop);
+	return {
+		top: Math.max(0, Math.floor(top / chunkPx) * chunkPx - overscanPx),
+		bottom: Math.ceil((top + viewportHeight) / chunkPx) * chunkPx + overscanPx,
+	};
+}
+
+/** Linhas a montar: as que intersectam a janela + as que a interação exige (`keep`). */
+export function selectVisibleRows<
+	T extends { id: string; top: number; height: number },
+>({
+	rows,
+	window,
+	keep,
+}: {
+	rows: readonly T[];
+	window: VisibleRowWindow | null;
+	keep: (id: string) => boolean;
+}): readonly T[] {
+	if (window === null) return rows;
+	return rows.filter(
+		(row) =>
+			(row.top + row.height >= window.top && row.top <= window.bottom) ||
+			keep(row.id),
+	);
+}

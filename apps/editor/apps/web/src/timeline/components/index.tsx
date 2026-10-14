@@ -35,8 +35,11 @@ import type { MediaTime } from "@/wasm";
 import type { ElementDragView, DropTarget } from "@/timeline";
 import { TimelineTrackContent } from "./timeline-track";
 import {
+	computeVisibleRowWindow,
 	computeVisibleTimeWindow,
 	isVirtualizationEnabled,
+	selectVisibleRows,
+	type VisibleRowWindow,
 	type VisibleTimeWindow,
 } from "@/timeline/virtualization";
 import { TimelinePlayhead } from "./timeline-playhead";
@@ -96,6 +99,7 @@ import { cn } from "@/utils/ui";
 
 const TRACKS_CONTAINER_MAX_HEIGHT = 800;
 const FALLBACK_CONTAINER_WIDTH = 1000;
+const FALLBACK_CONTAINER_HEIGHT = 600;
 const TRACKS_CONTAINER_HEIGHT = { min: 0, max: TRACKS_CONTAINER_MAX_HEIGHT };
 const TRACK_ICONS: Record<TimelineTrack["type"], ReactNode> = {
 	video: <OcVideoIcon className="text-muted-foreground size-4 shrink-0" />,
@@ -162,10 +166,14 @@ export function Timeline() {
 	const { height: timelineHeaderHeightValue } = useContainerSize({
 		containerRef: timelineHeaderRef,
 	});
-	const { viewportWidth: tracksViewportWidth, scrollLeft: tracksScrollLeft } =
-		useScrollPosition({
-			scrollRef: tracksScrollRef,
-		});
+	const {
+		viewportWidth: tracksViewportWidth,
+		scrollLeft: tracksScrollLeft,
+		scrollTop: tracksScrollTop,
+		viewportHeight: tracksViewportHeight,
+	} = useScrollPosition({
+		scrollRef: tracksScrollRef,
+	});
 
 	const handleSnapPointChange = useCallback((snapPoint: SnapPoint | null) => {
 		setCurrentSnapPoint(snapPoint);
@@ -203,6 +211,17 @@ export function Timeline() {
 				? { start: rawWindow.start, end: rawWindow.end }
 				: null,
 		[virtualizationEnabled, rawWindow.start, rawWindow.end],
+	);
+	const rawRowWindow = computeVisibleRowWindow({
+		scrollTop: tracksScrollTop,
+		viewportHeight: tracksViewportHeight || FALLBACK_CONTAINER_HEIGHT,
+	});
+	const visibleRowWindow = useMemo<VisibleRowWindow | null>(
+		() =>
+			virtualizationEnabled
+				? { top: rawRowWindow.top, bottom: rawRowWindow.bottom }
+				: null,
+		[virtualizationEnabled, rawRowWindow.top, rawRowWindow.bottom],
 	);
 	const { isResizing, handleResizeStart } = useTimelineResize({
 		zoomLevel,
@@ -567,6 +586,7 @@ export function Timeline() {
 								{tracks.length > 0 && (
 									<TimelineTrackRows
 										visibleWindow={visibleWindow}
+										visibleRowWindow={visibleRowWindow}
 										mainTrackId={mainTrackId}
 										zoomLevel={zoomLevel}
 										dragView={dragView}
@@ -744,6 +764,7 @@ function TrackLabelsPanel({
 
 const TimelineTrackRows = memo(function TimelineTrackRows({
 	visibleWindow,
+	visibleRowWindow,
 	mainTrackId,
 	zoomLevel,
 	dragView,
@@ -774,6 +795,7 @@ const TimelineTrackRows = memo(function TimelineTrackRows({
 	isDragOver: boolean;
 	dropTarget: DropTarget | null;
 	visibleWindow: VisibleTimeWindow | null;
+	visibleRowWindow: VisibleRowWindow | null;
 }) {
 	const timeline = useEditor((e) => e.timeline);
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
@@ -826,9 +848,37 @@ const TimelineTrackRows = memo(function TimelineTrackRows({
 			});
 	}, [tracks, draggingElementIds]);
 
+	const rowLayout = useMemo(
+		() =>
+			sortedTracks.map(({ track, index }) => ({
+				id: track.id,
+				track,
+				index,
+				top:
+					TIMELINE_CONTENT_TOP_PADDING_PX +
+					getCumulativeHeightBefore({
+						tracks,
+						trackIndex: index,
+						getExtraHeight: getTrackExpansionHeight,
+					}),
+				height:
+					getTrackHeight({ type: track.type }) + getTrackExpansionHeight(index),
+			})),
+		[sortedTracks, tracks, getTrackExpansionHeight],
+	);
+	// Durante arrasto o layout muda: monta todas as faixas (a janela horizontal continua valendo).
+	const isDragging = dragView.kind === "dragging";
+	const visibleRows = selectVisibleRows({
+		rows: rowLayout,
+		window: isDragging ? null : visibleRowWindow,
+		keep: (id) =>
+			tracksWithSelection.has(id) ||
+			(isDragOver && dropTarget?.targetElement?.trackId === id),
+	});
+
 	return (
 		<>
-			{sortedTracks.map(({ track, index }) => (
+			{visibleRows.map(({ track, index }) => (
 				<ContextMenu key={track.id}>
 					<ContextMenuTrigger asChild>
 						<div

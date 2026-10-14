@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
 	WINDOW_CHUNK_PX,
 	WINDOW_OVERSCAN_PX,
+	computeVisibleRowWindow,
 	computeVisibleTimeWindow,
 	isInWindow,
 	selectVisibleElements,
+	selectVisibleRows,
 } from "@/timeline/virtualization";
 import { TICKS_PER_SECOND } from "@/wasm";
 
@@ -111,5 +113,61 @@ describe("timeline time-window virtualization", () => {
 		});
 		expect(picked.length).toBeGreaterThan(0);
 		expect(picked.length).toBeLessThan(100);
+	});
+});
+
+describe("virtualização vertical de faixas", () => {
+	const rows = Array.from({ length: 100 }, (_, i) => ({
+		id: `t${i}`,
+		top: i * 40,
+		height: 40,
+	}));
+
+	test("janela quantizada com overscan", () => {
+		const w = computeVisibleRowWindow({ scrollTop: 130, viewportHeight: 200 });
+		expect(w.top).toBe(0); // floor(130/120)*120 - 300 < 0
+		expect(w.bottom).toBe(Math.ceil(330 / 120) * 120 + 300);
+	});
+
+	test("no topo monta só ~ viewport+overscan", () => {
+		const w = computeVisibleRowWindow({ scrollTop: 0, viewportHeight: 400 });
+		const out = selectVisibleRows({ rows, window: w, keep: () => false });
+		expect(out.length).toBeLessThan(25);
+		expect(out[0].id).toBe("t0");
+	});
+
+	test("no meio não monta as faixas distantes", () => {
+		const w = computeVisibleRowWindow({ scrollTop: 2000, viewportHeight: 400 });
+		const ids = selectVisibleRows({ rows, window: w, keep: () => false }).map(
+			(r) => r.id,
+		);
+		expect(ids).not.toContain("t0");
+		expect(ids).not.toContain("t99");
+		expect(ids).toContain("t50");
+	});
+
+	test("faixas 'keep' (selecionada/arrasto) sempre montadas", () => {
+		const w = computeVisibleRowWindow({ scrollTop: 2000, viewportHeight: 400 });
+		const ids = selectVisibleRows({
+			rows,
+			window: w,
+			keep: (id) => id === "t0",
+		}).map((r) => r.id);
+		expect(ids).toContain("t0");
+	});
+
+	test("window null = tudo (virtualização desligada)", () => {
+		expect(
+			selectVisibleRows({ rows, window: null, keep: () => false }).length,
+		).toBe(100);
+	});
+
+	test("faixa parcialmente visível na borda é montada", () => {
+		const out = selectVisibleRows({
+			rows: [{ id: "x", top: 1000, height: 40 }],
+			window: { top: 1039, bottom: 2000 },
+			keep: () => false,
+		});
+		expect(out.length).toBe(1);
 	});
 });
