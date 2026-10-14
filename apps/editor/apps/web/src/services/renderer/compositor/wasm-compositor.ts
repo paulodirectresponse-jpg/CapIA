@@ -7,6 +7,7 @@ import {
 	resizeCompositor,
 	uploadTexture,
 } from "opencut-wasm";
+import { objectId, recordTrace } from "@/diagnostics/render-trace";
 import {
 	incrementCounter,
 	isRenderPerfEnabled,
@@ -98,12 +99,23 @@ class WasmCompositor {
 
 	private syncExternalTexture(texture: ExternalTextureDescriptor) {
 		const previous = this.cache.get(texture.id);
-		if (
+		const hit =
 			previous?.kind === "external" &&
 			previous.source === texture.source &&
 			previous.width === texture.width &&
-			previous.height === texture.height
-		) {
+			previous.height === texture.height;
+		recordTrace({
+			event: {
+				kind: "texture",
+				textureId: texture.id,
+				decision: hit ? "hit" : "miss",
+				reason: hit ? "same" : previous?.kind === "external" ? "source" : "first",
+				uploaded: !hit,
+				sourceId: objectId({ value: texture.source }),
+				revision: "n/a (pre-fix)",
+			},
+		});
+		if (hit) {
 			incrementCounter({ name: "textureCacheHit" });
 			return;
 		}

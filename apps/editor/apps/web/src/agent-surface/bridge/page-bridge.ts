@@ -1,3 +1,4 @@
+import { installRenderTraceHooks } from "@/diagnostics/render-trace";
 import { EditorCore } from "@/core";
 import { buildDefaultMaskInstance } from "@/masks";
 import { buildTextElement } from "@/timeline/element-utils";
@@ -31,6 +32,7 @@ export function installPageBridge(): void {
 	) {
 		window.__capiaEditor = EditorCore.getInstance();
 		window.__capiaE2E = { buildTextElement, buildDefaultMaskInstance };
+		installRenderTraceHooks();
 	}
 	if (
 		process.env.NEXT_PUBLIC_CAPIA_AGENT_BRIDGE !== "1" ||

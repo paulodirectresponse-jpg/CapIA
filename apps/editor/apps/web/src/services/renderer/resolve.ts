@@ -8,6 +8,7 @@ import {
 import { effectsRegistry, resolveEffectPasses } from "@/effects";
 import type { Effect, EffectPass } from "@/effects/types";
 import { getSourceTimeAtClipTime } from "@/retime";
+import { objectId, recordTrace } from "@/diagnostics/render-trace";
 import {
 	DEFAULT_GRAPHIC_SOURCE_SIZE,
 	resolveGraphicElementParamsAtTime,
@@ -210,6 +211,22 @@ async function resolveVideoNode({
 	if (!frame) {
 		return null;
 	}
+	recordTrace({
+		event: {
+			kind: "video-frame",
+			site: "layer",
+			mediaId: node.params.mediaId,
+			timelineTimeTicks: context.time,
+			timelineTimeSeconds: mediaTimeToSeconds({ time: roundMediaTime({ time: context.time }) }),
+			clipLocalTimeTicks: clipTime,
+			sourceTimeTicks,
+			sourceTimeSeconds: mediaTimeToSeconds({ time: roundMediaTime({ time: sourceTimeTicks }) }),
+			frameTimestamp: frame.timestamp,
+			frameDuration: frame.duration,
+			canvasId: objectId({ value: frame.canvas }),
+			revision: `${frame.timestamp}:${frame.duration}`,
+		},
+	});
 
 	const visualState = resolveVisualState({
 		params: node.params,
@@ -431,6 +448,22 @@ async function resolveBackdropSource({
 		if (!frame) {
 			return null;
 		}
+		recordTrace({
+			event: {
+				kind: "video-frame",
+				site: "backdrop",
+				mediaId: node.params.mediaId,
+				timelineTimeTicks: clipTime,
+				timelineTimeSeconds: mediaTimeToSeconds({ time: roundMediaTime({ time: clipTime }) }),
+				clipLocalTimeTicks: clipTime,
+				sourceTimeTicks,
+				sourceTimeSeconds: mediaTimeToSeconds({ time: roundMediaTime({ time: sourceTimeTicks }) }),
+				frameTimestamp: frame.timestamp,
+				frameDuration: frame.duration,
+				canvasId: objectId({ value: frame.canvas }),
+				revision: `${frame.timestamp}:${frame.duration}`,
+			},
+		});
 
 		return {
 			source: frame.canvas,
