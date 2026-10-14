@@ -13,6 +13,11 @@ import {
 	makeMedia,
 	openNewProject,
 } from "./harness.mjs";
+import {
+	BootstrapError,
+	evaluateProjectBootstrap,
+	serverPreflight,
+} from "./bootstrap.mjs";
 
 const BASE = process.env.EDITOR_URL ?? "http://127.0.0.1:3100";
 const OUT = process.env.E2E_OUT ?? join(process.cwd(), "gpu-parity-out");
@@ -211,10 +216,34 @@ const check = (name, ok, detail) => {
 };
 
 try {
-	await page.addInitScript(() => {
-		window.__CAPIA_TRACE__ = true;
-	});
-	await openNewProject(page, BASE);
+	// --- estágio 1: o servidor serve um build consistente? (senão SERVER_BOOT_FAIL, nunca GPU_PARITY_FAIL)
+	verdict.stage = "preflight";
+	verdict.preflight = await serverPreflight(BASE);
+	check(
+		"PREFLIGHT (servidor responde e serve todos os assets do build)",
+		verdict.preflight.ok,
+		verdict.preflight.ok
+			? `/projects 200, ${verdict.preflight.assetsChecked} assets ok`
+			: verdict.preflight.reasons.join(" | "),
+	);
+	if (!verdict.preflight.ok) {
+		verdict.serverBootFail = true;
+		throw new Error("SERVER_BOOT_FAIL");
+	}
+
+	// --- estágio 2: PROJECT_BOOTSTRAP (projeto REAL aberto em /editor/[id])
+	verdict.stage = "bootstrap";
+	const boot = await openNewProject(page, BASE);
+	verdict.bootstrap = await evaluateProjectBootstrap(page, boot);
+	check(
+		"PROJECT_BOOTSTRAP (projeto real em /editor/[id], __capiaAgent/__capiaEditor presentes)",
+		verdict.bootstrap.ok,
+		`id=${boot.projectId} mode=${boot.mode} ` +
+			JSON.stringify(verdict.bootstrap.criteria),
+	);
+	if (!verdict.bootstrap.ok)
+		throw new Error("PROJECT_BOOTSTRAP critérios falharam");
+	verdict.stage = "gpu-detect";
 	await importFiles(page, [media.main, overlay]);
 	await page.waitForFunction(
 		() => window.__capiaEditor && window.__capiaE2E,
@@ -262,6 +291,7 @@ try {
 		return info;
 	});
 	const gpuText = JSON.stringify(verdict.gpu);
+	verdict.stage = "temporal";
 	verdict.softwareRenderer =
 		/swiftshader|llvmpipe|software|warp|basic render|microsoft basic/i.test(
 			gpuText,
@@ -575,13 +605,27 @@ try {
 } catch (e) {
 	if (String(e.message) === "TEMPORAL_ONLY") {
 		console.log("TEMPORAL_ONLY: parando após VIDEO_TEMPORAL_ADVANCE");
-	} else
+	} else if (String(e.message) === "SERVER_BOOT_FAIL") {
+		verdict.checks.push({
+			name: "exceção",
+			ok: false,
+			detail:
+				"SERVER_BOOT_FAIL: " + (verdict.preflight?.reasons ?? []).join(" | "),
+		});
+	} else {
+		if (e instanceof BootstrapError)
+			verdict.bootstrapFailure = {
+				kind: e.kind,
+				message: e.message,
+				evidence: ["bootstrap-failure.png", "bootstrap-diagnostics.json"],
+			};
 		verdict.checks.push({
 			name: "exceção",
 			ok: false,
 			detail: String(e.stack ?? e),
 		});
-	console.error(e);
+		console.error(e);
+	}
 } finally {
 	const allOk = verdict.checks.every((c) => c.ok);
 	const crashed = verdict.checks.some((c) => c.name === "exceção");
@@ -590,19 +634,26 @@ try {
 		? !verdict.videoTemporalAdvance.ok
 		: false;
 	const failed = verdict.checks.filter((c) => !c.ok);
+	if (verdict.videoTemporalAdvance) verdict.stage = "parity";
 	// Em renderer de software, divergência de export é registrada como achado aberto (não é PASS
 	// e não é prova de falha de GPU); exceção do harness continua sendo FAIL.
 	verdict.softwareFindings = verdict.softwareRenderer
 		? failed.map((c) => c.name)
 		: [];
-	verdict.verdict =
-		crashed || temporalBroken
-			? "GPU_PARITY_FAIL"
-			: verdict.softwareRenderer
-				? "GPU_PARITY_PENDING_HUMAN_MACHINE"
-				: allOk
-					? "GPU_PARITY_PASS"
-					: "GPU_PARITY_FAIL";
+	// Classificação: falha ANTES de detectar a GPU / de VIDEO_TEMPORAL_ADVANCE não é falha de paridade.
+	const beforeTemporal = !verdict.videoTemporalAdvance;
+	verdict.failedStage = failed.length || crashed ? verdict.stage : null;
+	verdict.verdict = verdict.serverBootFail
+		? "SERVER_BOOT_FAIL"
+		: beforeTemporal && (crashed || failed.length)
+			? "HARNESS_BOOTSTRAP_FAIL"
+			: crashed || temporalBroken
+				? "GPU_PARITY_FAIL"
+				: verdict.softwareRenderer
+					? "GPU_PARITY_PENDING_HUMAN_MACHINE"
+					: allOk
+						? "GPU_PARITY_PASS"
+						: "GPU_PARITY_FAIL";
 	verdict.note = verdict.softwareRenderer
 		? "Renderer de SOFTWARE (SwiftShader/WARP/llvmpipe): os quadros foram comparados, mas isto NÃO é evidência de GPU real. Rode em PC Windows com GPU física (GPU_REAL=1)."
 		: "Renderer com GPU física.";
@@ -612,5 +663,5 @@ try {
 	);
 	await browser.close();
 	console.log(`VERDICT: ${verdict.verdict}`);
-	process.exitCode = verdict.verdict === "GPU_PARITY_FAIL" ? 1 : 0;
+	process.exitCode = /FAIL$/.test(verdict.verdict) ? 1 : 0;
 }

@@ -5,6 +5,11 @@ import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
+import {
+	applyFaultInjection,
+	attachDiagnostics,
+	bootstrapProject,
+} from "./bootstrap.mjs";
 
 export function findChromium() {
 	if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
@@ -68,6 +73,12 @@ export async function launch({ headless = true } = {}) {
 		acceptDownloads: true,
 	});
 	const page = await context.newPage();
+	attachDiagnostics(page);
+	// liga o trace do app (boot do projeto + render); só tem efeito em builds com NEXT_PUBLIC_CAPIA_E2E_HOOKS=1
+	await page.addInitScript(() => {
+		window.__CAPIA_TRACE__ = true;
+	});
+	await applyFaultInjection(page, process.env.E2E_FAULT);
 	return { browser, context, page };
 }
 
@@ -191,24 +202,8 @@ export function portCli(addr, args) {
 }
 
 export async function openNewProject(page, base) {
-	await page.goto(`${base}/projects`, { waitUntil: "networkidle" });
-	await page
-		.getByRole("button", { name: /new project|create your first project/i })
-		.first()
-		.click();
-	await page.waitForURL(/editor\//);
-	await page.waitForFunction(() => window.__capiaAgent !== undefined, null, {
-		timeout: 30000,
-	});
-	await page.waitForTimeout(2500); // o diálogo de onboarding aparece depois do load
-	for (let i = 0; i < 3; i++) {
-		const close = page.getByRole("button", { name: /^close$/i });
-		if (await close.count())
-			await close
-				.first()
-				.click()
-				.catch(() => {});
-	}
+	// Bootstrap robusto + diagnosticável (bootstrap.mjs): espera por pathname, não por `load`.
+	return bootstrapProject(page, base);
 }
 
 export async function importFiles(page, files) {
