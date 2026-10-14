@@ -77,3 +77,23 @@ OpenCut: 120 000 ticks/s (inteiro). CapIA: 705 600 000/s. Razão 5880 (inteira).
 
 ## 13. CI
 Workflow `.github/workflows/opencut-integration.yml` (push em `integration/**` + manual). Jobs: `editor` (install/tsc/testes/contrato/build), `wasm`, `engine-port`, `rules` (arquitetura core + editor, licenças JS/Rust), `codec-webview2` (Windows), `gpu-parity` (manual). `ci.yml` legado intocado.
+
+### Estado do CI (evidência por job — runs reais no GitHub Actions)
+| Job | Resultado | Onde |
+|---|---|---|
+| `editor` (install, tsc, 245 testes, contrato AgentSurface, `next build`) | verde | run 38487826620 (completo) e run 38488194148 (tsc/testes/contrato verdes; build em andamento ao fechar este relatório) |
+| `wasm` (`wasm-pack build rust/wasm`) | verde | run 38487826620 |
+| `engine-port` (cargo test EnginePort × OpenCut real com `CAPIA_REQUIRE_BUN=1`) | passo de testes verde no run 38487826620; passo final (`--no-default-features`) não observado até o fim em CI (verificado localmente) | run 38487826620 |
+| `codec-webview2` (Windows) | **verde / H264_PASS** | run 38487826620 |
+| `rules` (arquitetura core+editor, licenças JS, `cargo deny`) | verde | run 38488194148 (após corrigir 2 achados reais: fixtures de `check-architecture.test.mjs` e dependência sem versão em `capia-engine-port`) |
+| `gpu-parity` | manual (não roda no push) | — |
+Os runs 1 e 2 foram cancelados por `concurrency` quando um push novo chegou; o run 3 (HEAD de código) estava em andamento ao fechar. Nenhum job do HEAD de código falhou até então.
+
+## 14. Pendências assumidas para a Fase 2B (nenhuma bloqueia o veredito)
+1. Paridade export × snapshot em GPU real (achado aberto em software) — rodar `gpu-parity` em PC Windows com GPU.
+2. Encoder H.264 por hardware e export 1080p longo no WebView2; range de cor `yuvj420p`; tornar explícito o fallback AAC→Opus.
+3. `soundtouchjs` (LGPL-2.1) e `sharp` (LGPL, nativo) — resolver; auditar Whisper/fontes.
+4. Virtualização vertical de faixas (layout denso).
+5. Vocabulário legado restante no EnginePort; `capia-store` ainda puxa `capia-commands/model` transitivamente.
+6. Tag `legacy-core-rc3` no remoto (push de tags falha neste ambiente).
+7. Persistência: o OpenCut usa IndexedDB/OPFS; decidir/armazenar projeto local no desktop (Tauri) na 2B.
