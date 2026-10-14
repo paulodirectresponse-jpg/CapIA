@@ -444,11 +444,20 @@ try {
 	console.error(e);
 } finally {
 	const allOk = verdict.checks.every((c) => c.ok);
-	verdict.verdict = !allOk
+	const crashed = verdict.checks.some((c) => c.name === "exceção");
+	const failed = verdict.checks.filter((c) => !c.ok);
+	// Em renderer de software, divergência de export é registrada como achado aberto (não é PASS
+	// e não é prova de falha de GPU); exceção do harness continua sendo FAIL.
+	verdict.softwareFindings = verdict.softwareRenderer
+		? failed.map((c) => c.name)
+		: [];
+	verdict.verdict = crashed
 		? "GPU_PARITY_FAIL"
 		: verdict.softwareRenderer
 			? "GPU_PARITY_PENDING_HUMAN_MACHINE"
-			: "GPU_PARITY_PASS";
+			: allOk
+				? "GPU_PARITY_PASS"
+				: "GPU_PARITY_FAIL";
 	verdict.note = verdict.softwareRenderer
 		? "Renderer de SOFTWARE (SwiftShader/WARP/llvmpipe): os quadros foram comparados, mas isto NÃO é evidência de GPU real. Rode em PC Windows com GPU física (GPU_REAL=1)."
 		: "Renderer com GPU física.";

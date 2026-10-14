@@ -1,0 +1,183 @@
+name: OpenCut integration (Fase 2A)
+
+# Não substitui o CI do núcleo legado (ci.yml): é um workflow adicional para o editor adotado em apps/editor.
+on:
+  push:
+    branches: ["integration/**"]
+  workflow_dispatch:
+    inputs:
+      gpu_parity:
+        description: "Rodar o harness de paridade de GPU (renderer de software no runner ⇒ PENDING_HUMAN_MACHINE)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencut-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  editor:
+    name: Editor (install, tsc, testes, contrato AgentSurface, build web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.18
+      - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx tsc --noEmit -p apps/web
+      - name: Testes (inclui contrato AgentSurface, comandos, snapping, virtualização)
+        run: bun test
+      - name: Contrato AgentSurface (explícito)
+        run: bun test apps/web/src/agent-surface
+      - name: Build web (sem .env, local-first)
+        working-directory: apps/editor/apps/web
+        run: bun run build
+        env:
+          NEXT_PUBLIC_CAPIA_AGENT_BRIDGE: "1"
+
+  wasm:
+    name: Compositor WASM (wasm-pack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.18
+      - run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/editor/rust -> target
+      - name: Instalar wasm-pack
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+      - name: Build WASM
+        working-directory: apps/editor
+        run: wasm-pack build rust/wasm --target bundler --out-dir pkg
+
+  engine-port:
+    name: EnginePort × OpenCut real (cargo + bun)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CAPIA_REQUIRE_BUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.18
+      - uses: Swatinem/rust-cache@v2
+      - name: Dependências do editor (hospeda o domínio TS)
+        working-directory: apps/editor
+        run: bun install --frozen-lockfile
+      - name: Testes do EnginePort (tradutor, unidades, domínio real via stdio)
+        run: cargo test -p capia-engine-port -p capia-actor -p capia-intelligence --all-targets
+      - name: capia-commands / capia-intelligence sem o adaptador legado
+        run: cargo check -p capia-commands -p capia-intelligence --no-default-features
+
+  rules:
+    name: Regras de arquitetura e licença
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Fronteiras do core (CapIA)
+        run: node tools/check-architecture.mjs
+      - name: Fronteiras do editor (UI ⇏ domínio, rede, segredos)
+        run: |
+          node tools/check-editor-architecture.mjs
+          node --test tools/check-editor-architecture.test.mjs tools/check-architecture.test.mjs
+      - name: Licenças JS do CapIA
+        run: node tools/check-licenses.mjs
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: Licenças Rust
+        run: cargo deny check licenses bans sources
+
+  codec-webview2:
+    name: H.264/AAC no WebView2 real (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: FFmpeg (ffprobe, só verificação do arquivo)
+        shell: pwsh
+        run: ./tools/ci/install-ffmpeg-windows.ps1
+      - name: Obter mediabunny (mesma versão do editor)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path mb | Out-Null
+          Push-Location mb
+          npm init -y | Out-Null
+          npm install mediabunny@1.41.0 --no-audit --no-fund
+          Pop-Location
+      - name: Spike WebView2
+        shell: powershell
+        run: |
+          $mb = (Resolve-Path "mb\node_modules\mediabunny\dist\bundles\mediabunny.min.mjs").Path
+          .\tools\codec-spike\run-webview2.ps1 -Mediabunny $mb -Out out-webview2
+        continue-on-error: true
+      - name: Resumo
+        if: always()
+        shell: pwsh
+        run: |
+          $r = "tools/codec-spike/out-webview2"
+          if (Test-Path "$r/verdict.json") { Get-Content "$r/verdict.json" | Write-Host } else { Write-Host "sem verdict.json (spike não completou)" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codec-webview2
+          path: tools/codec-spike/out-webview2
+          if-no-files-found: warn
+
+  gpu-parity:
+    name: Paridade de GPU (manual; runner = software)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.gpu_parity }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.18
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - working-directory: apps/editor
+        run: bun install --frozen-lockfile
+      - working-directory: apps/editor/apps/web
+        run: bun run build
+        env:
+          NEXT_PUBLIC_CAPIA_E2E_HOOKS: "1"
+          NEXT_PUBLIC_CAPIA_AGENT_BRIDGE: "1"
+      - working-directory: apps/editor
+        run: |
+          (cd apps/web && bunx next start -p 3100 &)
+          sleep 8
+          EDITOR_URL=http://127.0.0.1:3100 node e2e/gpu-parity.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpu-parity
+          path: apps/editor/gpu-parity-out
