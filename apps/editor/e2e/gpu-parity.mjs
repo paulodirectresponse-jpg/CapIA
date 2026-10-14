@@ -330,6 +330,7 @@ try {
 			: verdict.videoTemporalAdvance.reasons.join(" | "),
 	);
 
+	if (process.env.TEMPORAL_ONLY === "1") throw new Error("TEMPORAL_ONLY");
 	const r1 = await applyPlan("scene-1b", [
 		{
 			type: "insert_clip",
@@ -572,11 +573,14 @@ try {
 		);
 	}
 } catch (e) {
-	verdict.checks.push({
-		name: "exceção",
-		ok: false,
-		detail: String(e.stack ?? e),
-	});
+	if (String(e.message) === "TEMPORAL_ONLY") {
+		console.log("TEMPORAL_ONLY: parando após VIDEO_TEMPORAL_ADVANCE");
+	} else
+		verdict.checks.push({
+			name: "exceção",
+			ok: false,
+			detail: String(e.stack ?? e),
+		});
 	console.error(e);
 } finally {
 	const allOk = verdict.checks.every((c) => c.ok);
