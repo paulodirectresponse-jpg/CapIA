@@ -1133,3 +1133,26 @@ A Fase 6 precisa de documentação de API que não divirja do código, de um pac
 **Decisão.** `MediaTime` (inteiro, 120 000/s) é exato para 24/25/30/48/50/60 fps e NTSC (24000/1001, 30000/1001, 60000/1001). **Não** é exato para amostras de áudio de 44,1/48 kHz: nesses casos o tempo de amostra é derivado do inteiro com arredondamento determinístico, e o áudio guarda contagem de amostras própria. Não migrar para 705 600 000/s agora; a razão 5880 entre os dois é inteira, então a fronteira EnginePort converte sem perda (CapIA→editor exige tick múltiplo de 5880 ou arredondamento explícito e registrado). Nunca usar float de segundos no modelo (princípio 4).
 
 **Consequências.** Revisitar se surgir requisito de sincronia sample-accurate de áudio em edição de precisão; custo de migração seria um ADR novo (*Superseded*).
+
+### ADR-131 — Dependências LGPL e ativos de rede removidos do produto (2B)
+
+**Contexto.** O relatório da 2A apontou `soundtouchjs` (LGPL-2.1, bundle JS) e `sharp`/libvips (LGPL-3.0, binário nativo) e rede implícita para fontes do Google.
+**Decisão.** (1) `soundtouchjs` removido; `retime/wsola.ts` (WSOLA original, MIT, 0,5×–2×, testado por frequência/pico/comprimento). (2) `sharp` neutralizado por override para `packages/sharp-stub` (sem binário; o script gerador de atlas exige `sharp` instalado localmente e fica fora do typecheck). (3) Fontes do Google só com opt-in (`localStorage capia.remoteFonts=1` ou env), por padrão fonte do sistema. (4) Pesos Whisper continuam baixados sob demanda do Hugging Face (ação explícita do usuário); `revision` fixa e licença por card ficam `VERIFICAR` (rede bloqueada no ambiente de auditoria) — ver `docs/adoption/AUDIT_ASSETS.md`.
+**Consequências.** Nenhuma dependência LGPL no lockfile do editor. Qualidade do time-stretch WSOLA deve ser ouvida em material real (métricas objetivas passam; avaliação perceptiva é humana).
+
+### ADR-132 — Persistência desktop: projeto em arquivo (`capia.project` v1), IndexedDB só cache
+
+**Contexto.** O OpenCut persiste em IndexedDB+OPFS do navegador. No desktop (WebView2) isso é opaco, não portável, sem backup/Git/associação de arquivo e some se os dados do WebView forem limpos — incompatível com "local-first" e com o fluxo de relink do CapIA.
+**Alternativas.** (A) manter IndexedDB como única fonte; (B) arquivo de projeto versionado com mídia por referência; (C) guardar o documento TS dentro do `capia-store` (SQLite).
+**Decisão.** **B.** `apps/web/src/project-file/format.ts`: JSON canônico (chaves ordenadas ⇒ bytes determinísticos), `formatVersion`, `editorSchemaVersion` (arquivo de editor mais novo é recusado sem tocar o arquivo), `revision`, referências de mídia com caminho + `sha256:` (relink só por conteúdo, nunca por nome) e `contentSha256` (adulteração/truncamento detectados). Sem segredos nem bytes de mídia. A escrita em disco é do host Rust (temp + fsync + rename, como ADR-068); IndexedDB/OPFS permanece como autosave/cache e fonte de recuperação de falha. (C) é rejeitada: duplicaria o documento e criaria uma segunda fonte de verdade (princípios 1 e 3). O `capia-store` continua dono do que é da inteligência (runs, orçamento, memória, proveniência), associado ao `project.id`.
+**Consequências.** Pendências de 2B-2: comandos Tauri `project_open/save` (host Rust), hospedar o editor no shell desktop, autosave → arquivo, migração do projeto de IndexedDB existente. Formato testado (roundtrip, determinismo, adulteração, versões, relink).
+
+### ADR-133 — Export: AAC→Opus nunca é silencioso; export 1080p longo medido no WebView2
+
+**Decisão.** `export/audio-codec.ts`: MP4 sem AAC falha com `ExportCodecError` (`AAC_UNAVAILABLE`) a menos que `allowAudioFallback` seja pedido, caso em que o MP4 leva Opus e o resultado carrega `audioCodec` + aviso `AUDIO_CODEC_FALLBACK`. WebM continua Opus por definição. O spike do WebView2 ganhou perfil longo (1080p, 20 s, 8 Mbps, AAC) com verificação por ffprobe (resolução, nº de quadros, deriva A/V, duração).
+**Consequências.** A UI de export deve oferecer o opt-in e exibir o aviso (pendente). Resultado do perfil longo: ver `docs/adoption/PHASE_2B.md` (CI Windows).
+
+### ADR-134 — AgentSurface v1.1 e matriz de suporte do EnginePort
+
+**Decisão.** Operações aditivas (schemaVersion continua 1): `insert_text`, `set_clip_params` (apenas parâmetros existentes no elemento; desconhecido ⇒ `INVALID_OPERATION`), `set_clip_enabled` (áudio ⇒ `muted`; já no estado pedido ⇒ `NO_EFFECT`). O tradutor do EnginePort cobre texto/legendas (estilo → params, tamanho `size_permille/1000×90`), `set_property` (opacity, scale→scaleX/Y, position_x/y, rotation, volume_db) e `set_clip_enabled`; `command_support()` é a matriz de suporte e é testada contra o vocabulário emitido pelo Editor Agent. Sem equivalente (falham alto, nunca descartados): transições de clip, multi-sequence (`create_sequence`, `insert_nested`), `fade_in/out` (exigem keyframes), conteúdo `solid`/gerado.
+**Consequências.** Fluxo completo de overlays/legendas/enquadramento chega ao documento real em um plano = uma entrada de histórico (teste de integração contra o domínio OpenCut). Transições e multi-sequence são decisão de produto para a 2B-2 (adotar scenes do OpenCut ou limitar o Editor Agent).

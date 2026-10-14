@@ -1,6 +1,6 @@
 # STATUS
 
-> **FASE 2A (OpenCut Adoption Gate) — leia primeiro:** `docs/adoption/PHASE_2A.md`. Branch `integration/opencut-classic` (não mesclada em `main`). O editor OpenCut classic vive em `apps/editor/` (subtree, MIT); o documento/timeline dele é a fonte de verdade editorial (ADR-126/127); a inteligência CapIA o acessa via **AgentSurface v1 + EnginePort** (ADR-128). Veredito e gates A–J no relatório da fase. Pesquisa: `docs/research/open-source-base-evaluation.md`, `docs/research/opencut-classic-validation.md`. **Fase 2B não iniciada.**
+> **FASE 2B (andamento): `docs/adoption/PHASE_2B.md`.** **FASE 2A (OpenCut Adoption Gate) — leia primeiro:** `docs/adoption/PHASE_2A.md`. Branch `integration/opencut-classic` (não mesclada em `main`). O editor OpenCut classic vive em `apps/editor/` (subtree, MIT); o documento/timeline dele é a fonte de verdade editorial (ADR-126/127); a inteligência CapIA o acessa via **AgentSurface v1 + EnginePort** (ADR-128). Veredito e gates A–J no relatório da fase. Pesquisa: `docs/research/open-source-base-evaluation.md`, `docs/research/opencut-classic-validation.md`. **Fase 2B não iniciada.**
 
 
 **Última atualização:** 2026-10-02 · **Fase atual:** FASE 1 — Fundação (encerrada tecnicamente na M04; ver "Gates") · **Próxima:** FASE 2 — Motor
