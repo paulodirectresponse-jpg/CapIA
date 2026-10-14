@@ -11,7 +11,11 @@ export function findChromium() {
 	const roots = [
 		process.env.PLAYWRIGHT_BROWSERS_PATH,
 		"/opt/pw-browsers",
-		join(process.env.HOME ?? "", ".cache/ms-playwright"),
+		join(
+			process.env.HOME ?? process.env.USERPROFILE ?? "",
+			".cache/ms-playwright",
+		),
+		join(process.env.LOCALAPPDATA ?? "", "ms-playwright"),
 	].filter(Boolean);
 	for (const root of roots) {
 		if (!existsSync(root)) continue;
@@ -41,13 +45,23 @@ export const SOFTWARE_GL_ARGS = [
 ];
 
 export async function launch({ headless = true } = {}) {
+	const real = process.env.GPU_REAL === "1";
+	// GPU real: Chrome/Edge INSTALADO (tem H.264 e GPU de verdade), janela visível (WebGPU em headless
+	// costuma cair em software). BROWSER_CHANNEL=chrome|msedge.
 	const browser = await chromium.launch({
-		executablePath: findChromium(),
-		headless,
-		args:
-			process.env.GPU_REAL === "1"
-				? ["--autoplay-policy=no-user-gesture-required"]
-				: SOFTWARE_GL_ARGS,
+		executablePath: real ? process.env.CHROMIUM_PATH : findChromium(),
+		channel:
+			real && !process.env.CHROMIUM_PATH
+				? (process.env.BROWSER_CHANNEL ?? "chrome")
+				: undefined,
+		headless: real ? false : headless,
+		args: real
+			? [
+					"--autoplay-policy=no-user-gesture-required",
+					"--enable-unsafe-webgpu",
+					"--ignore-gpu-blocklist",
+				]
+			: SOFTWARE_GL_ARGS,
 	});
 	const context = await browser.newContext({
 		viewport: { width: 1700, height: 950 },

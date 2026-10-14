@@ -25,4 +25,6 @@ target/
 
 .cargo-tools/
 
-rust-migration-notes.mdgpu-parity-out/
+rust-migration-notes.md
+gpu-parity-out/
+
