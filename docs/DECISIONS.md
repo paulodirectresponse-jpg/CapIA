@@ -1099,3 +1099,37 @@ A Fase 6 precisa de documentação de API que não divirja do código, de um pac
 ### ADR-125 — Aceitação do OpenAI real: credencial já guardada, nunca lida pelo script
 
 **Decisão.** `ai.connect` aceita `use_stored: true`: usa a credencial que o app já guardou no cofre do SO (`capia/provider/openai`), sem o cliente informar ou receber o valor; sem credencial ⇒ erro `NO_CREDENTIAL`. O `capia-devserver --os-vault` usa o cofre real (nunca memória) e o `tools/rc3-acceptance/openai-real.ps1` conduz o fluxo (conectar, chat, edição com aprovação e desfazer exato, visão opcional, `whisper-1` à parte) e varre os logs por padrão de chave. **Sem chave ⇒ `pending_external` (exit 3), nunca sucesso.** O CI roda só esse caminho sem chave; o fluxo real é gate externo.
+
+### ADR-126 — Base de editor: OpenCut classic (subtree em `apps/editor`)
+
+**Contexto.** Fase 1/1B (`docs/research/`) decidiu `ADOPT_OPENCUT_CLASSIC_WITH_MAJOR_CHANGES` (baseline `OpenCut-app/opencut-classic@cf5e79e9`, MIT). A Fase 2A executa a adoção.
+
+**Decisão.** Importar por `git subtree` **sem squash** em `apps/editor/` (histórico upstream preservado; remote `upstream-opencut`, tag `upstream-opencut-cf5e79e9`). O workspace do editor (bun) é isolado dos workspaces pnpm/cargo do CapIA (`!apps/editor`, `exclude`). Serviços SaaS (auth/DB/Redis/Marble/Freesound) removidos — local-first. O núcleo legado fica congelado em `legacy/core-from-scratch` (tag `legacy-core-rc3`) e **não é apagado**.
+
+**Consequências.** Proveniência em `docs/PROVENANCE.md` (E1B-1, E2A-1) e `THIRD_PARTY_NOTICES.md`. Correções da 1B entram como commits separados. Merge de upstream futuro é possível (`git subtree pull`), com custo crescente conforme divergirmos.
+
+### ADR-127 — Fonte de verdade editorial: domínio TypeScript headless-capaz (não é "Rust abandonado")
+
+**Contexto.** Princípios 1 e 3 exigem uma timeline única e uma única porta de escrita. O documento do OpenCut (EditorCore + Commands com undo por snapshot) é o que a UI, o compositor WASM e a persistência já usam.
+
+**Decisão.** O **documento/timeline do OpenCut é a fonte de verdade editorial**. O CapIA não mantém segunda timeline. A inteligência (Rust: `capia-intelligence`, serviços, desktop, infra) escreve nele só via **AgentSurface v1** (planos `schemaVersion/planId/actor/baseRevision/operations`, CAS por revisão, idempotência por `planId`, batch atômico com rollback, preview/validate = executar e reverter). O núcleo Rust legado **não é abandonado**: continua válido para render/export headless, intelligence, store, server/MCP e como motor alternativo atrás da feature `session-engine`. "Headless" aqui significa: o domínio roda sem DOM em Bun (testado), hospedado por stdio/loopback/`window.__capiaAgent`.
+
+**Consequências.** Princípios 3/5/7 preservados (uma porta de escrita; UI como cliente; estados separados). Riscos: dois runtimes (TS + Rust) e fronteira de serialização — mitigados por contrato versionado + testes de contrato e de integração (job `engine-port`).
+
+### ADR-128 — EnginePort: a trait `Engine` do capia-intelligence sobre a AgentSurface
+
+**Decisão.** `capia-engine-port` implementa a trait `Engine` (re-exportada por `capia-commands`) via `AgentSurfaceEngine` sobre um `Transport` (stdio Bun, HTTP loopback, página). `capia-intelligence` deixou de depender de `Session`: o adaptador legado ficou atrás da feature `session-engine` (default ligada) e o tipo de ator virou o crate folha `capia-actor`. O tradutor mapeia o vocabulário de comandos legado para operações da AgentSurface; conversão de unidades 705 600 000 ↔ 120 000 ticks/s (razão 5880, inteira, sem float).
+
+**Consequências.** Veredito do spike: `ENGINEPORT_ADAPTER_FEASIBLE` — testes contra o domínio OpenCut **real** (não mock). Pendência de Fase 2B: cobertura do vocabulário legado além do subconjunto editorial (transições, legendas auto, etc.).
+
+### ADR-129 — Estratégia de codecs: WebCodecs (mediabunny) primeiro; FFmpeg LGPL híbrido como plano B
+
+**Contexto.** O exportador do editor usa WebCodecs (H.264 `avc` + AAC) — sem x264. Chromium sem codecs proprietários (Linux CI) reporta `H264_FAIL` por design; WebView2 no Windows usa codecs do SO (Media Foundation).
+
+**Decisão.** O critério é medido no **WebView2 real** (`tools/codec-spike`, job `codec-webview2` em windows-latest; `verify.mjs` valida com ffprobe). Se passar: export H.264/AAC pelo WebCodecs. Se falhar: caminho híbrido — compositor do editor → quadros → encoder **FFmpeg LGPL dinâmico** do CapIA (ADR-032; nunca x264/GPL). Também: o fallback silencioso AAC→Opus do exportador deve virar erro/aviso explícito na UI (Fase 2B).
+
+### ADR-130 — Timebase: manter 120 000 ticks/s no editor; conversão exata na fronteira
+
+**Decisão.** `MediaTime` (inteiro, 120 000/s) é exato para 24/25/30/48/50/60 fps e NTSC (24000/1001, 30000/1001, 60000/1001). **Não** é exato para amostras de áudio de 44,1/48 kHz: nesses casos o tempo de amostra é derivado do inteiro com arredondamento determinístico, e o áudio guarda contagem de amostras própria. Não migrar para 705 600 000/s agora; a razão 5880 entre os dois é inteira, então a fronteira EnginePort converte sem perda (CapIA→editor exige tick múltiplo de 5880 ou arredondamento explícito e registrado). Nunca usar float de segundos no modelo (princípio 4).
+
+**Consequências.** Revisitar se surgir requisito de sincronia sample-accurate de áudio em edição de precisão; custo de migração seria um ADR novo (*Superseded*).

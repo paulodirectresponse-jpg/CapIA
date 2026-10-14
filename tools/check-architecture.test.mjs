@@ -7,9 +7,18 @@ const pkg = (name, deps = []) => ({
   dependencies: deps.map(([n, kind]) => ({ name: n, kind: kind ?? null })),
 });
 const base = () => [
+  pkg("capia-actor", [["serde"], ["serde_json", "dev"]]),
+  pkg("capia-engine-port", [
+    ["capia-actor"],
+    ["capia-intelligence"],
+    ["capia-media"],
+    ["serde"],
+    ["serde_json"],
+    ["sha2"],
+  ]),
   pkg("capia-time"),
   pkg("capia-model", [["capia-time"]]),
-  pkg("capia-commands", [["capia-time"], ["capia-model"]]),
+  pkg("capia-commands", [["capia-actor"], ["capia-time"], ["capia-model"]]),
   pkg("capia-jobs", [["serde"], ["serde_json"]]),
   pkg("capia-render", [["capia-time"], ["capia-model"], ["capia-commands", "dev"], ["ab_glyph"]]),
   pkg("capia-media", [["capia-time"], ["serde"], ["serde_json"], ["sha2"], ["capia-media", "dev"]]),
