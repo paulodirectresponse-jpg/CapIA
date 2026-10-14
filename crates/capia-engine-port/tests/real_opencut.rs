@@ -208,7 +208,8 @@ fn unsupported_legacy_commands_fail_loudly_and_write_nothing() {
         .preview(
             &actor,
             "x",
-            json!([{"type": "set_property", "clip": "c", "prop": "scale", "value": 1.2}]),
+            json!([{"type": "set_transition", "clip": "c",
+                    "transition": {"kind": "cross_dissolve", "duration": 705_600_000}}]),
         )
         .unwrap_err();
     assert_eq!(e.code, "UNSUPPORTED_COMMAND");
@@ -217,5 +218,61 @@ fn unsupported_legacy_commands_fail_loudly_and_write_nothing() {
     assert_eq!(
         e.code, "NOT_ALLOWED",
         "writes are never reachable through read()"
+    );
+}
+
+fn rich_plan(target_sequence: &str) -> EditPlan {
+    serde_json::from_value(json!({
+        "schema_version": 1, "id": "ep2", "version": 1, "deliverable_key": "AD2",
+        "target_sequence": target_sequence,
+        "format": {"width": 1280, "height": 720, "fps": 30},
+        "beats": [
+            {"id": "hook", "role": "hook", "duration_ms": 3000,
+             "asset": {"asset_id": "asset-a", "source_in_ms": 0},
+             "framing": {"scale": 1.25, "position_y": -40.0},
+             "overlays": [{"text": "COMPRE AGORA", "start_offset_ms": 500, "duration_ms": 2000,
+                           "position": "top"}],
+             "captions": [{"text": "legenda um", "start_offset_ms": 0, "duration_ms": 1500}]}
+        ],
+        "estimated_duration_ms": 3000
+    }))
+    .expect("edit plan")
+}
+
+#[test]
+fn text_overlays_captions_and_framing_reach_the_real_timeline() {
+    let Some(engine) = open_host() else { return };
+    let inventory = Inventory::from_assets_list(&engine.read("assets.list", json!({})).unwrap());
+    let snapshot = engine.read("project.snapshot", json!({})).unwrap();
+    let sequence = snapshot["project"]["activeSequenceId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let resolutions = BTreeMap::new();
+    let env = CompileEnv {
+        run_id: "run2",
+        ns: "p1",
+        inventory: &inventory,
+        resolutions: &resolutions,
+    };
+    let commands = compile_edit_plan(&env, &rich_plan(&sequence))
+        .expect("compile")
+        .commands;
+    let actor = Actor::agent("run:run2");
+    let preview = engine
+        .preview(&actor, "AI Run", Value::Array(commands))
+        .expect("preview (texto + set_property traduzidos)");
+    engine
+        .apply(&actor, preview["plan_token"].as_str().unwrap())
+        .expect("apply");
+    let placed = clips(&engine);
+    assert_eq!(placed.len(), 3, "1 vídeo + 1 overlay + 1 legenda");
+    let text: Vec<&Value> = placed.iter().filter(|c| c["type"] == "text").collect();
+    assert_eq!(text.len(), 2, "overlay e legenda são texto no editor");
+    let history = engine.read("history.list", json!({})).unwrap();
+    assert_eq!(
+        history.as_array().unwrap().len(),
+        1,
+        "um plano = uma entrada de histórico"
     );
 }

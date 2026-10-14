@@ -59,7 +59,37 @@ export type Operation =
 			operationId: string;
 			clipId?: string;
 			clipRef?: string;
+	  }
+	| {
+			/** v1.1: texto na timeline (mesmo caminho do painel Texto da UI). */
+			type: "insert_text";
+			operationId: string;
+			text: string;
+			startTicks: number;
+			durationTicks: number;
+			trackId?: string;
+			ref?: string;
+			/** Parâmetros do elemento de texto (ex.: fontSize, color); validados contra o registro. */
+			params?: Record<string, ParamValue>;
+	  }
+	| {
+			/** v1.1: altera parâmetros do clip (opacity, transform.*, volume, muted, blendMode, ...). */
+			type: "set_clip_params";
+			operationId: string;
+			clipId?: string;
+			clipRef?: string;
+			params: Record<string, ParamValue>;
+	  }
+	| {
+			/** v1.1: habilita/desabilita o clip (hidden = !enabled). */
+			type: "set_clip_enabled";
+			operationId: string;
+			clipId?: string;
+			clipRef?: string;
+			enabled: boolean;
 	  };
+
+export type ParamValue = number | string | boolean;
 
 export type OperationType = Operation["type"];
 

@@ -11,7 +11,10 @@ import {
 	SplitElementsCommand,
 	UpdateElementsCommand,
 } from "@/commands/timeline";
-import { buildElementFromMedia } from "@/timeline/element-utils";
+import {
+	buildElementFromMedia,
+	buildTextElement,
+} from "@/timeline/element-utils";
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/timeline/creation";
 import type { SceneTracks, TimelineElement } from "@/timeline";
 import {
@@ -220,6 +223,90 @@ function buildInner({
 				elements: [{ trackId, elementId: clipId }],
 			});
 		}
+		case "insert_text": {
+			if (typeof operation.text !== "string" || operation.text.length === 0) {
+				throw new CommandError({
+					code: "INVALID_OPERATION",
+					message: "insert_text requires a non-empty text",
+					details: { field: "text" },
+				});
+			}
+			const element = buildTextElement({
+				raw: {
+					duration: ticks({
+						value: operation.durationTicks,
+						field: "durationTicks",
+					}),
+					params: { content: operation.text, ...(operation.params ?? {}) },
+				},
+				startTime: ticks({ value: operation.startTicks, field: "startTicks" }),
+			});
+			return new InsertElementCommand({
+				element,
+				placement: operation.trackId
+					? { mode: "explicit", trackId: operation.trackId }
+					: { mode: "auto" },
+			});
+		}
+		case "set_clip_params": {
+			const clipId = resolveClipId({
+				clipId: operation.clipId,
+				clipRef: operation.clipRef,
+				refs,
+			});
+			const { trackId, element } = requireClip(clipId);
+			const known = Object.keys(element.params ?? {});
+			const unknown = Object.keys(operation.params).filter(
+				(key) => !known.includes(key),
+			);
+			if (unknown.length > 0) {
+				throw new CommandError({
+					code: "INVALID_OPERATION",
+					message: `unknown param(s) for ${element.type} clip: ${unknown.join(", ")}`,
+					details: { unknown, known },
+				});
+			}
+			return new UpdateElementsCommand({
+				updates: [
+					{
+						trackId,
+						elementId: clipId,
+						patch: { params: { ...element.params, ...operation.params } },
+					},
+				],
+			});
+		}
+		case "set_clip_enabled": {
+			const clipId = resolveClipId({
+				clipId: operation.clipId,
+				clipRef: operation.clipRef,
+				refs,
+			});
+			const { trackId, element } = requireClip(clipId);
+			// Áudio não tem `hidden`: "desabilitar" = mutar (params.muted).
+			const isAudio = element.type === "audio";
+			const currentlyEnabled = isAudio
+				? element.params?.muted !== true
+				: !("hidden" in element && element.hidden === true);
+			if (currentlyEnabled === operation.enabled) {
+				throw new CommandError({
+					code: "NO_EFFECT",
+					message: `clip ${clipId} is already ${operation.enabled ? "enabled" : "disabled"}`,
+					details: { clipId },
+				});
+			}
+			return new UpdateElementsCommand({
+				updates: [
+					{
+						trackId,
+						elementId: clipId,
+						patch: isAudio
+							? { params: { ...element.params, muted: !operation.enabled } }
+							: { hidden: !operation.enabled },
+					},
+				],
+			});
+		}
 	}
 }
 
@@ -275,7 +362,7 @@ export class PlannedOperation extends Command {
 	private registerRefs(before: SceneTracks): void {
 		const op = this.operation;
 		const name =
-			op.type === "insert_clip"
+			op.type === "insert_clip" || op.type === "insert_text"
 				? op.ref
 				: op.type === "split_clip"
 					? op.rightRef

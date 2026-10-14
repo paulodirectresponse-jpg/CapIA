@@ -33,6 +33,9 @@ const OPERATION_TYPES = new Set([
 	"trim_clip",
 	"split_clip",
 	"delete_clip",
+	"insert_text",
+	"set_clip_params",
+	"set_clip_enabled",
 ]);
 
 function fail({ code, message, ...extra }: SurfaceError): Failure {
