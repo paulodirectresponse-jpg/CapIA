@@ -1,5 +1,7 @@
 "use client";
 
+import { recordBoot } from "@/diagnostics/render-trace";
+import { installProjectsPageHooks } from "@/agent-surface/bridge/page-bridge";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -95,6 +97,10 @@ export default function ProjectsPage() {
 	const projectsToDisplay = useEditor((e) =>
 		e.project.getFilteredAndSortedProjects({ searchQuery, sortOption }),
 	);
+
+	useEffect(() => {
+		installProjectsPageHooks();
+	}, []);
 
 	useEffect(() => {
 		if (!editor.project.getIsInitialized()) {
@@ -507,10 +513,17 @@ function NewProjectButton() {
 	const router = useRouter();
 
 	const handleCreateProject = async () => {
-		const projectId = await editor.project.createNewProject({
-			name: "New project",
-		});
-		router.push(`/editor/${projectId}`);
+		recordBoot({ stage: "newProjectButton:click" });
+		try {
+			const projectId = await editor.project.createNewProject({
+				name: "New project",
+			});
+			recordBoot({ stage: "router.push", detail: `/editor/${projectId}` });
+			router.push(`/editor/${projectId}`);
+		} catch (error) {
+			recordBoot({ stage: "newProjectButton:error", detail: String(error) });
+			throw error;
+		}
 	};
 
 	return (

@@ -6,6 +6,14 @@
 
 export type RenderTraceEvent =
 	| {
+			/** Bootstrap do projeto (2B.1B): clique, criação, gravação e navegação. */
+			kind: "boot";
+			stage: string;
+			pathname: string;
+			at: number;
+			detail?: string;
+	  }
+	| {
 			kind: "video-frame";
 			site: "layer" | "backdrop";
 			mediaId: string;
@@ -52,6 +60,24 @@ export function objectId({ value }: { value: object }): number {
 
 export function recordTrace({ event }: { event: RenderTraceEvent }): void {
 	if (isRenderTraceEnabled()) events.push(event);
+}
+
+/** Marco do bootstrap de projeto; só grava com o trace ligado (E2E). */
+export function recordBoot({
+	stage,
+	detail,
+}: {
+	stage: string;
+	detail?: string;
+}): void {
+	if (!isRenderTraceEnabled()) return;
+	events.push({
+		kind: "boot",
+		stage,
+		pathname: window.location.pathname,
+		at: Math.round(performance.now()),
+		detail,
+	});
 }
 
 export function readTrace(): RenderTraceEvent[] {

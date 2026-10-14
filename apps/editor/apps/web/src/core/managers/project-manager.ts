@@ -1,3 +1,4 @@
+import { recordBoot } from "@/diagnostics/render-trace";
 import type { EditorCore } from "@/core";
 import type {
 	TProject,
@@ -80,6 +81,7 @@ export class ProjectManager {
 	}
 
 	async createNewProject({ name }: { name: string }): Promise<string> {
+		recordBoot({ stage: "createNewProject:start", detail: name });
 		const mainScene = buildDefaultScene({ name: "Main scene", isMain: true });
 		const newProject: TProject = {
 			metadata: {
@@ -115,11 +117,18 @@ export class ProjectManager {
 		});
 
 		try {
+			recordBoot({ stage: "saveProject:start", detail: newProject.metadata.id });
 			await storageService.saveProject({ project: newProject });
+			recordBoot({ stage: "saveProject:done", detail: newProject.metadata.id });
 			this.updateMetadata(newProject);
+			recordBoot({
+				stage: "createNewProject:done",
+				detail: newProject.metadata.id,
+			});
 
 			return newProject.metadata.id;
 		} catch (error) {
+			recordBoot({ stage: "saveProject:error", detail: String(error) });
 			toast.error("Failed to save new project");
 			throw error;
 		}

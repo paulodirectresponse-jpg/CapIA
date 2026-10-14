@@ -22,6 +22,21 @@ declare global {
 }
 
 /**
+ * Hooks mínimos na página /projects (só builds E2E): expõem o EditorCore REAL e o trace de bootstrap, para o
+ * harness diagnosticar a criação de projeto e, se necessário, criá-lo pelo mesmo ProjectManager.
+ */
+export function installProjectsPageHooks(): void {
+	if (
+		process.env.NEXT_PUBLIC_CAPIA_E2E_HOOKS !== "1" ||
+		typeof window === "undefined"
+	) {
+		return;
+	}
+	window.__capiaEditor = EditorCore.getInstance();
+	installRenderTraceHooks();
+}
+
+/**
  * Installs `window.__capiaAgent` on the live editor page. Gated by
  * NEXT_PUBLIC_CAPIA_AGENT_BRIDGE=1 (dev/E2E builds and the desktop host); disabled by default.
  */
