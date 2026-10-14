@@ -11,7 +11,7 @@ workspace = true
 
 [dependencies]
 capia-actor.workspace = true
-capia-intelligence = { path = "../capia-intelligence", default-features = false }
+capia-intelligence = { path = "../capia-intelligence", version = "0.6.0-rc.3", default-features = false }
 capia-media.workspace = true
 serde.workspace = true
 serde_json.workspace = true
