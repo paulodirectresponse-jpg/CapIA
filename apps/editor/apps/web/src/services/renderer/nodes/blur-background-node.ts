@@ -17,6 +17,8 @@ export type BlurBackgroundNodeParams = {
 
 export type BackdropSource = {
 	source: CanvasImageSource;
+	/** Revisão de conteúdo (vídeo: por quadro). Ausente = estática. */
+	revision?: string;
 	width: number;
 	height: number;
 };

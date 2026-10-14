@@ -9,6 +9,7 @@ import { effectsRegistry, resolveEffectPasses } from "@/effects";
 import type { Effect, EffectPass } from "@/effects/types";
 import { getSourceTimeAtClipTime } from "@/retime";
 import { objectId, recordTrace } from "@/diagnostics/render-trace";
+import { videoFrameRevision } from "@/services/video-cache/revision";
 import {
 	DEFAULT_GRAPHIC_SOURCE_SIZE,
 	resolveGraphicElementParamsAtTime,
@@ -224,7 +225,7 @@ async function resolveVideoNode({
 			frameTimestamp: frame.timestamp,
 			frameDuration: frame.duration,
 			canvasId: objectId({ value: frame.canvas }),
-			revision: `${frame.timestamp}:${frame.duration}`,
+			revision: videoFrameRevision(frame),
 		},
 	});
 
@@ -241,6 +242,7 @@ async function resolveVideoNode({
 	return {
 		...visualState,
 		source: frame.canvas,
+		sourceRevision: videoFrameRevision(frame),
 		sourceWidth: frame.canvas.width,
 		sourceHeight: frame.canvas.height,
 	};
@@ -461,12 +463,13 @@ async function resolveBackdropSource({
 				frameTimestamp: frame.timestamp,
 				frameDuration: frame.duration,
 				canvasId: objectId({ value: frame.canvas }),
-				revision: `${frame.timestamp}:${frame.duration}`,
+				revision: videoFrameRevision(frame),
 			},
 		});
 
 		return {
 			source: frame.canvas,
+			revision: videoFrameRevision(frame),
 			width: frame.canvas.width,
 			height: frame.canvas.height,
 		};

@@ -17,6 +17,7 @@ import { StickerNode } from "../nodes/sticker-node";
 import { renderTextToContext, TextNode } from "../nodes/text-node";
 import { VideoNode } from "../nodes/video-node";
 import type { ResolvedVisualSourceNodeState } from "../nodes/visual-node";
+import { STATIC_SOURCE_REVISION } from "@/services/video-cache/revision";
 import type {
 	FrameDescriptor,
 	FrameItemDescriptor,
@@ -138,10 +139,9 @@ async function collectNode({
 		const textureId = `${path}:blur-background`;
 		const { width, height } = renderer;
 		const { backdropSource, passes } = node.resolved;
-		// Backdrop pixels come from a decoded video/image frame whose identity
-		// already changes when it changes. Hashing the source reference is
-		// enough to let us skip redraws on frozen frames.
-		const contentHash = `blur:${identityKey(backdropSource.source)}:${backdropSource.width}x${backdropSource.height}:${width}x${height}`;
+		// Backdrop de VÍDEO vem de um Canvas que o decoder reaproveita: a identidade do objeto
+		// NÃO muda quando o quadro muda. O hash precisa da revisão de conteúdo do quadro.
+		const contentHash = `blur:${identityKey(backdropSource.source)}:${backdropSource.revision ?? STATIC_SOURCE_REVISION}:${backdropSource.width}x${backdropSource.height}:${width}x${height}`;
 		textures.set(textureId, {
 			kind: "rendered",
 			id: textureId,
@@ -244,6 +244,11 @@ async function collectVisualSourceNode({
 		kind: "external",
 		id: textureId,
 		source,
+		revision:
+			node instanceof GraphicNode
+				? STATIC_SOURCE_REVISION
+				: ((node.resolved as ResolvedVisualSourceNodeState).sourceRevision ??
+					STATIC_SOURCE_REVISION),
 		width: sourceWidth,
 		height: sourceHeight,
 	});

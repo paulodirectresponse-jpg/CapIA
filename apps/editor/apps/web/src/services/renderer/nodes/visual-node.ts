@@ -27,6 +27,8 @@ export interface ResolvedVisualNodeState {
 
 export interface ResolvedVisualSourceNodeState extends ResolvedVisualNodeState {
 	source: CanvasImageSource;
+	/** Revisão de conteúdo da fonte (vídeo: por quadro). Ausente = estática. */
+	sourceRevision?: string;
 	sourceWidth: number;
 	sourceHeight: number;
 }

@@ -13,6 +13,7 @@ import {
 	isRenderPerfEnabled,
 	recordWasmFrameProfile,
 } from "@/diagnostics/render-perf";
+import { decideExternalTexture } from "./texture-cache-policy";
 import type {
 	ExternalTextureDescriptor,
 	FrameDescriptor,
@@ -36,6 +37,7 @@ type RenderedCacheEntry = {
 type ExternalCacheEntry = {
 	kind: "external";
 	source: CanvasImageSource;
+	revision: string;
 	width: number;
 	height: number;
 };
@@ -99,23 +101,22 @@ class WasmCompositor {
 
 	private syncExternalTexture(texture: ExternalTextureDescriptor) {
 		const previous = this.cache.get(texture.id);
-		const hit =
-			previous?.kind === "external" &&
-			previous.source === texture.source &&
-			previous.width === texture.width &&
-			previous.height === texture.height;
+		const decision = decideExternalTexture({
+			previous: previous?.kind === "external" ? previous : undefined,
+			next: texture,
+		});
 		recordTrace({
 			event: {
 				kind: "texture",
 				textureId: texture.id,
-				decision: hit ? "hit" : "miss",
-				reason: hit ? "same" : previous?.kind === "external" ? "source" : "first",
-				uploaded: !hit,
+				decision: decision.hit ? "hit" : "miss",
+				reason: decision.reason,
+				uploaded: !decision.hit,
 				sourceId: objectId({ value: texture.source }),
-				revision: "n/a (pre-fix)",
+				revision: texture.revision,
 			},
 		});
-		if (hit) {
+		if (decision.hit) {
 			incrementCounter({ name: "textureCacheHit" });
 			return;
 		}
@@ -139,6 +140,7 @@ class WasmCompositor {
 		this.cache.set(texture.id, {
 			kind: "external",
 			source: texture.source,
+			revision: texture.revision,
 			width: texture.width,
 			height: texture.height,
 		});
