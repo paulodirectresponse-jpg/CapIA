@@ -6,7 +6,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Mediabunny,
   [string]$Out = "out-webview2",
   [int]$Port = 8767,
-  [int]$TimeoutSecs = 180
+  [int]$TimeoutSecs = 180,
+  [string]$Query = ""   # ex.: "w=1920&h=1080&seconds=20&bitrate=8000000" (perfil longo)
 )
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -48,7 +49,8 @@ try {
   $version = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::GetAvailableBrowserVersionString()
   Set-Content (Join-Path $Out "webview2-version.txt") $version
   Write-Host "WebView2 runtime: $version"
-  $wv.CoreWebView2.Navigate("http://127.0.0.1:$Port/spike.html")
+  if ($Query -and -not $Query.StartsWith("?")) { $Query = "?" + $Query }
+  $wv.CoreWebView2.Navigate("http://127.0.0.1:$Port/spike.html$Query")
   $deadline = (Get-Date).AddSeconds($TimeoutSecs)
   while (-not (Test-Path (Join-Path $Out "report.json")) -and (Get-Date) -lt $deadline) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100 }
 } finally {

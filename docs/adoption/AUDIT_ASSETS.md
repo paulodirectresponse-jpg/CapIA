@@ -1,0 +1,16 @@
+# Auditoria de ativos e modelos de terceiros do editor (Fase 2B)
+
+Escopo: `apps/editor`. Método: leitura do código + inventário de `public/` + `bun.lock`. **Limite:** o ambiente de execução bloqueia `huggingface.co` e `api.fontsource.org` (proxy de egress), então os *model cards* e as licenças por família **não puderam ser verificados online aqui**; o que depende disso está marcado `VERIFICAR`.
+
+| Ativo | Origem | Rede? | Licença | Situação |
+|---|---|---|---|---|
+| Pesos Whisper (`onnx-community/whisper-tiny/small/medium/large-v3-turbo`, `transcription/models.ts`) | Hugging Face, baixados em runtime por `@huggingface/transformers` no worker | **Sim**, só quando o usuário aciona a transcrição; cacheados pelo navegador | Whisper original (OpenAI) é MIT; a conversão `onnx-community/*` herda — `VERIFICAR` o campo `license` de cada card | Não embarcados no repositório nem no instalador. Transcrição é recurso opt-in por ação do usuário; o editor funciona sem ele. No CapIA a transcrição "oficial" continua no pipeline Rust (Fase 4). Pendência: fixar `revision` (hash) de cada modelo e registrar a licença confirmada em `PROVENANCE.md`. |
+| `@huggingface/transformers` + `onnxruntime-web/node` | npm | — | Apache-2.0 / MIT | OK. `sharp` (dep opcional dele) neutralizado por stub. |
+| Fontes do Google (picker) | `fonts.googleapis.com`, em `fonts/google-fonts.ts` | **Sim** (CSS e arquivos de fonte) | Mistura OFL / Apache-2.0 / Ubuntu Font Licence por família — `VERIFICAR` caso a caso | **Corrigido:** agora **desligado por padrão** (`fonts/remote-fonts.ts`); sem opt-in nenhuma requisição é feita e o texto cai na fonte do sistema. Habilitar: `localStorage["capia.remoteFonts"]="1"` ou `NEXT_PUBLIC_CAPIA_REMOTE_FONTS=1`. Falta a UI do opt-in (2B/UX). Para export com fonte do Google, embarcar a fonte localmente é o caminho correto (fora do escopo desta etapa). |
+| Atlas de fontes (`public/fonts/font-atlas.json`, `font-chunk-*.avif`, 2,4 MB) | gerado por `scripts/generate-font-sprites.ts` | Não | Imagens de **nomes** de fontes renderizadas; os glifos vêm das famílias (OFL/Apache) | Aceitável como lista de nomes; `VERIFICAR` se há família com licença que proíba redistribuir amostras. O script gerador agora fica fora do typecheck e exige `sharp` instalado localmente. |
+| Bandeiras (`public/flags/*.svg`, 2,7 MB) | `flag-icons` (ids `flag-icons-xx` nos SVGs) | Não | MIT | OK; registrar atribuição em `THIRD_PARTY_NOTICES`. |
+| Logos/ícones (`public/logos`, `public/icons`) | marca OpenCut | Não | Marca registrada do upstream (código MIT não concede uso da marca) | **Trocar** pela identidade CapIA antes de qualquer distribuição. |
+| `soundtouchjs` | npm | — | **LGPL-2.1** | **Removido.** Substituído por `retime/wsola.ts` (WSOLA próprio, MIT, testado: tom preservado em 0,5×–2×). |
+| `sharp` / `@img/sharp-libvips-*` | opcional de `next` e `@huggingface/transformers` | — | **LGPL-3.0** (binário nativo) | **Removido do lockfile** (override `sharp → packages/sharp-stub`); `next.config.ts` já usa imagens não otimizadas. |
+
+Resultado: os dois riscos LGPL do relatório 2A estão eliminados do produto; sobram duas verificações online (cards do Whisper, licenças por família de fonte) e a troca de marca, listadas no relatório da 2B.

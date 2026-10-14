@@ -147,7 +147,7 @@ export class RendererManager {
 		onProgress?: ({ progress }: { progress: number }) => void;
 		onCancel?: () => boolean;
 	}): Promise<ExportResult> {
-		const { format, quality, fps, includeAudio } = options;
+		const { format, quality, fps, includeAudio, allowAudioFallback } = options;
 
 		try {
 			const tracks = this.editor.scenes.getActiveScene().tracks;
@@ -192,7 +192,10 @@ export class RendererManager {
 				quality,
 				shouldIncludeAudio: !!includeAudio,
 				audioBuffer: audioBuffer || undefined,
+				allowAudioFallback,
 			});
+			const warnings: { code: string; message: string }[] = [];
+			exporter.on("warning", (warning) => warnings.push(warning));
 
 			exporter.on("progress", (progress) => {
 				const adjustedProgress = includeAudio
@@ -226,6 +229,8 @@ export class RendererManager {
 				return {
 					success: true,
 					buffer,
+					audioCodec: exporter.audioCodec,
+					warnings,
 				};
 			} finally {
 				clearInterval(cancelInterval);

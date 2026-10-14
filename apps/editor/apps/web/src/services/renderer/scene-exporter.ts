@@ -19,6 +19,7 @@ import { frameRateToFloat } from "@/fps/utils";
 import type { RootNode } from "./nodes/root-node";
 import type { ExportFormat, ExportQuality } from "@/export";
 import { CanvasRenderer } from "./canvas-renderer";
+import { decideAudioCodec } from "@/export/audio-codec";
 
 type ExportParams = {
 	width: number;
@@ -28,6 +29,7 @@ type ExportParams = {
 	quality: ExportQuality;
 	shouldIncludeAudio?: boolean;
 	audioBuffer?: AudioBuffer;
+	allowAudioFallback?: boolean;
 };
 
 const qualityMap = {
@@ -42,6 +44,7 @@ export type SceneExporterEvents = {
 	complete: [buffer: ArrayBuffer];
 	error: [error: Error];
 	cancelled: [];
+	warning: [warning: { code: string; message: string }];
 };
 
 export class SceneExporter extends EventEmitter<SceneExporterEvents> {
@@ -50,6 +53,8 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 	private quality: ExportQuality;
 	private shouldIncludeAudio: boolean;
 	private audioBuffer?: AudioBuffer;
+	private allowAudioFallback: boolean;
+	audioCodec: "aac" | "opus" | null = null;
 
 	private isCancelled = false;
 
@@ -61,6 +66,7 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 		quality,
 		shouldIncludeAudio,
 		audioBuffer,
+		allowAudioFallback,
 	}: ExportParams) {
 		super();
 		this.renderer = new CanvasRenderer({
@@ -73,6 +79,7 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 		this.quality = quality;
 		this.shouldIncludeAudio = shouldIncludeAudio ?? false;
 		this.audioBuffer = audioBuffer;
+		this.allowAudioFallback = allowAudioFallback ?? false;
 	}
 
 	cancel(): void {
@@ -108,16 +115,32 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 
 		let audioSource: AudioBufferSource | null = null;
 		if (this.shouldIncludeAudio && this.audioBuffer) {
-			let audioCodec: "aac" | "opus" = this.format === "webm" ? "opus" : "aac";
-
-			if (audioCodec === "aac" && typeof AudioEncoder !== "undefined") {
-				const { supported } = await AudioEncoder.isConfigSupported({
-					codec: "mp4a.40.2",
-					sampleRate: this.audioBuffer.sampleRate,
-					numberOfChannels: this.audioBuffer.numberOfChannels,
-					bitrate: 192000,
+			const aacSupported =
+				this.format === "webm"
+					? false
+					: typeof AudioEncoder !== "undefined" &&
+						(
+							await AudioEncoder.isConfigSupported({
+								codec: "mp4a.40.2",
+								sampleRate: this.audioBuffer.sampleRate,
+								numberOfChannels: this.audioBuffer.numberOfChannels,
+								bitrate: 192000,
+							})
+						).supported === true;
+			// Lança ExportCodecError se o MP4 não puder levar AAC e o fallback não foi permitido.
+			const decision = decideAudioCodec({
+				format: this.format,
+				aacSupported,
+				allowOpusFallback: this.allowAudioFallback,
+			});
+			const audioCodec = decision.codec;
+			this.audioCodec = audioCodec;
+			if (decision.fallbackFrom) {
+				this.emit("warning", {
+					code: "AUDIO_CODEC_FALLBACK",
+					message:
+						"AAC indisponível neste sistema: o áudio do MP4 foi codificado em Opus (menos compatível).",
 				});
-				if (!supported) audioCodec = "opus";
 			}
 
 			audioSource = new AudioBufferSource({

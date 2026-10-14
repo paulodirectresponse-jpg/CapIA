@@ -140,17 +140,27 @@ jobs:
           $mb = (Resolve-Path "mb\node_modules\mediabunny\dist\bundles\mediabunny.min.mjs").Path
           .\tools\codec-spike\run-webview2.ps1 -Mediabunny $mb -Out out-webview2
         continue-on-error: true
+      - name: Spike WebView2 - export longo 1080p (20 s, 8 Mbps, AAC)
+        shell: powershell
+        run: |
+          $mb = (Resolve-Path "mb\node_modules\mediabunny\dist\bundles\mediabunny.min.mjs").Path
+          .\tools\codec-spike\run-webview2.ps1 -Mediabunny $mb -Out out-webview2-1080p -TimeoutSecs 900 -Query "w=1920&h=1080&seconds=20&bitrate=8000000"
+        continue-on-error: true
       - name: Resumo
         if: always()
         shell: pwsh
         run: |
           $r = "tools/codec-spike/out-webview2"
           if (Test-Path "$r/verdict.json") { Get-Content "$r/verdict.json" | Write-Host } else { Write-Host "sem verdict.json (spike não completou)" }
+          $l = "tools/codec-spike/out-webview2-1080p"
+          if (Test-Path "$l/verdict.json") { Write-Host "== 1080p longo =="; Get-Content "$l/verdict.json" | Write-Host } else { Write-Host "sem verdict 1080p" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: codec-webview2
-          path: tools/codec-spike/out-webview2
+          path: |
+            tools/codec-spike/out-webview2
+            tools/codec-spike/out-webview2-1080p
           if-no-files-found: warn
 
   gpu-parity:

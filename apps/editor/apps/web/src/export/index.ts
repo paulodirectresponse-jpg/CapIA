@@ -18,6 +18,8 @@ export interface ExportOptions {
 	quality: ExportQuality;
 	fps?: FrameRate;
 	includeAudio?: boolean;
+	// MP4 sem AAC: falha por padrão; true permite Opus dentro do MP4 (com aviso).
+	allowAudioFallback?: boolean;
 }
 
 export interface ExportResult {
@@ -25,6 +27,8 @@ export interface ExportResult {
 	buffer?: ArrayBuffer;
 	error?: string;
 	cancelled?: boolean;
+	audioCodec?: "aac" | "opus" | null;
+	warnings?: { code: string; message: string }[];
 }
 
 export interface ExportState {

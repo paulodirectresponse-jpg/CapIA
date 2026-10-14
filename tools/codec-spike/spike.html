@@ -9,7 +9,12 @@
 import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource } from "./mediabunny.min.mjs";
 
 const log = (m) => { document.getElementById("log").textContent += `\n${m}`; };
-const report = { userAgent: navigator.userAgent, probes: {}, steps: [] };
+const q = new URLSearchParams(location.search);
+const PROFILE = {
+  w: Number(q.get("w") ?? 640), h: Number(q.get("h") ?? 360), fps: Number(q.get("fps") ?? 30),
+  seconds: Number(q.get("seconds") ?? 2), bitrate: Number(q.get("bitrate") ?? 2_000_000),
+};
+const report = { userAgent: navigator.userAgent, probes: {}, steps: [], profile: PROFILE };
 
 async function probe() {
   if (typeof VideoEncoder === "undefined") { report.probes.videoEncoderApi = false; return; }
@@ -34,11 +39,11 @@ async function probe() {
 }
 
 async function encode() {
-  const W = 640, H = 360, FPS = 30, SECONDS = 2;
+  const { w: W, h: H, fps: FPS, seconds: SECONDS, bitrate } = PROFILE;
   const canvas = new OffscreenCanvas(W, H);
   const ctx = canvas.getContext("2d");
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() });
-  const video = new CanvasSource(canvas, { codec: "avc", bitrate: 2_000_000 });
+  const video = new CanvasSource(canvas, { codec: "avc", bitrate });
   output.addVideoTrack(video, { frameRate: FPS });
   const audio = new AudioBufferSource({ codec: "aac", bitrate: 128_000 });
   output.addAudioTrack(audio);
@@ -55,8 +60,10 @@ async function encode() {
     ctx.fillStyle = `hsl(${(i * 6) % 360} 80% 50%)`;
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = "#fff";
-    ctx.font = "48px sans-serif";
-    ctx.fillText(`frame ${i}`, 40, 200);
+    ctx.font = `${Math.round(H / 7)}px sans-serif`;
+    ctx.fillText(`frame ${i}`, 40, Math.round(H / 2));
+    ctx.fillStyle = "#000";
+    ctx.fillRect((i * 7) % (W - 80), H - 60, 80, 40); // movimento por quadro (p/ detectar quadros repetidos)
     await video.add(i / FPS, 1 / FPS);
   }
   video.close();
@@ -74,6 +81,7 @@ try {
   await probe();
   log(JSON.stringify(report.probes, null, 1));
   const t0 = performance.now();
+  report.memoryBeforeMB = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;
   const buf = await encode();
   report.encodeMs = Math.round(performance.now() - t0);
   report.mp4Bytes = buf.byteLength;

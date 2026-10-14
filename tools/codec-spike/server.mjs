@@ -26,9 +26,10 @@ const server = createServer((req, res) => {
     });
     return;
   }
-  if (req.url === "/" || req.url === "/spike.html") {
+  const path = (req.url ?? "/").split("?")[0];
+  if (path === "/" || path === "/spike.html") {
     res.writeHead(200, { "Content-Type": "text/html" }).end(readFileSync(join(here, "spike.html")));
-  } else if (req.url === "/mediabunny.min.mjs") {
+  } else if (path === "/mediabunny.min.mjs") {
     res.writeHead(200, { "Content-Type": "text/javascript" }).end(readFileSync(mediabunny));
   } else {
     res.writeHead(404).end();

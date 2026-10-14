@@ -21,6 +21,8 @@ if (!existsSync(reportPath)) {
     );
     const v = probe.streams.find((s) => s.codec_type === "video");
     const a = probe.streams.find((s) => s.codec_type === "audio");
+    const p = report.profile ?? { w: 640, h: 360, fps: 30, seconds: 2 };
+    verdict.profile = p;
     verdict.container = probe.format.format_name;
     verdict.durationSeconds = Number(probe.format.duration);
     verdict.video = v && { codec: v.codec_name, profile: v.profile, width: v.width, height: v.height, fps: v.r_frame_rate, pix_fmt: v.pix_fmt };
@@ -28,8 +30,13 @@ if (!existsSync(reportPath)) {
     if (!/mp4/.test(verdict.container)) verdict.reasons.push(`container ${verdict.container} is not mp4`);
     if (v?.codec_name !== "h264") verdict.reasons.push(`video codec ${v?.codec_name} is not h264`);
     if (a?.codec_name !== "aac") verdict.reasons.push(`audio codec ${a?.codec_name} is not aac`);
-    if (!(verdict.durationSeconds > 1.8 && verdict.durationSeconds < 2.3)) verdict.reasons.push(`duration ${verdict.durationSeconds}`);
-    if (v && Math.abs(eval(v.r_frame_rate) - 30) > 0.5) verdict.reasons.push(`fps ${v.r_frame_rate}`);
+    if (Math.abs(verdict.durationSeconds - p.seconds) > Math.max(0.3, p.seconds * 0.02)) verdict.reasons.push(`duration ${verdict.durationSeconds}`);
+    if (v && Math.abs(eval(v.r_frame_rate) - p.fps) > 0.5) verdict.reasons.push(`fps ${v.r_frame_rate}`);
+    if (v && (v.width !== p.w || v.height !== p.h)) verdict.reasons.push(`size ${v.width}x${v.height}`);
+    if (v && a && Math.abs(Number(v.duration) - Number(a.duration)) > 0.15) verdict.reasons.push(`A/V duration drift v=${v.duration} a=${a.duration}`);
+    const frames = Number(execFileSync("ffprobe", ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", join(dir, "out.mp4")], { encoding: "utf8" }).trim());
+    verdict.frames = frames;
+    if (frames !== p.fps * p.seconds) verdict.reasons.push(`frames ${frames} != ${p.fps * p.seconds}`);
     if (a && Number(a.sample_rate) !== 48000) verdict.reasons.push(`audio rate ${a.sample_rate}`);
     if (verdict.reasons.length === 0) verdict.verdict = "H264_PASS";
   }
