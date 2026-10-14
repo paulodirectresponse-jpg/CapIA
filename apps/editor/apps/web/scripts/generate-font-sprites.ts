@@ -5,7 +5,7 @@
  * packs them into chunk images, and outputs a JSON atlas + AVIF images.
  *
  * Run: npx tsx scripts/generate-font-sprites.ts
- * Deps: @napi-rs/canvas sharp (install as devDependencies)
+ * Deps: @napi-rs/canvas sharp (install LOCALLY, fora do lockfile: sharp/libvips é LGPL e foi removido do produto — o atlas gerado é versionado)
  */
 
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";

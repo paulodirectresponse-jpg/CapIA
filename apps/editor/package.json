@@ -40,5 +40,8 @@
   },
   "trustedDependencies": [
     "@tailwindcss/oxide"
-  ]
+  ],
+  "overrides": {
+    "sharp": "workspace:*"
+  }
 }

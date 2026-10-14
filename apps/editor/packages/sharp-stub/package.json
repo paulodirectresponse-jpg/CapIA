@@ -1,0 +1,8 @@
+{
+  "name": "sharp",
+  "version": "0.0.0-capia-stub",
+  "description": "Stub vazio: o editor CapIA não usa sharp/libvips (LGPL). Evita o binário nativo opcional puxado por next e @huggingface/transformers.",
+  "license": "MIT",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

@@ -1,4 +1,4 @@
-import { PitchShifter } from "soundtouchjs";
+import { wsolaStretch } from "./wsola";
 import { clampRetimeRate, shouldMaintainPitch } from "@/retime/rate";
 import type { RetimeConfig } from "@/timeline";
 import { getSourceTimeAtClipTime } from "./resolve";
@@ -128,16 +128,28 @@ async function buildPitchPreservedBuffer({
 		1,
 		Math.ceil(clipDuration * targetSampleRate),
 	);
+	const stretched = wsolaStretch({
+		channels: Array.from({ length: numChannels }, (_, channel) =>
+			resampledBuffer.getChannelData(channel),
+		),
+		rate,
+		sampleRate: targetSampleRate,
+		outputLength: outputSamples,
+	});
 	const stretchCtx = new OfflineAudioContext(
 		numChannels,
 		outputSamples,
 		targetSampleRate,
 	);
-	const shifter = new PitchShifter(stretchCtx, resampledBuffer, 4096);
-	shifter.tempo = rate;
-	shifter.pitch = 1;
-	shifter.connect(stretchCtx.destination);
-	return stretchCtx.startRendering();
+	const outputBuffer = stretchCtx.createBuffer(
+		numChannels,
+		outputSamples,
+		targetSampleRate,
+	);
+	for (let channel = 0; channel < numChannels; channel++) {
+		outputBuffer.copyToChannel(stretched[channel], channel);
+	}
+	return outputBuffer;
 }
 
 export async function renderRetimedBuffer({
