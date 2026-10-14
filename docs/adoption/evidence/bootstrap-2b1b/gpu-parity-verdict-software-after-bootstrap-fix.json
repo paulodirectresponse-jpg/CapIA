@@ -1,0 +1,711 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "samples": [
+    0.5,
+    2.5,
+    3.5,
+    5.5
+  ],
+  "thresholds": {
+    "PSNR_EXPORT_MIN": 26,
+    "PSNR_PREVIEW_MIN": 24
+  },
+  "frames": [
+    {
+      "t": 0.5,
+      "snap": "/home/user/CapIA/apps/editor/gpu-parity-out/snapshot-0.5.png",
+      "shot": "/home/user/CapIA/apps/editor/gpu-parity-out/preview-0.5.png",
+      "source": {
+        "frameTimestamp": 0.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 0.5,
+        "sourceRevision": "0.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "source",
+            "uploaded": true,
+            "revision": "0.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "0.5:0.033",
+            "sourceId": 1
+          }
+        ]
+      },
+      "colors": 132,
+      "psnrPreviewVsSnapshot": 27.387766,
+      "exportFrame": "/home/user/CapIA/apps/editor/gpu-parity-out/export-0.5.png",
+      "psnrExportVsSnapshot": 46.241665
+    },
+    {
+      "t": 2.5,
+      "snap": "/home/user/CapIA/apps/editor/gpu-parity-out/snapshot-2.5.png",
+      "shot": "/home/user/CapIA/apps/editor/gpu-parity-out/preview-2.5.png",
+      "source": {
+        "frameTimestamp": 2.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 2.5,
+        "sourceRevision": "2.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "2.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:2:source",
+            "decision": "miss",
+            "reason": "first",
+            "uploaded": true,
+            "revision": "static",
+            "sourceId": 4
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "2.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:2:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "static",
+            "sourceId": 4
+          }
+        ]
+      },
+      "colors": 284,
+      "psnrPreviewVsSnapshot": 29.532986,
+      "exportFrame": "/home/user/CapIA/apps/editor/gpu-parity-out/export-2.5.png",
+      "psnrExportVsSnapshot": 43.016752
+    },
+    {
+      "t": 3.5,
+      "snap": "/home/user/CapIA/apps/editor/gpu-parity-out/snapshot-3.5.png",
+      "shot": "/home/user/CapIA/apps/editor/gpu-parity-out/preview-3.5.png",
+      "source": {
+        "frameTimestamp": 3.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 3.5,
+        "sourceRevision": "3.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "3.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:2:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "static",
+            "sourceId": 4
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "3.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:2:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "static",
+            "sourceId": 4
+          }
+        ]
+      },
+      "colors": 295,
+      "psnrPreviewVsSnapshot": 26.490769,
+      "exportFrame": "/home/user/CapIA/apps/editor/gpu-parity-out/export-3.5.png",
+      "psnrExportVsSnapshot": 44.698656
+    },
+    {
+      "t": 5.5,
+      "snap": "/home/user/CapIA/apps/editor/gpu-parity-out/snapshot-5.5.png",
+      "shot": "/home/user/CapIA/apps/editor/gpu-parity-out/preview-5.5.png",
+      "source": {
+        "frameTimestamp": 5.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 5.5,
+        "sourceRevision": "5.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "5.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:2:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "static",
+            "sourceId": 4
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "5.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:2:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "static",
+            "sourceId": 4
+          }
+        ]
+      },
+      "colors": 293,
+      "psnrPreviewVsSnapshot": 25.537556,
+      "exportFrame": "/home/user/CapIA/apps/editor/gpu-parity-out/export-5.5.png",
+      "psnrExportVsSnapshot": 44.793055
+    }
+  ],
+  "checks": [
+    {
+      "name": "PREFLIGHT (servidor responde e serve todos os assets do build)",
+      "ok": true,
+      "detail": "/projects 200, 12 assets ok"
+    },
+    {
+      "name": "PROJECT_BOOTSTRAP (projeto real em /editor/[id], __capiaAgent/__capiaEditor presentes)",
+      "ok": true,
+      "detail": "id=76686132-3953-4d3a-a160-517d25e501e0 mode=ui {\"1 abriu /projects\":true,\"2 projeto real criado\":true,\"3 projectId obtido\":true,\"4 chegou em /editor/[projectId]\":true,\"5 __capiaAgent existe\":true,\"6 __capiaEditor existe\":true,\"7 projeto ativo = projectId\":true}"
+    },
+    {
+      "name": "cena: inserir vídeo (AgentSurface)",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "VIDEO_TEMPORAL_ADVANCE (vídeo avança no tempo; mesmo tempo ⇒ mesmos pixels; quadro novo ⇒ upload)",
+      "ok": true,
+      "detail": "7 seeks fora de ordem"
+    },
+    {
+      "name": "cena: inserir imagem (AgentSurface)",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "cena: transform, máscara, blur e texto aplicados",
+      "ok": true,
+      "detail": "{\"effectId\":\"474f0d84-f563-444b-a49b-66faf488eb9c\"}"
+    },
+    {
+      "name": "cena: keyframes de opacidade no texto",
+      "ok": true,
+      "detail": "animations.opacity"
+    },
+    {
+      "name": "export webm",
+      "ok": true,
+      "detail": "{\"size\":1881254,\"ms\":391461}"
+    },
+    {
+      "name": "t=0.5s: snapshot não-vazio",
+      "ok": true,
+      "detail": "132 cores distintas"
+    },
+    {
+      "name": "t=0.5s: preview(tela) ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 27.387766"
+    },
+    {
+      "name": "t=0.5s: export ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 46.241665"
+    },
+    {
+      "name": "t=2.5s: snapshot não-vazio",
+      "ok": true,
+      "detail": "284 cores distintas"
+    },
+    {
+      "name": "t=2.5s: preview(tela) ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 29.532986"
+    },
+    {
+      "name": "t=2.5s: export ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 43.016752"
+    },
+    {
+      "name": "t=3.5s: snapshot não-vazio",
+      "ok": true,
+      "detail": "295 cores distintas"
+    },
+    {
+      "name": "t=3.5s: preview(tela) ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 26.490769"
+    },
+    {
+      "name": "t=3.5s: export ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 44.698656"
+    },
+    {
+      "name": "t=5.5s: snapshot não-vazio",
+      "ok": true,
+      "detail": "293 cores distintas"
+    },
+    {
+      "name": "t=5.5s: preview(tela) ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 25.537556"
+    },
+    {
+      "name": "t=5.5s: export ≈ snapshot",
+      "ok": true,
+      "detail": "PSNR 44.793055"
+    }
+  ],
+  "stage": "parity",
+  "preflight": {
+    "ok": true,
+    "base": "http://127.0.0.1:3100",
+    "status": 200,
+    "assetsChecked": 12,
+    "failures": [],
+    "reasons": []
+  },
+  "bootstrap": {
+    "ok": true,
+    "criteria": {
+      "1 abriu /projects": true,
+      "2 projeto real criado": true,
+      "3 projectId obtido": true,
+      "4 chegou em /editor/[projectId]": true,
+      "5 __capiaAgent existe": true,
+      "6 __capiaEditor existe": true,
+      "7 projeto ativo = projectId": true
+    },
+    "globals": {
+      "agent": true,
+      "editor": true,
+      "e2e": true,
+      "active": "76686132-3953-4d3a-a160-517d25e501e0"
+    },
+    "mode": "ui",
+    "projectId": "76686132-3953-4d3a-a160-517d25e501e0"
+  },
+  "gpu": {
+    "webgl2": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "webgpu": null,
+    "h264": false
+  },
+  "softwareRenderer": true,
+  "videoTemporalAdvance": {
+    "ok": true,
+    "reasons": [],
+    "samples": [
+      {
+        "index": 0,
+        "seekSeconds": 0.5,
+        "snapshot": "/home/user/CapIA/apps/editor/gpu-parity-out/temporal-0-0.5.png",
+        "frameTimestamp": 0.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 0.5,
+        "sourceRevision": "0.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "0.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "0.5:0.033",
+            "sourceId": 1
+          }
+        ],
+        "cacheOk": true,
+        "uploadedThisSeek": true
+      },
+      {
+        "index": 1,
+        "seekSeconds": 2.5,
+        "snapshot": "/home/user/CapIA/apps/editor/gpu-parity-out/temporal-1-2.5.png",
+        "frameTimestamp": 2.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 2.5,
+        "sourceRevision": "2.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "2.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "2.5:0.033",
+            "sourceId": 1
+          }
+        ],
+        "cacheOk": true,
+        "uploadedThisSeek": true
+      },
+      {
+        "index": 2,
+        "seekSeconds": 3.5,
+        "snapshot": "/home/user/CapIA/apps/editor/gpu-parity-out/temporal-2-3.5.png",
+        "frameTimestamp": 3.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 3.5,
+        "sourceRevision": "3.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "3.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "3.5:0.033",
+            "sourceId": 1
+          }
+        ],
+        "cacheOk": true,
+        "uploadedThisSeek": true
+      },
+      {
+        "index": 3,
+        "seekSeconds": 5.5,
+        "snapshot": "/home/user/CapIA/apps/editor/gpu-parity-out/temporal-3-5.5.png",
+        "frameTimestamp": 5.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 5.5,
+        "sourceRevision": "5.5:0.033",
+        "canvasId": 1,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "5.5:0.033",
+            "sourceId": 1
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "5.5:0.033",
+            "sourceId": 1
+          }
+        ],
+        "cacheOk": true,
+        "uploadedThisSeek": true
+      },
+      {
+        "index": 4,
+        "seekSeconds": 0.5,
+        "snapshot": "/home/user/CapIA/apps/editor/gpu-parity-out/temporal-4-0.5.png",
+        "frameTimestamp": 0.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 0.5,
+        "sourceRevision": "0.5:0.033",
+        "canvasId": 2,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "source",
+            "uploaded": true,
+            "revision": "0.5:0.033",
+            "sourceId": 2
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "0.5:0.033",
+            "sourceId": 2
+          }
+        ],
+        "cacheOk": true,
+        "uploadedThisSeek": true
+      },
+      {
+        "index": 5,
+        "seekSeconds": 3.5,
+        "snapshot": "/home/user/CapIA/apps/editor/gpu-parity-out/temporal-5-3.5.png",
+        "frameTimestamp": 3.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 3.5,
+        "sourceRevision": "3.5:0.033",
+        "canvasId": 2,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "revision": "3.5:0.033",
+            "sourceId": 2
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "3.5:0.033",
+            "sourceId": 2
+          }
+        ],
+        "cacheOk": true,
+        "uploadedThisSeek": true
+      },
+      {
+        "index": 6,
+        "seekSeconds": 2.5,
+        "snapshot": "/home/user/CapIA/apps/editor/gpu-parity-out/temporal-6-2.5.png",
+        "frameTimestamp": 2.5,
+        "frameDuration": 0.033,
+        "sourceTimeSeconds": 2.5,
+        "sourceRevision": "2.5:0.033",
+        "canvasId": 3,
+        "textureDecisions": [
+          {
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "source",
+            "uploaded": true,
+            "revision": "2.5:0.033",
+            "sourceId": 3
+          },
+          {
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "revision": "2.5:0.033",
+            "sourceId": 3
+          }
+        ],
+        "cacheOk": true,
+        "uploadedThisSeek": true
+      }
+    ],
+    "pairs": [
+      {
+        "a": 0,
+        "b": 1,
+        "kind": "distinct-time",
+        "psnr": 18.060983,
+        "ok": true
+      },
+      {
+        "a": 0,
+        "b": 2,
+        "kind": "distinct-time",
+        "psnr": 13.080395,
+        "ok": true
+      },
+      {
+        "a": 0,
+        "b": 3,
+        "kind": "distinct-time",
+        "psnr": 16.997795,
+        "ok": true
+      },
+      {
+        "a": 0,
+        "b": 4,
+        "kind": "same-time",
+        "psnr": 99,
+        "ok": true
+      },
+      {
+        "a": 0,
+        "b": 5,
+        "kind": "distinct-time",
+        "psnr": 13.080395,
+        "ok": true
+      },
+      {
+        "a": 0,
+        "b": 6,
+        "kind": "distinct-time",
+        "psnr": 18.060983,
+        "ok": true
+      },
+      {
+        "a": 1,
+        "b": 2,
+        "kind": "distinct-time",
+        "psnr": 13.205096,
+        "ok": true
+      },
+      {
+        "a": 1,
+        "b": 3,
+        "kind": "distinct-time",
+        "psnr": 16.62431,
+        "ok": true
+      },
+      {
+        "a": 1,
+        "b": 4,
+        "kind": "distinct-time",
+        "psnr": 18.060983,
+        "ok": true
+      },
+      {
+        "a": 1,
+        "b": 5,
+        "kind": "distinct-time",
+        "psnr": 13.205096,
+        "ok": true
+      },
+      {
+        "a": 1,
+        "b": 6,
+        "kind": "same-time",
+        "psnr": 99,
+        "ok": true
+      },
+      {
+        "a": 2,
+        "b": 3,
+        "kind": "distinct-time",
+        "psnr": 12.963006,
+        "ok": true
+      },
+      {
+        "a": 2,
+        "b": 4,
+        "kind": "distinct-time",
+        "psnr": 13.080395,
+        "ok": true
+      },
+      {
+        "a": 2,
+        "b": 5,
+        "kind": "same-time",
+        "psnr": 99,
+        "ok": true
+      },
+      {
+        "a": 2,
+        "b": 6,
+        "kind": "distinct-time",
+        "psnr": 13.205096,
+        "ok": true
+      },
+      {
+        "a": 3,
+        "b": 4,
+        "kind": "distinct-time",
+        "psnr": 16.997795,
+        "ok": true
+      },
+      {
+        "a": 3,
+        "b": 5,
+        "kind": "distinct-time",
+        "psnr": 12.963006,
+        "ok": true
+      },
+      {
+        "a": 3,
+        "b": 6,
+        "kind": "distinct-time",
+        "psnr": 16.62431,
+        "ok": true
+      },
+      {
+        "a": 4,
+        "b": 5,
+        "kind": "distinct-time",
+        "psnr": 13.080395,
+        "ok": true
+      },
+      {
+        "a": 4,
+        "b": 6,
+        "kind": "distinct-time",
+        "psnr": 18.060983,
+        "ok": true
+      },
+      {
+        "a": 5,
+        "b": 6,
+        "kind": "distinct-time",
+        "psnr": 13.205096,
+        "ok": true
+      }
+    ]
+  },
+  "export": {
+    "format": "webm",
+    "ok": true,
+    "size": 1881254,
+    "ms": 391461
+  },
+  "softwareFindings": [],
+  "failedStage": null,
+  "verdict": "GPU_PARITY_PENDING_HUMAN_MACHINE",
+  "note": "Renderer de SOFTWARE (SwiftShader/WARP/llvmpipe): os quadros foram comparados, mas isto NÃO é evidência de GPU real. Rode em PC Windows com GPU física (GPU_REAL=1)."
+}

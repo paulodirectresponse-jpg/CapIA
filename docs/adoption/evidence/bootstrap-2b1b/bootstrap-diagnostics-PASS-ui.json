@@ -1,0 +1,118 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "startedAt": "2026-10-14T19:38:49.753Z",
+  "strictUi": false,
+  "mode": "ui",
+  "steps": [
+    {
+      "at": 1,
+      "step": "goto /projects"
+    },
+    {
+      "at": 1512,
+      "step": "projects loaded"
+    },
+    {
+      "at": 1558,
+      "step": "ui create"
+    },
+    {
+      "at": 4216,
+      "step": "editor route"
+    },
+    {
+      "at": 4547,
+      "step": "editor globals"
+    },
+    {
+      "at": 7207,
+      "step": "ready"
+    }
+  ],
+  "storageBefore": {
+    "indexedDB": "ok",
+    "opfs": "ok",
+    "persisted": false
+  },
+  "buttons": {
+    "total": 9,
+    "matching": [
+      {
+        "text": "New projectNew",
+        "disabled": false,
+        "visible": true
+      },
+      {
+        "text": "Create your first project",
+        "disabled": false,
+        "visible": true
+      }
+    ]
+  },
+  "openDialogsBeforeClick": [],
+  "target": {
+    "count": 2,
+    "visible": true,
+    "enabled": true
+  },
+  "urlBeforeClick": "http://127.0.0.1:3100/projects",
+  "samples": [
+    {
+      "afterMs": 0,
+      "pathname": "/projects",
+      "boot": 6
+    },
+    {
+      "afterMs": 1000,
+      "pathname": "/editor/d95d73cf-7132-43ef-8daa-7561c76271c2",
+      "boot": 6
+    }
+  ],
+  "uiBootEvents": [
+    {
+      "kind": "boot",
+      "stage": "newProjectButton:click",
+      "pathname": "/projects",
+      "at": 1690
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:start",
+      "pathname": "/projects",
+      "at": 1690,
+      "detail": "New project"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:start",
+      "pathname": "/projects",
+      "at": 1691,
+      "detail": "d95d73cf-7132-43ef-8daa-7561c76271c2"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:done",
+      "pathname": "/projects",
+      "at": 1696,
+      "detail": "d95d73cf-7132-43ef-8daa-7561c76271c2"
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:done",
+      "pathname": "/projects",
+      "at": 1696,
+      "detail": "d95d73cf-7132-43ef-8daa-7561c76271c2"
+    },
+    {
+      "kind": "boot",
+      "stage": "router.push",
+      "pathname": "/projects",
+      "at": 1728,
+      "detail": "/editor/d95d73cf-7132-43ef-8daa-7561c76271c2"
+    }
+  ],
+  "projectId": "d95d73cf-7132-43ef-8daa-7561c76271c2",
+  "activeProjectId": "d95d73cf-7132-43ef-8daa-7561c76271c2",
+  "finalUrl": "http://127.0.0.1:3100/editor/d95d73cf-7132-43ef-8daa-7561c76271c2",
+  "ok": true
+}

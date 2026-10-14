@@ -1,0 +1,206 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "startedAt": "2026-10-14T19:39:06.062Z",
+  "strictUi": true,
+  "mode": "ui",
+  "steps": [
+    {
+      "at": 0,
+      "step": "goto /projects"
+    },
+    {
+      "at": 1393,
+      "step": "projects loaded"
+    },
+    {
+      "at": 1440,
+      "step": "ui create"
+    }
+  ],
+  "storageBefore": {
+    "indexedDB": "throw: E2E_FAULT=storage",
+    "opfs": "error: E2E_FAULT=storage",
+    "persisted": false
+  },
+  "buttons": {
+    "total": 9,
+    "matching": [
+      {
+        "text": "New projectNew",
+        "disabled": false,
+        "visible": true
+      },
+      {
+        "text": "Create your first project",
+        "disabled": false,
+        "visible": true
+      }
+    ]
+  },
+  "openDialogsBeforeClick": [],
+  "target": {
+    "count": 2,
+    "visible": true,
+    "enabled": true
+  },
+  "urlBeforeClick": "http://127.0.0.1:3100/projects",
+  "samples": [
+    {
+      "afterMs": 0,
+      "pathname": "/projects",
+      "boot": 5
+    },
+    {
+      "afterMs": 1000,
+      "pathname": "/projects",
+      "boot": 5
+    },
+    {
+      "afterMs": 5000,
+      "pathname": "/projects",
+      "boot": 5
+    },
+    {
+      "afterMs": 10000,
+      "pathname": "/projects",
+      "boot": 5
+    }
+  ],
+  "uiBootEvents": [
+    {
+      "kind": "boot",
+      "stage": "newProjectButton:click",
+      "pathname": "/projects",
+      "at": 1576
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:start",
+      "pathname": "/projects",
+      "at": 1577,
+      "detail": "New project"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:start",
+      "pathname": "/projects",
+      "at": 1578,
+      "detail": "a13eb4cd-95de-4a0b-aaaf-4b6330d5e3af"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:error",
+      "pathname": "/projects",
+      "at": 1579,
+      "detail": "Error: E2E_FAULT=storage"
+    },
+    {
+      "kind": "boot",
+      "stage": "newProjectButton:error",
+      "pathname": "/projects",
+      "at": 1579,
+      "detail": "Error: E2E_FAULT=storage"
+    }
+  ],
+  "uiFailure": "URL não mudou para /editor/ após o clique",
+  "failure": "UI não navegou (BOOTSTRAP_STRICT_UI=1): URL não mudou para /editor/ após o clique",
+  "finalUrl": "http://127.0.0.1:3100/projects",
+  "bootEvents": [
+    {
+      "kind": "boot",
+      "stage": "newProjectButton:click",
+      "pathname": "/projects",
+      "at": 1576
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:start",
+      "pathname": "/projects",
+      "at": 1577,
+      "detail": "New project"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:start",
+      "pathname": "/projects",
+      "at": 1578,
+      "detail": "a13eb4cd-95de-4a0b-aaaf-4b6330d5e3af"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:error",
+      "pathname": "/projects",
+      "at": 1579,
+      "detail": "Error: E2E_FAULT=storage"
+    },
+    {
+      "kind": "boot",
+      "stage": "newProjectButton:error",
+      "pathname": "/projects",
+      "at": 1579,
+      "detail": "Error: E2E_FAULT=storage"
+    }
+  ],
+  "collector": {
+    "consoleErrors": [],
+    "pageErrors": [
+      "Error: E2E_FAULT=storage\n    at IDBFactory.boom [as open] (<anonymous>:5:11)\n    at http://127.0.0.1:3100/_next/static/chunks/a1c580095725019e.js:10:28737\n    at new Promise (<anonymous>)\n    at t.getDB (http://127.0.0.1:3100/_next/static/chunks/a1c580095725019e.js:10:28701)\n    at t.set (http://127.0.0.1:3100/_next/static/chunks/a1c580095725019e.js:10:29221)\n    at Object.saveProject (http://127.0.0.1:3100/_next/static/chunks/a1c580095725019e.js:10:92383)\n    at v.createNewProject (http://127.0.0.1:3100/_next/static/chunks/a1c580095725019e.js:37:129836)\n    at n (http://127.0.0.1:3100/_next/s"
+    ],
+    "failedRequests": [],
+    "badResponses": [],
+    "dialogs": [],
+    "pendingRequests": []
+  },
+  "storage": {
+    "indexedDB": "throw: E2E_FAULT=storage",
+    "opfs": "error: E2E_FAULT=storage",
+    "persisted": false
+  },
+  "buttonsNow": [
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "New projectNew",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Modified",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": false
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": false
+    },
+    {
+      "text": "Create your first project",
+      "disabled": false,
+      "visible": true
+    }
+  ]
+}

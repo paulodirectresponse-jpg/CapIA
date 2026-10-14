@@ -1,0 +1,33 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "verdict": "PROJECT_BOOTSTRAP_PASS",
+  "preflight": {
+    "ok": true,
+    "base": "http://127.0.0.1:3100",
+    "status": 200,
+    "assetsChecked": 12,
+    "failures": [],
+    "reasons": []
+  },
+  "result": {
+    "ok": true,
+    "criteria": {
+      "1 abriu /projects": true,
+      "2 projeto real criado": true,
+      "3 projectId obtido": true,
+      "4 chegou em /editor/[projectId]": true,
+      "5 __capiaAgent existe": true,
+      "6 __capiaEditor existe": true,
+      "7 projeto ativo = projectId": true
+    },
+    "globals": {
+      "agent": true,
+      "editor": true,
+      "e2e": true,
+      "active": "d95d73cf-7132-43ef-8daa-7561c76271c2"
+    },
+    "mode": "ui",
+    "projectId": "d95d73cf-7132-43ef-8daa-7561c76271c2"
+  },
+  "mode": "ui"
+}

@@ -94,3 +94,55 @@ Saída: `apps\editor\gpu-parity-out\gpu-parity-verdict.json` (+ PNGs `temporal-*
 
 ## Interpretação
 Se, no rerun, `videoTemporalAdvance.ok = true` **e** o export×snapshot passar: `ROOT_CAUSE = PREVIEW_SNAPSHOT_MUTABLE_TEXTURE_CACHE`, `GPU_RENDERER = PASS`, `EXPORT_PIPELINE = PASS`. Se o vídeo parar de congelar mas export×snapshot continuar falhando, abre-se uma segunda investigação (EXPORT_TIMING, SOURCE_TIME_MAPPING, FRAME_ROUNDING, COLOR_PIPELINE) — só depois.
+
+---
+
+# Fase 2B.1B — bootstrap do harness no Windows (HARNESS_BOOTSTRAP_FAIL)
+
+## O que aconteceu
+O rerun no Windows AMD físico falhou duas vezes, antes de qualquer teste de GPU, em `openNewProject()` → `page.waitForURL(/editor\//)` ("waiting for navigation until load", 30 s). Nenhum teste de GPU rodou (`frames=[]`, sem `videoTemporalAdvance`, sem detecção de GPU). **Isso não é `GPU_PARITY_FAIL`**: é `HARNESS_BOOTSTRAP_FAIL`. O renderer, o cache de textura, o export e os limiares ficaram **intactos** (o harness completo no Cloud reproduz exatamente os mesmos PSNR de antes: 46,24 / 43,02 / 44,70 / 44,79 dB).
+
+## Causa raiz — o que se sabe e o que não se sabe
+Não consegui reproduzir a falha no Cloud (o bootstrap sempre passou), então a causa exata no PC Windows **não está provada**. O que está provado:
+1. `waitForURL` espera o evento `load`; a mensagem de timeout é idêntica quando (a) a URL já mudou mas `load` não dispara, e (b) a URL nunca muda. O código antigo não distinguia nenhum dos casos nem guardava evidência.
+2. Candidatas, todas agora discriminadas pelo diagnóstico: **A** URL mudou mas `load` não completa; **B/C** `createNewProject`/`saveProject` falhou (storage); **D** `router.push` não navegou; **E** diálogo/modal; **F** erro de página; e, na infraestrutura, **servidor órfão/stale** — no Windows `Stop-Process` no wrapper `bunx` deixa o `next-server` filho vivo na porta, e a rodada seguinte conversa com um servidor antigo (hipótese consistente com "passou na 1ª rodada e falhou nas seguintes"; **testei no Cloud reconstruindo o `.next` sob um servidor em execução e a página continuou funcionando, então não a confirmo**).
+3. Fragilidade real encontrada ao instrumentar: o predicado `project.getActive()` do próprio harness **lança** enquanto o projeto não carregou, o que faz o `waitForFunction` rejeitar na hora em vez de continuar tentando.
+
+## Correção
+- `e2e/bootstrap.mjs` (novo): espera por **`location.pathname`** (não por `load`); depois espera explícita por `__capiaAgent`, `__capiaEditor` e `__capiaE2E` com mensagem dizendo qual global falta; confere que o projeto ativo tem o id da rota; predicados tolerantes ao `getActive()` que lança.
+- **Fallback controlado**: se a UI não navegar, registra o diagnóstico e (salvo `BOOTSTRAP_STRICT_UI=1`) cria o projeto pelo **mesmo `ProjectManager`/storage reais** (`__capiaEditor.project.createNewProject`) e abre `/editor/[id]` com retentativas (a corrida real do Next). O resultado traz `mode: "ui" | "programmatic-fallback"` e a falha da UI fica gravada — nada é escondido; não há projectId inventado, mock nem storage desligado; se o storage estiver quebrado o fallback também falha.
+- **Preflight** (`serverPreflight`, `e2e/preflight.mjs`): `/projects` responde 200 **e** todos os assets `/_next/*.js|css` do HTML são servidos; senão `SERVER_BOOT_FAIL` (pega servidor stale/build trocado).
+- **Classificação** no `gpu-parity.mjs`: `SERVER_BOOT_FAIL`, `HARNESS_BOOTSTRAP_FAIL`, `GPU_PARITY_FAIL`, `GPU_PARITY_PASS`, `GPU_PARITY_PENDING_HUMAN_MACHINE`. Qualquer falha **antes** de `VIDEO_TEMPORAL_ADVANCE` completar é `HARNESS_BOOTSTRAP_FAIL` (com `stage`/`failedStage`), nunca `GPU_PARITY_FAIL`.
+- **`run-windows.ps1`**: limpa evidências antigas; detecta porta ocupada e encerra a árvore do dono; sobe o servidor com `server.log`/`server.err.log` preservados; espera `/projects` = 200 (90 s) ou falha como `SERVER_BOOT_FAIL` mostrando o log; roda o preflight; roda `PROJECT_BOOTSTRAP` isolado; só então o teste de GPU; no `finally` mata a **árvore** do servidor (`taskkill /T /F`).
+
+## Diagnóstico adicionado
+- App (só build E2E, só com `window.__CAPIA_TRACE__`): eventos `newProjectButton:click`, `createNewProject:start/done`, `saveProject:start/done/error`, `router.push` com `pathname`; hooks mínimos em `/projects` (`__capiaEditor`, `__capiaTrace`).
+- Harness: URL antes/depois do clique e em 0/1/5/10 s; botões encontrados (texto, visível, habilitado), diálogos abertos, erros de console/página, `unhandledrejection`/pageerror, requisições falhas/4xx-5xx/pendentes, sonda de IndexedDB/OPFS, eventos de boot do app. Em qualquer falha grava `bootstrap-failure.png` + `bootstrap-diagnostics.json` (+ `project-bootstrap.json`).
+
+## PROJECT_BOOTSTRAP (`e2e/project-bootstrap.mjs`, roda antes da GPU)
+Critérios: 1 abre `/projects` · 2 cria projeto real · 3 obtém `projectId` · 4 chega em `/editor/[projectId]` · 5 `__capiaAgent` · 6 `__capiaEditor` · 7 projeto ativo = `projectId`. Também roda como primeiro check do `gpu-parity.mjs`.
+
+## Testes negativos (Cloud) — evidências em `docs/adoption/evidence/bootstrap-2b1b/`
+Injeção de falha só no harness (`E2E_FAULT`): `storage` (IndexedDB/OPFS lançam), `nav` (em `/projects`, `pushState/replaceState` viram no-op), `no-button`.
+| Cenário | Resultado | O diagnóstico mostra |
+|---|---|---|
+| `storage`, UI estrita | `HARNESS_BOOTSTRAP_FAIL` | `saveProject:error` + `newProjectButton:error`, sonda `indexedDB: throw`, pageerror |
+| `nav`, UI estrita | `HARNESS_BOOTSTRAP_FAIL` | `createNewProject:done` + `router.push` registrados, mas a URL fica em `/projects` nas 4 amostras |
+| `nav`, com fallback | `PROJECT_BOOTSTRAP_PASS` com `mode=programmatic-fallback` | `uiFailure` gravada |
+| `no-button`, UI estrita | `HARNESS_BOOTSTRAP_FAIL` | `locator.click` timeout |
+| `gpu-parity` + `storage` | **`HARNESS_BOOTSTRAP_FAIL`** (stage `bootstrap`, `frames=0`) | `bootstrapFailure` + PNG/JSON |
+| `gpu-parity` contra porta sem servidor | **`SERVER_BOOT_FAIL`** (stage `preflight`) | `ECONNREFUSED` |
+Os dois últimos não viram `GPU_PARITY_FAIL`.
+
+## Como saber que o bootstrap passou (primeiras linhas do rerun)
+```
+[SERVER] http://127.0.0.1:3100/projects => 200
+[PREFLIGHT] PASS :: http://127.0.0.1:3100/projects 200, <N> assets ok
+[PREFLIGHT] PASS :: /projects 200, <N> assets ok
+[PROJECT_BOOTSTRAP] PASS :: id=<uuid> mode=ui url=/editor/<uuid> {"1 abriu /projects":true, ... "7 projeto ativo = projectId":true}
+VERDICT: PROJECT_BOOTSTRAP_PASS
+[PASS] PREFLIGHT (servidor responde e serve todos os assets do build) :: ...
+[PASS] PROJECT_BOOTSTRAP (projeto real em /editor/[id], ...) :: id=<uuid> mode=ui ...
+GPU: {"webgl2":"ANGLE (... AMD Radeon ...)", ...} software= false
+```
+Se aparecer `mode=programmatic-fallback`, o clique visual falhou e o diagnóstico de por quê está em `bootstrap-diagnostics.json` (`uiFailure`, `uiBootEvents`, `collector`).

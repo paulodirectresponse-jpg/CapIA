@@ -1,0 +1,381 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "startedAt": "2026-10-14T19:39:29.020Z",
+  "strictUi": true,
+  "mode": "ui",
+  "steps": [
+    {
+      "at": 0,
+      "step": "goto /projects"
+    },
+    {
+      "at": 1344,
+      "step": "projects loaded"
+    },
+    {
+      "at": 1394,
+      "step": "ui create"
+    }
+  ],
+  "storageBefore": {
+    "indexedDB": "ok",
+    "opfs": "ok",
+    "persisted": false
+  },
+  "buttons": {
+    "total": 9,
+    "matching": [
+      {
+        "text": "New projectNew",
+        "disabled": false,
+        "visible": true
+      },
+      {
+        "text": "Create your first project",
+        "disabled": false,
+        "visible": true
+      }
+    ]
+  },
+  "openDialogsBeforeClick": [],
+  "target": {
+    "count": 2,
+    "visible": true,
+    "enabled": true
+  },
+  "urlBeforeClick": "http://127.0.0.1:3100/projects",
+  "samples": [
+    {
+      "afterMs": 0,
+      "pathname": "/projects",
+      "boot": 6
+    },
+    {
+      "afterMs": 1000,
+      "pathname": "/projects",
+      "boot": 6
+    },
+    {
+      "afterMs": 5000,
+      "pathname": "/projects",
+      "boot": 6
+    },
+    {
+      "afterMs": 10000,
+      "pathname": "/projects",
+      "boot": 6
+    }
+  ],
+  "uiBootEvents": [
+    {
+      "kind": "boot",
+      "stage": "newProjectButton:click",
+      "pathname": "/projects",
+      "at": 1500
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:start",
+      "pathname": "/projects",
+      "at": 1501,
+      "detail": "New project"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:start",
+      "pathname": "/projects",
+      "at": 1502,
+      "detail": "86b41c83-de3f-4034-8fff-d3fa6919802d"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:done",
+      "pathname": "/projects",
+      "at": 1504,
+      "detail": "86b41c83-de3f-4034-8fff-d3fa6919802d"
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:done",
+      "pathname": "/projects",
+      "at": 1505,
+      "detail": "86b41c83-de3f-4034-8fff-d3fa6919802d"
+    },
+    {
+      "kind": "boot",
+      "stage": "router.push",
+      "pathname": "/projects",
+      "at": 1524,
+      "detail": "/editor/86b41c83-de3f-4034-8fff-d3fa6919802d"
+    }
+  ],
+  "uiFailure": "URL não mudou para /editor/ após o clique",
+  "failure": "UI não navegou (BOOTSTRAP_STRICT_UI=1): URL não mudou para /editor/ após o clique",
+  "finalUrl": "http://127.0.0.1:3100/projects",
+  "bootEvents": [
+    {
+      "kind": "boot",
+      "stage": "newProjectButton:click",
+      "pathname": "/projects",
+      "at": 1500
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:start",
+      "pathname": "/projects",
+      "at": 1501,
+      "detail": "New project"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:start",
+      "pathname": "/projects",
+      "at": 1502,
+      "detail": "86b41c83-de3f-4034-8fff-d3fa6919802d"
+    },
+    {
+      "kind": "boot",
+      "stage": "saveProject:done",
+      "pathname": "/projects",
+      "at": 1504,
+      "detail": "86b41c83-de3f-4034-8fff-d3fa6919802d"
+    },
+    {
+      "kind": "boot",
+      "stage": "createNewProject:done",
+      "pathname": "/projects",
+      "at": 1505,
+      "detail": "86b41c83-de3f-4034-8fff-d3fa6919802d"
+    },
+    {
+      "kind": "boot",
+      "stage": "router.push",
+      "pathname": "/projects",
+      "at": 1524,
+      "detail": "/editor/86b41c83-de3f-4034-8fff-d3fa6919802d"
+    }
+  ],
+  "collector": {
+    "consoleErrors": [],
+    "pageErrors": [],
+    "failedRequests": [
+      {
+        "url": "http://127.0.0.1:3100/editor/86b41c83-de3f-4034-8fff-d3fa6919802d?_rsc=vf1hk",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "url": "http://127.0.0.1:3100/editor/86b41c83-de3f-4034-8fff-d3fa6919802d?_rsc=qdzqe",
+        "error": "net::ERR_ABORTED"
+      },
+      {
+        "url": "http://127.0.0.1:3100/editor/86b41c83-de3f-4034-8fff-d3fa6919802d?_rsc=1izxw",
+        "error": "net::ERR_ABORTED"
+      }
+    ],
+    "badResponses": [],
+    "dialogs": [],
+    "pendingRequests": []
+  },
+  "storage": {
+    "indexedDB": "ok",
+    "opfs": "ok",
+    "persisted": false
+  },
+  "buttonsNow": [
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Export",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Dark",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Import",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Drag and drop videos, photos, and audio files here",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "00:00:00:00",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Fit",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": true,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": true,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": true,
+      "visible": true
+    },
+    {
+      "text": "Main scene",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Ripple",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Next",
+      "disabled": false,
+      "visible": true
+    },
+    {
+      "text": "Close",
+      "disabled": false,
+      "visible": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "samples": [
+    0.5,
+    2.5,
+    3.5,
+    5.5
+  ],
+  "thresholds": {
+    "PSNR_EXPORT_MIN": 26,
+    "PSNR_PREVIEW_MIN": 24
+  },
+  "frames": [],
+  "checks": [
+    {
+      "name": "PREFLIGHT (servidor responde e serve todos os assets do build)",
+      "ok": true,
+      "detail": "/projects 200, 12 assets ok"
+    },
+    {
+      "name": "exceção",
+      "ok": false,
+      "detail": "BootstrapError: createNewProject falhou também pelo caminho programático: page.evaluate: Error: E2E_FAULT=storage\n    at fail (file:///home/user/CapIA/apps/editor/e2e/bootstrap.mjs:352:9)\n    at async bootstrapProject (file:///home/user/CapIA/apps/editor/e2e/bootstrap.mjs:402:5)\n    at async file:///home/user/CapIA/apps/editor/e2e/gpu-parity.mjs:236:15"
+    }
+  ],
+  "stage": "bootstrap",
+  "preflight": {
+    "ok": true,
+    "base": "http://127.0.0.1:3100",
+    "status": 200,
+    "assetsChecked": 12,
+    "failures": [],
+    "reasons": []
+  },
+  "bootstrapFailure": {
+    "kind": "HARNESS_BOOTSTRAP_FAIL",
+    "message": "createNewProject falhou também pelo caminho programático: page.evaluate: Error: E2E_FAULT=storage",
+    "evidence": [
+      "bootstrap-failure.png",
+      "bootstrap-diagnostics.json"
+    ]
+  },
+  "softwareFindings": [],
+  "failedStage": "bootstrap",
+  "verdict": "HARNESS_BOOTSTRAP_FAIL",
+  "note": "Renderer com GPU física."
+}

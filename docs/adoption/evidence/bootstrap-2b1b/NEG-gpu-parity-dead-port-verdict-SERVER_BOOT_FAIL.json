@@ -1,0 +1,42 @@
+{
+  "base": "http://127.0.0.1:3999",
+  "samples": [
+    0.5,
+    2.5,
+    3.5,
+    5.5
+  ],
+  "thresholds": {
+    "PSNR_EXPORT_MIN": 26,
+    "PSNR_PREVIEW_MIN": 24
+  },
+  "frames": [],
+  "checks": [
+    {
+      "name": "PREFLIGHT (servidor responde e serve todos os assets do build)",
+      "ok": false,
+      "detail": "GET /projects falhou: ECONNREFUSED"
+    },
+    {
+      "name": "exceção",
+      "ok": false,
+      "detail": "SERVER_BOOT_FAIL: GET /projects falhou: ECONNREFUSED"
+    }
+  ],
+  "stage": "preflight",
+  "preflight": {
+    "ok": false,
+    "base": "http://127.0.0.1:3999",
+    "status": null,
+    "assetsChecked": 0,
+    "failures": [],
+    "reasons": [
+      "GET /projects falhou: ECONNREFUSED"
+    ]
+  },
+  "serverBootFail": true,
+  "softwareFindings": [],
+  "failedStage": "preflight",
+  "verdict": "SERVER_BOOT_FAIL",
+  "note": "Renderer com GPU física."
+}
