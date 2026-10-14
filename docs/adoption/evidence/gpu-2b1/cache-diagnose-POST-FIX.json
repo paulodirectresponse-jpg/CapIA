@@ -1,0 +1,400 @@
+{
+  "seeks": [
+    {
+      "seekSeconds": 0.5,
+      "snapshotSha256": "ba0f237f01c8657a",
+      "renders": [
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 60000,
+            "timelineTimeSeconds": 0.5,
+            "clipLocalTimeTicks": 60000,
+            "sourceTimeTicks": 60000,
+            "sourceTimeSeconds": 0.5,
+            "frameTimestamp": 0.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "0.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "sourceId": 1,
+            "revision": "0.5:0.033"
+          }
+        },
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 60000,
+            "timelineTimeSeconds": 0.5,
+            "clipLocalTimeTicks": 60000,
+            "sourceTimeTicks": 60000,
+            "sourceTimeSeconds": 0.5,
+            "frameTimestamp": 0.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "0.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "sourceId": 1,
+            "revision": "0.5:0.033"
+          }
+        }
+      ]
+    },
+    {
+      "seekSeconds": 2.5,
+      "snapshotSha256": "a6d175e42d07dd2c",
+      "renders": [
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 300000,
+            "timelineTimeSeconds": 2.5,
+            "clipLocalTimeTicks": 300000,
+            "sourceTimeTicks": 300000,
+            "sourceTimeSeconds": 2.5,
+            "frameTimestamp": 2.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "2.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "sourceId": 1,
+            "revision": "2.5:0.033"
+          }
+        },
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 300000,
+            "timelineTimeSeconds": 2.5,
+            "clipLocalTimeTicks": 300000,
+            "sourceTimeTicks": 300000,
+            "sourceTimeSeconds": 2.5,
+            "frameTimestamp": 2.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "2.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "sourceId": 1,
+            "revision": "2.5:0.033"
+          }
+        }
+      ]
+    },
+    {
+      "seekSeconds": 3.5,
+      "snapshotSha256": "fe4c70bf43e332dc",
+      "renders": [
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 420000,
+            "timelineTimeSeconds": 3.5,
+            "clipLocalTimeTicks": 420000,
+            "sourceTimeTicks": 420000,
+            "sourceTimeSeconds": 3.5,
+            "frameTimestamp": 3.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "3.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "sourceId": 1,
+            "revision": "3.5:0.033"
+          }
+        },
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 420000,
+            "timelineTimeSeconds": 3.5,
+            "clipLocalTimeTicks": 420000,
+            "sourceTimeTicks": 420000,
+            "sourceTimeSeconds": 3.5,
+            "frameTimestamp": 3.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "3.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "sourceId": 1,
+            "revision": "3.5:0.033"
+          }
+        }
+      ]
+    },
+    {
+      "seekSeconds": 5.5,
+      "snapshotSha256": "956218fca6c641f9",
+      "renders": [
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 660000,
+            "timelineTimeSeconds": 5.5,
+            "clipLocalTimeTicks": 660000,
+            "sourceTimeTicks": 660000,
+            "sourceTimeSeconds": 5.5,
+            "frameTimestamp": 5.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "5.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "sourceId": 1,
+            "revision": "5.5:0.033"
+          }
+        },
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 660000,
+            "timelineTimeSeconds": 5.5,
+            "clipLocalTimeTicks": 660000,
+            "sourceTimeTicks": 660000,
+            "sourceTimeSeconds": 5.5,
+            "frameTimestamp": 5.5,
+            "frameDuration": 0.033,
+            "canvasId": 1,
+            "revision": "5.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "sourceId": 1,
+            "revision": "5.5:0.033"
+          }
+        }
+      ]
+    },
+    {
+      "seekSeconds": 0.5,
+      "snapshotSha256": "ba0f237f01c8657a",
+      "renders": [
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 60000,
+            "timelineTimeSeconds": 0.5,
+            "clipLocalTimeTicks": 60000,
+            "sourceTimeTicks": 60000,
+            "sourceTimeSeconds": 0.5,
+            "frameTimestamp": 0.5,
+            "frameDuration": 0.033,
+            "canvasId": 2,
+            "revision": "0.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "source",
+            "uploaded": true,
+            "sourceId": 2,
+            "revision": "0.5:0.033"
+          }
+        },
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 60000,
+            "timelineTimeSeconds": 0.5,
+            "clipLocalTimeTicks": 60000,
+            "sourceTimeTicks": 60000,
+            "sourceTimeSeconds": 0.5,
+            "frameTimestamp": 0.5,
+            "frameDuration": 0.033,
+            "canvasId": 2,
+            "revision": "0.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "sourceId": 2,
+            "revision": "0.5:0.033"
+          }
+        }
+      ]
+    },
+    {
+      "seekSeconds": 3.5,
+      "snapshotSha256": "fe4c70bf43e332dc",
+      "renders": [
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 420000,
+            "timelineTimeSeconds": 3.5,
+            "clipLocalTimeTicks": 420000,
+            "sourceTimeTicks": 420000,
+            "sourceTimeSeconds": 3.5,
+            "frameTimestamp": 3.5,
+            "frameDuration": 0.033,
+            "canvasId": 2,
+            "revision": "3.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "revision",
+            "uploaded": true,
+            "sourceId": 2,
+            "revision": "3.5:0.033"
+          }
+        },
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 420000,
+            "timelineTimeSeconds": 3.5,
+            "clipLocalTimeTicks": 420000,
+            "sourceTimeTicks": 420000,
+            "sourceTimeSeconds": 3.5,
+            "frameTimestamp": 3.5,
+            "frameDuration": 0.033,
+            "canvasId": 2,
+            "revision": "3.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "sourceId": 2,
+            "revision": "3.5:0.033"
+          }
+        }
+      ]
+    },
+    {
+      "seekSeconds": 2.5,
+      "snapshotSha256": "a6d175e42d07dd2c",
+      "renders": [
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 300000,
+            "timelineTimeSeconds": 2.5,
+            "clipLocalTimeTicks": 300000,
+            "sourceTimeTicks": 300000,
+            "sourceTimeSeconds": 2.5,
+            "frameTimestamp": 2.5,
+            "frameDuration": 0.033,
+            "canvasId": 3,
+            "revision": "2.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "miss",
+            "reason": "source",
+            "uploaded": true,
+            "sourceId": 3,
+            "revision": "2.5:0.033"
+          }
+        },
+        {
+          "frame": {
+            "kind": "video-frame",
+            "site": "layer",
+            "mediaId": "65de09ce-9e10-4d42-bd15-0ad0a4312de9",
+            "timelineTimeTicks": 300000,
+            "timelineTimeSeconds": 2.5,
+            "clipLocalTimeTicks": 300000,
+            "sourceTimeTicks": 300000,
+            "sourceTimeSeconds": 2.5,
+            "frameTimestamp": 2.5,
+            "frameDuration": 0.033,
+            "canvasId": 3,
+            "revision": "2.5:0.033"
+          },
+          "texture": {
+            "kind": "texture",
+            "textureId": "root:1:source",
+            "decision": "hit",
+            "reason": "same",
+            "uploaded": false,
+            "sourceId": 3,
+            "revision": "2.5:0.033"
+          }
+        }
+      ]
+    }
+  ],
+  "verdict": "NOT_REPRODUCED",
+  "violations": [],
+  "distinctSnapshots": 4,
+  "distinctSeekTimes": 4
+}

@@ -21,6 +21,13 @@ const SAMPLES = (process.env.SAMPLES ?? "0.5,2.5,3.5,5.5")
 	.map(Number);
 const PSNR_EXPORT_MIN = Number(process.env.PSNR_EXPORT_MIN ?? 26);
 const PSNR_PREVIEW_MIN = Number(process.env.PSNR_PREVIEW_MIN ?? 24);
+const TEMPORAL_SEEKS = (
+	process.env.TEMPORAL_SEEKS ?? "0.5,2.5,3.5,5.5,0.5,3.5,2.5"
+)
+	.split(",")
+	.map(Number);
+const TEMPORAL_DISTINCT_MAX = Number(process.env.TEMPORAL_DISTINCT_MAX ?? 35);
+const TEMPORAL_SAME_MIN = Number(process.env.TEMPORAL_SAME_MIN ?? 45);
 const T = 120_000;
 mkdirSync(OUT, { recursive: true });
 
@@ -86,6 +93,108 @@ function distinctColors(png) {
 	return set.size;
 }
 
+async function snapshotTo(page, file) {
+	const b64 = await page.evaluate(async () => {
+		const s = await window.__capiaEditor.renderer.createSnapshot();
+		const u8 = new Uint8Array(await s.blob.arrayBuffer());
+		let str = "";
+		for (let i = 0; i < u8.length; i += 0x8000)
+			str += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+		return btoa(str);
+	});
+	writeFileSync(file, Buffer.from(b64, "base64"));
+}
+
+// Resume o trace de um render: quadro do decoder (camada de vídeo) × decisão do cache de textura.
+function summarizeTrace(events) {
+	const frames = events.filter(
+		(e) => e.kind === "video-frame" && e.site === "layer",
+	);
+	const last = frames.at(-1) ?? null;
+	const textures = events.filter(
+		(e) => e.kind === "texture" && e.textureId.endsWith(":source"),
+	);
+	return {
+		frameTimestamp: last?.frameTimestamp ?? null,
+		frameDuration: last?.frameDuration ?? null,
+		sourceTimeSeconds: last?.sourceTimeSeconds ?? null,
+		sourceRevision: last?.revision ?? null,
+		canvasId: last?.canvasId ?? null,
+		textureDecisions: textures.map((t) => ({
+			textureId: t.textureId,
+			decision: t.decision,
+			reason: t.reason,
+			uploaded: t.uploaded,
+			revision: t.revision,
+			sourceId: t.sourceId,
+		})),
+	};
+}
+
+// VIDEO_TEMPORAL_ADVANCE — independe do export: com um clip de vídeo SÓ, seeks fora de ordem.
+//  (a) tempos diferentes não podem produzir imagens iguais (vídeo congelado);
+//  (b) o MESMO tempo revisitado tem de reproduzir os mesmos pixels (resultado não depende da ordem);
+//  (c) quadro novo do decoder => textura reenviada (nunca HIT com timestamp diferente).
+async function videoTemporalAdvance(page) {
+	const samples = [];
+	for (const [i, t] of TEMPORAL_SEEKS.entries()) {
+		await page.evaluate(() => window.__capiaTrace.clear());
+		await page.evaluate(
+			(t) =>
+				window.__capiaEditor.playback.seek({ time: Math.round(t * 120000) }),
+			t,
+		);
+		await page.waitForTimeout(1500);
+		const file = join(OUT, `temporal-${i}-${t}.png`);
+		await snapshotTo(page, file);
+		const trace = summarizeTrace(
+			await page.evaluate(() => window.__capiaTrace.read()),
+		);
+		samples.push({ index: i, seekSeconds: t, snapshot: file, ...trace });
+	}
+	const pairs = [];
+	const reasons = [];
+	for (let a = 0; a < samples.length; a++) {
+		for (let b = a + 1; b < samples.length; b++) {
+			const same = samples[a].seekSeconds === samples[b].seekSeconds;
+			const value = psnr(samples[a].snapshot, samples[b].snapshot);
+			const ok = same
+				? value >= TEMPORAL_SAME_MIN
+				: value < TEMPORAL_DISTINCT_MAX;
+			pairs.push({
+				a: a,
+				b: b,
+				kind: same ? "same-time" : "distinct-time",
+				psnr: value,
+				ok,
+			});
+			if (!ok)
+				reasons.push(
+					same
+						? `mesmo tempo ${samples[a].seekSeconds}s (#${a} × #${b}) com PSNR ${value} < ${TEMPORAL_SAME_MIN}: resultado depende da ordem dos seeks`
+						: `tempos ${samples[a].seekSeconds}s e ${samples[b].seekSeconds}s (#${a} × #${b}) quase idênticos (PSNR ${value} >= ${TEMPORAL_DISTINCT_MAX}): vídeo congelado`,
+				);
+		}
+	}
+	let previous = null;
+	for (const s of samples) {
+		const uploaded = s.textureDecisions.some((d) => d.uploaded);
+		const hitWithNewFrame =
+			previous !== null &&
+			s.frameTimestamp !== previous.frameTimestamp &&
+			s.textureDecisions.length > 0 &&
+			s.textureDecisions.every((d) => d.decision === "hit");
+		s.cacheOk = !hitWithNewFrame;
+		if (hitWithNewFrame)
+			reasons.push(
+				`seek ${s.seekSeconds}s: quadro novo (ts=${s.frameTimestamp}) com cache HIT sem upload`,
+			);
+		s.uploadedThisSeek = uploaded;
+		previous = s;
+	}
+	return { ok: reasons.length === 0, reasons, samples, pairs };
+}
+
 const { browser, page } = await launch({
 	headless: process.env.HEADED !== "1",
 });
@@ -102,6 +211,9 @@ const check = (name, ok, detail) => {
 };
 
 try {
+	await page.addInitScript(() => {
+		window.__CAPIA_TRACE__ = true;
+	});
 	await openNewProject(page, BASE);
 	await importFiles(page, [media.main, overlay]);
 	await page.waitForFunction(
@@ -192,7 +304,7 @@ try {
 			},
 			{ id, operations },
 		);
-	const r1 = await applyPlan("scene-1", [
+	const r1a = await applyPlan("scene-1a", [
 		{
 			type: "insert_clip",
 			operationId: "v",
@@ -200,6 +312,25 @@ try {
 			startTicks: 0,
 			ref: "video",
 		},
+	]);
+	check(
+		"cena: inserir vídeo (AgentSurface)",
+		r1a.ok === true,
+		JSON.stringify(r1a.error ?? r1a.receipt?.diff?.added?.length),
+	);
+	await page.waitForTimeout(1000);
+
+	// --- VIDEO_TEMPORAL_ADVANCE (com o vídeo sozinho na timeline; não depende de export)
+	verdict.videoTemporalAdvance = await videoTemporalAdvance(page);
+	check(
+		"VIDEO_TEMPORAL_ADVANCE (vídeo avança no tempo; mesmo tempo ⇒ mesmos pixels; quadro novo ⇒ upload)",
+		verdict.videoTemporalAdvance.ok,
+		verdict.videoTemporalAdvance.ok
+			? `${verdict.videoTemporalAdvance.samples.length} seeks fora de ordem`
+			: verdict.videoTemporalAdvance.reasons.join(" | "),
+	);
+
+	const r1 = await applyPlan("scene-1b", [
 		{
 			type: "insert_clip",
 			operationId: "i",
@@ -209,7 +340,7 @@ try {
 		},
 	]);
 	check(
-		"cena: inserir vídeo + imagem (AgentSurface)",
+		"cena: inserir imagem (AgentSurface)",
 		r1.ok === true,
 		JSON.stringify(r1.error ?? r1.receipt?.diff?.added?.length),
 	);
@@ -341,6 +472,7 @@ try {
 		return { x: r.x, y: r.y, width: r.width, height: r.height };
 	});
 	for (const t of SAMPLES) {
+		await page.evaluate(() => window.__capiaTrace.clear());
 		await page.evaluate(
 			(t) =>
 				window.__capiaEditor.playback.seek({ time: Math.round(t * 120000) }),
@@ -357,12 +489,16 @@ try {
 		});
 		const snap = join(OUT, `snapshot-${t}.png`);
 		writeFileSync(snap, Buffer.from(snapB64, "base64"));
+		const sampleTrace = summarizeTrace(
+			await page.evaluate(() => window.__capiaTrace.read()),
+		);
 		const shot = join(OUT, `preview-${t}.png`);
 		await page.screenshot({ path: shot, clip: previewBox });
 		verdict.frames.push({
 			t,
 			snap,
 			shot,
+			source: sampleTrace,
 			colors: distinctColors(snap),
 			psnrPreviewVsSnapshot: psnr(shot, snap),
 		});
@@ -445,19 +581,24 @@ try {
 } finally {
 	const allOk = verdict.checks.every((c) => c.ok);
 	const crashed = verdict.checks.some((c) => c.name === "exceção");
+	// independe de GPU/export: vídeo congelado ou dependente da ordem é falha real em qualquer renderer
+	const temporalBroken = verdict.videoTemporalAdvance
+		? !verdict.videoTemporalAdvance.ok
+		: false;
 	const failed = verdict.checks.filter((c) => !c.ok);
 	// Em renderer de software, divergência de export é registrada como achado aberto (não é PASS
 	// e não é prova de falha de GPU); exceção do harness continua sendo FAIL.
 	verdict.softwareFindings = verdict.softwareRenderer
 		? failed.map((c) => c.name)
 		: [];
-	verdict.verdict = crashed
-		? "GPU_PARITY_FAIL"
-		: verdict.softwareRenderer
-			? "GPU_PARITY_PENDING_HUMAN_MACHINE"
-			: allOk
-				? "GPU_PARITY_PASS"
-				: "GPU_PARITY_FAIL";
+	verdict.verdict =
+		crashed || temporalBroken
+			? "GPU_PARITY_FAIL"
+			: verdict.softwareRenderer
+				? "GPU_PARITY_PENDING_HUMAN_MACHINE"
+				: allOk
+					? "GPU_PARITY_PASS"
+					: "GPU_PARITY_FAIL";
 	verdict.note = verdict.softwareRenderer
 		? "Renderer de SOFTWARE (SwiftShader/WARP/llvmpipe): os quadros foram comparados, mas isto NÃO é evidência de GPU real. Rode em PC Windows com GPU física (GPU_REAL=1)."
 		: "Renderer com GPU física.";
