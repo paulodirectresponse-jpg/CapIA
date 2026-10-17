@@ -44,3 +44,5 @@ spikes/**/node_modules/
 spikes/**/package-lock.json
 tools/**/target/
 apps/desktop/src-tauri/gen/
+# orquestrador: estado e logs locais
+.orchestrator/

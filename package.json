@@ -17,6 +17,7 @@
     "test:tools": "node --test \"tools/*.test.mjs\" \"tools/phase5-acceptance/**/*.test.mjs\" \"tools/phase6-acceptance/**/*.test.mjs\" \"tools/release/*.test.mjs\" \"tools/docs/*.test.mjs\" \"tools/sample-project/*.test.mjs\" \"examples/**/*.test.mjs\"",
     "docs:api": "node tools/docs/gen-api-docs.mjs",
     "check:docs": "node tools/docs/gen-api-docs.mjs --check",
+    "orchestrate": "node tools/orchestrator/orchestrate.mjs",
     "check:arch": "node tools/check-architecture.mjs",
     "check:licenses": "node tools/check-licenses.mjs",
     "check:version": "node tools/release/check-version.mjs",

@@ -1,0 +1,54 @@
+{
+  "goalFile": "MASTER_GOAL.md",
+  "runtimeDir": ".orchestrator",
+  "protectedBranches": ["main", "master"],
+  "requireCleanTree": false,
+  "roles": {
+    "executor": { "agent": "claude", "promptFile": "prompts/executor.md" },
+    "auditor": { "agent": "codex", "promptFile": "prompts/auditor.md" }
+  },
+  "claude": {
+    "bin": "claude",
+    "model": null,
+    "permissionMode": "acceptEdits",
+    "maxTurns": 40,
+    "allowedTools": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(bun:*)",
+      "Bash(node:*)",
+      "Bash(pnpm:*)",
+      "Bash(cargo:*)"
+    ],
+    "auditorAllowedTools": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)"
+    ]
+  },
+  "codex": { "bin": "codex", "model": null, "sandbox": "read-only" },
+  "limits": {
+    "maxIterations": 6,
+    "maxWallClockMinutes": 240,
+    "maxCostUsd": 25,
+    "maxClaudeCalls": 20,
+    "maxCodexCalls": 10,
+    "callTimeoutMinutes": 30,
+    "maxConsecutiveFailures": 3,
+    "maxNoProgress": 2
+  },
+  "retry": { "maxAttempts": 3, "baseDelaySeconds": 15, "maxDelaySeconds": 300, "jitter": 0.2 },
+  "hardStops": { "humanGateMarker": "HUMAN_GATE:", "stopFile": "STOP" }
+}
